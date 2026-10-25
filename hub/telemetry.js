@@ -14,8 +14,10 @@ const TIMEOUT = 10_000;
 const MAX_SAMPLES = 2000; // latences gardées par connecteur et par période : au-delà, échantillonnage uniforme
 const MAX_MS = 600_000; // latence plafonnée à 10 minutes (borne acceptée par le backend)
 export const ERROR_TYPES = ["auth", "quota", "timeout", "unreachable", "other", "user"];
-let requests = 0;
+let requests = 0, lastOk = null;
 export const count = () => { requests++; };
+/** Date du dernier envoi accepté par Clevoa (supervision : /metrics). */
+export const lastSuccess = () => lastOk;
 
 // ---------- Statistiques par connecteur ----------
 // Collaborateur distinct : empreinte de sa clé MCP avec un sel tiré au démarrage, gardée en mémoire et jamais envoyée.
@@ -97,7 +99,7 @@ export async function send(connectors, seats = () => 0, installation = () => und
     // redirect "error" : la clé et le payload ne partent jamais vers une autre adresse que CLEVOA_URL.
     const r = await fetch(URL_, { method: "POST", redirect: "error", headers: { "Content-Type": "application/json", "X-Clevoa-Key": KEY }, body: JSON.stringify(body), signal: AbortSignal.timeout(TIMEOUT) });
     const data = await r.json().catch(() => ({}));
-    if (r.ok) requests = Math.max(0, requests - body.requests); // les appels comptés pendant l'envoi restent pour le prochain
+    if (r.ok) { requests = Math.max(0, requests - body.requests); lastOk = Date.now(); } // les appels comptés pendant l'envoi restent pour le prochain
     else if (r.status === 400 || r.status === 413) console.error(`[telemetry] période refusée par Clevoa (${r.status}) : statistiques abandonnées`); // les renvoyer échouerait de même
     else { restore(sent); since = from; }
     // Rien de la réponse n'est journalisé tel quel : statut court en minuscules, version X.Y.Z stricte, sinon ignorés.

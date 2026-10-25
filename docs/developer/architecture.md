@@ -1,7 +1,7 @@
 # Architecture
 
-Pour le développeur qui reprend le code. Un seul conteneur Node 22, trois dépendances (`@modelcontextprotocol/sdk`,
-`express`, `zod`), environ 1 060 lignes, un seul fichier d'état chiffré, aucune abstraction. Les connecteurs sont des
+Pour le développeur qui reprend le code. Un seul conteneur Node 22, quatre dépendances directes (`@modelcontextprotocol/sdk`,
+`express`, `zod`, et `express-rate-limit`, déjà fournie par le SDK, déclarée en 1.4.0 pour les routes de supervision), un seul fichier d'état chiffré, aucune abstraction. Les connecteurs sont des
 modules, pas des services.
 
 ## 1. Vue d'ensemble
@@ -21,11 +21,13 @@ Assistant IA (Claude Code, Claude Desktop, ChatGPT, Copilot)
 │ telemetry.js   compteurs envoyés à Clevoa au démarrage puis toutes   │
 │                les 6 h (statistiques par connecteur, essais bornés)  │
 │ version.js     VERSION stricte + APP_ENV (PRODUCTION / PRE-PROD)     │
+│ health.js      état des systèmes : appels de la dernière heure et    │
+│                vérification HEAD sans identifiant (lun-ven 7-19 h)   │
 │ diagnostic.js  rapport de support lancé par l'administrateur, sans   │
 │                secret ni donnée métier (docker exec, lecture seule)  │
 │ connectors/    salesforce · sagex3 · sharepoint · dropbox · myreport │
 │ public/        index.html, le portail                                │
-│ test/          node:test, amont mocké, 106 tests                     │
+│ test/          node:test, amont mocké, 112 tests                     │
 └───┬─────────────┬───────────────┬───────────────┬───────────────┬────┘
     ▼ MCP HTTP    ▼ REST Syracuse ▼ Graph (GET)   ▼ MCP HTTP      ▼ MCP SSE
  Salesforce    Sage X3 24R1    SharePoint      Dropbox (MCP    MyReport Server
@@ -77,8 +79,12 @@ pré-production les pointe par défaut vers le bouchon `mcp-stub`.
 
 ## 4. Portail
 
-`hub/public/index.html`, une page sans dépendance externe (CSP stricte). `GET /api/me` (version, environnement, instance et nom du
-serveur, SSO, e-mail, clé, systèmes avec leur état) alimente les cartes ; `GET /api/test/:system` exécute le diagnostic ;
+`hub/public/index.html`, une page sans dépendance externe (CSP stricte). Depuis la 1.4.0, un écran de travail : bandeau
+de situation, une ligne par application groupée par domaine (`domain` du connecteur ou `CONNECTOR_DOMAINS`), colonne
+« Service », assistant à brancher en colonne de droite, exemples de questions par domaine. `GET /api/me` (version,
+environnement, instance et nom du serveur, SSO, e-mail, clé, systèmes avec leur état et leur domaine) alimente les
+lignes ; `GET /api/status` (`health.js`, rafraîchi chaque minute) donne l'état de chaque système, sans volume ni
+identité ; `GET /metrics` (jeton `METRICS_TOKEN`) l'expose à la supervision ; `GET /api/test/:system` exécute le diagnostic ;
 `POST /api/:system/apikey`, `POST /api/disconnect/:system`, `POST /api/key/rotate`, `POST /api/logout` changent l'état
 du collaborateur (même origine exigée). La liste des variables affichées est dérivée de l'environnement (préfixes
 `SF_`, `SAGE_`, `MS_`, …), secrets masqués.
