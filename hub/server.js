@@ -203,15 +203,45 @@ app.get("/api/status", limit("me", 60), portalUser, (_req, res) => {
     systems: CONNECTORS.map((c) => ({ id: c.id, ...health.status(c) })) });
 });
 
-// Supervision (Zabbix, PRTG, Centreon, Prometheus…) : format texte Prometheus, jeton METRICS_TOKEN distinct des clés des
-// collaborateurs. Sans jeton configuré, la route n'existe pas. Aucune identité, clé ni donnée métier.
+// Supervision : /metrics au format texte Prometheus (Zabbix, Centreon, Prometheus, Grafana…) et /metrics/prtg au format JSON du
+// capteur PRTG « HTTP Data Advanced ». Jeton METRICS_TOKEN distinct des clés des collaborateurs, en Bearer ou en mot de passe
+// d'une authentification HTTP (identifiant libre). Sans jeton configuré, les routes n'existent pas. Aucune identité, clé ni donnée métier.
 const METRICS_TOKEN = process.env.METRICS_TOKEN || "";
+const metricsAuth = (req) => {
+  const h = req.headers.authorization || "";
+  const basic = h.match(/^Basic\s+(\S+)$/i)?.[1];
+  return basic ? Buffer.from(basic, "base64").toString().split(":").slice(1).join(":") : mcpKey(req) ?? "";
+};
 const sameToken = (given) => timingSafeEqual(createHash("sha256").update(String(given)).digest(), createHash("sha256").update(METRICS_TOKEN).digest());
 const STATES = ["ok", "lent", "erreurs", "injoignable", "inconnu", "simule"];
 const promLabel = (v) => String(v).replace(/[\\"\n]/g, "_");
-app.get("/metrics", limit("metrics", 30), (req, res) => {
+const metricsGate = (req, res, next) => {
   if (!METRICS_TOKEN) return res.sendStatus(404);
-  if (!sameToken(mcpKey(req) ?? "")) return res.status(hit("auth-fail", req.ip, 20) ? 429 : 401).type("text/plain").send("jeton de supervision requis\n");
+  if (!sameToken(metricsAuth(req))) return res.status(hit("auth-fail", req.ip, 20) ? 429 : 401).set("WWW-Authenticate", 'Basic realm="supervision"').type("text/plain").send("jeton de supervision requis\n");
+  next();
+};
+// PRTG : un canal « Santé » par système (0 bon, 1 avertissement si lent, 2 erreur si en erreurs ou injoignable ; seuils posés
+// par le hub), joignabilité, temps de réponse p95, appels et erreurs du système (mode différence : par intervalle de PRTG).
+app.get("/metrics/prtg", limit("metrics", 30), metricsGate, (_req, res) => {
+  const result = [], bad = [];
+  for (const c of CONNECTORS) {
+    const s = health.status(c), n = health.counters(c.id);
+    if (s.state === "simule") continue;
+    const level = s.state === "lent" ? 1 : ["erreurs", "injoignable"].includes(s.state) ? 2 : 0;
+    if (level) bad.push(`${c.label} : ${s.state}${s.probe?.reason ? ` (${s.probe.reason})` : ""}`);
+    result.push({ channel: `${c.label} · santé`, value: level, unit: "Custom", customunit: "", limitmode: 1, limitmaxwarning: 0.5, limitmaxerror: 1.5,
+      limitwarningmsg: `${c.label} lent`, limiterrormsg: `${c.label} en erreurs ou injoignable` });
+    if (n.probe) result.push({ channel: `${c.label} · joignable`, value: n.probe.ok ? 1 : 0, unit: "Custom", customunit: "", limitmode: 1, limitminerror: 0.5, limiterrormsg: `${c.label} injoignable` });
+    if (s.p95 != null) result.push({ channel: `${c.label} · p95`, value: s.p95, unit: "TimeResponse" });
+    result.push({ channel: `${c.label} · appels`, value: n.calls, unit: "Count", mode: "Difference" });
+    result.push({ channel: `${c.label} · erreurs système`, value: Object.entries(n.errors).filter(([t]) => t !== "user").reduce((x, [, v]) => x + v, 0), unit: "Count", mode: "Difference" });
+  }
+  result.push({ channel: "Hub · sièges", value: store.seats(), unit: "Count" });
+  result.push({ channel: "Hub · mémoire", value: process.memoryUsage().rss, unit: "BytesMemory" });
+  result.push({ channel: "Hub · durée de fonctionnement", value: Math.round(process.uptime()), unit: "TimeSeconds" });
+  res.json({ prtg: { result, text: bad.length ? bad.join(" · ") : `Clevoa AI Gateway ${VERSION} : systèmes opérationnels` } });
+});
+app.get("/metrics", limit("metrics", 30), metricsGate, (req, res) => {
   const m = [], g = (name, help, type = "gauge") => m.push(`# HELP ${name} ${help}`, `# TYPE ${name} ${type}`);
   g("clevoa_hub_info", "Version et environnement du hub");
   m.push(`clevoa_hub_info{version="${promLabel(VERSION)}",env="${promLabel(APP_ENV)}"} 1`);

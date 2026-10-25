@@ -22,8 +22,8 @@ propre nom de serveur MCP et son libellé (`MCP_SERVER_NAME`, `INSTANCE_LABEL`).
   questions qui fonctionnent par domaine, thème clair et sombre, accessible (WCAG 2.1 AA vérifié). SSO Microsoft Entra
   ID optionnel.
 * **Supervision** : état de chaque système mesuré par le hub (appels de la dernière heure et vérification de
-  joignabilité sans identifiant, en semaine aux heures ouvrées), exposé au format Prometheus pour Zabbix, PRTG,
-  Centreon… (`/metrics`, jeton dédié).
+  joignabilité sans identifiant, en semaine aux heures ouvrées), exposé à la supervision : PRTG (`/metrics/prtg`) ou
+  format Prometheus pour Zabbix, Centreon… (`/metrics`), jeton dédié.
 * **Traçabilité** : chaque résultat se termine par `Source : <système>` que l'assistant est instruit de citer.
 * **Exploitation simple** : deux stacks Docker Compose (pré-production, production), sauvegarde quotidienne chiffrée,
   restauration scriptée, reverse proxy nginx fourni, télémétrie de licence réduite à des compteurs.

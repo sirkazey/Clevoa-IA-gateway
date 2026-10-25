@@ -14,7 +14,7 @@ supervision du hub. Aucun changement d'outil MCP, de connecteur ni de route exis
 
 ### Ajouté
 - État de chaque système sur le portail (colonne « Service ») : appels réels de la dernière heure et vérification de joignabilité par une requête HEAD sans identifiant, toutes les 10 minutes du lundi au vendredi de 7 h à 19 h (`PROBE`, `SLOW_MS`) ; route `/api/status`, sans volume ni identité.
-- Supervision du hub : `GET /metrics` au format Prometheus (état, joignabilité, appels et erreurs par type, temps de réponse, sièges, télémétrie), protégé par un jeton dédié `METRICS_TOKEN`, absent sans lui.
+- Supervision du hub : `GET /metrics` au format Prometheus et `GET /metrics/prtg` pour le capteur PRTG « HTTP Data Advanced » (santé avec seuils, joignabilité, appels et erreurs, temps de réponse, sièges), protégés par un jeton dédié `METRICS_TOKEN` (Bearer ou authentification HTTP), absents sans lui.
 - Classement des applications par domaine (Commerce, Finance, Industrie, Documents…), modifiable par `CONNECTOR_DOMAINS`.
 
 ### Modifié

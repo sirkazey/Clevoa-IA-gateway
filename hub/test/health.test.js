@@ -86,9 +86,9 @@ test("Hub : domaine d'une application surchargé par CONNECTOR_DOMAINS ; valeur 
   } finally { await hub.stop(); }
 });
 
-test("Supervision /metrics : absente sans METRICS_TOKEN ; jeton exigé ; format Prometheus sans identité ni clé", async () => {
+test("Supervision /metrics et /metrics/prtg : absentes sans METRICS_TOKEN ; jeton exigé ; formats Prometheus et PRTG sans identité ni clé", async () => {
   const off = await startHub({ upstreamUrl: up.url });
-  try { assert.equal((await fetch(`${off.url}/metrics`)).status, 404, "désactivée par défaut"); } finally { await off.stop(); }
+  try { for (const r of ["/metrics", "/metrics/prtg"]) assert.equal((await fetch(`${off.url}${r}`)).status, 404, "désactivée par défaut"); } finally { await off.stop(); }
   const hub = await startHub({ upstreamUrl: up.url, users: { [KEY]: connectedUser(up.url) }, env: { METRICS_TOKEN: "jeton-supervision-0123456789" } });
   try {
     assert.equal((await fetch(`${hub.url}/metrics`)).status, 401);
@@ -107,6 +107,17 @@ test("Supervision /metrics : absente sans METRICS_TOKEN ; jeton exigé ; format 
     assert.match(txt, /^clevoa_system_state\{system="sagex3",state="ok"\} 1$/m);
     assert.match(txt, /^clevoa_hub_seats 1$/m);
     for (const x of [KEY, "alice", "sage-token", "jeton-supervision"]) assert.ok(!txt.includes(x), `rien de ${x}`);
+    // PRTG (capteur HTTP Data Advanced) : JSON au format PRTG, jeton en Bearer ou en mot de passe d'une authentification HTTP
+    const basic = (pwd) => ({ Authorization: `Basic ${Buffer.from(`prtg:${pwd}`).toString("base64")}` });
+    assert.equal((await fetch(`${hub.url}/metrics/prtg`, { headers: basic("faux") })).status, 401);
+    const prtg = await (await fetch(`${hub.url}/metrics/prtg`, { headers: basic("jeton-supervision-0123456789") })).json();
+    const ch = Object.fromEntries(prtg.prtg.result.map((r) => [r.channel, r]));
+    assert.equal(ch["Sage X3 · santé"].value, 0); assert.equal(ch["Sage X3 · santé"].limitmaxerror, 1.5);
+    assert.equal(ch["Sage X3 · appels"].value, 1); assert.equal(ch["Sage X3 · appels"].mode, "Difference");
+    assert.ok(ch["Hub · sièges"] && prtg.prtg.result.length <= 50, "50 canaux au plus par capteur PRTG");
+    assert.match(prtg.prtg.text, /systèmes opérationnels/);
+    for (const x of [KEY, "alice", "jeton-supervision"]) assert.ok(!JSON.stringify(prtg).includes(x), `rien de ${x}`);
+    assert.equal((await fetch(`${hub.url}/metrics/prtg`, { headers: { Authorization: "Bearer jeton-supervision-0123456789" } })).status, 200);
     const cfg = (await (await fetch(`${hub.url}/api/me`, { headers: { Cookie: `mcp_key=${KEY}` } })).json()).config ?? [];
     assert.equal(cfg.find((v) => v.name === "METRICS_TOKEN")?.value, "••••••••", "jeton masqué dans la configuration du portail");
   } finally { await hub.stop(); }

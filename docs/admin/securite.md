@@ -41,7 +41,7 @@ d'outils ; noms d'objets validés (`^\w+$`) ; outils annotés `readOnlyHint`.
 * État des systèmes (1.4.0) : le hub envoie, du lundi au vendredi de 7 h à 19 h, une requête `HEAD` toutes les 10 minutes
   vers l'adresse de chaque système réel, **sans aucun identifiant** ni redirection suivie (`PROBE=off` la désactive). Le
   portail (`/api/status`, collaborateur connecté) n'affiche qu'un état et un temps de réponse par système, jamais un
-  volume ni une identité. La supervision (`/metrics`) exige un jeton dédié `METRICS_TOKEN`, distinct des clés des
+  volume ni une identité. La supervision (`/metrics`, `/metrics/prtg`) exige un jeton dédié `METRICS_TOKEN`, distinct des clés des
   collaborateurs, et n'existe pas sans lui ; elle ne contient ni identité, ni clé, ni adresse, ni donnée métier.
 * Limitation de débit en mémoire, par adresse IP et par minute : 20 diagnostics, 30 actions portail, 60 `/api/me` et
   `/api/status`, 30 `/metrics`,

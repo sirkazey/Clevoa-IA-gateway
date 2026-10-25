@@ -18,7 +18,7 @@ sur le système réel), **testé sur bouchon** (tests automatisés et simulateur
 | Portail, diagnostic, blocs de configuration, exemples de questions | disponible | usage quotidien en préproduction ; refonte v1.3.1 validée sur bouchon ([compte rendu](portail-v1.3.1.md)) | revue sur le portail de préproduction réel |
 | Portail 1.4.0 : une ligne par application par domaine, colonne « Service », assistant en colonne, questions par domaine | testé sur bouchon | tests du portail, captures et axe-core sur bouchon ([compte rendu](portail-v1.4.md)) | revue par des collaborateurs sur la préproduction réelle |
 | État des systèmes (appels de la dernière heure, vérification HEAD sans identifiant en semaine de 7 h à 19 h) | testé sur bouchon | `health.test.js` | vérification vers Sage X3 et MyReport sur le réseau de Charlois, accord de l'équipe réseau |
-| Supervision du hub (`/metrics`, format Prometheus, jeton dédié) | testé sur bouchon | `health.test.js` | branchement dans l'outil de supervision de Charlois |
+| Supervision du hub (`/metrics` Prometheus, `/metrics/prtg` PRTG, jeton dédié) | testé sur bouchon | `health.test.js` | capteur HTTP Data Advanced sur le PRTG de Charlois |
 | Claude Desktop via `mcp-remote` | disponible | vérifié le 23/10/2026 sur Windows | |
 | Claude Code, ChatGPT, Copilot (MCP HTTP + en-tête) | testé sur bouchon | tests de transport du hub ; Claude Code déclaré vérifié sans entrée au journal ; ChatGPT et Copilot non exercés | une session réelle par assistant, consignée au journal |
 | Claude.ai web et mobile | écarté | décision ([historique](../history/decisions.md)) | |

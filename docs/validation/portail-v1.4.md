@@ -65,4 +65,4 @@ Avant, pour comparaison : [portail 1.3.1](portail-v1.3.1/2-outils-connectes-desk
 * Revue par deux ou trois collaborateurs de Charlois sur la préproduction réelle (lisibilité de la colonne « Service »,
   libellés des domaines).
 * Accord de l'équipe réseau de Charlois pour les requêtes `HEAD` régulières vers Sage X3 et MyReport.
-* Branchement de `/metrics` dans l'outil de supervision de Charlois (outil à confirmer).
+* Capteur PRTG « HTTP Data Advanced » sur `/metrics/prtg` chez Charlois (exploitation § 11).
