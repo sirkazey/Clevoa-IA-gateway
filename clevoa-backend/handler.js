@@ -1,19 +1,23 @@
 // Backend Clevoa (AWS Lambda), deux fonctions et aucune dépendance à installer :
 // - telemetry : reçoit le POST d'un hub Clevoa AI Gateway (toutes les 6 heures), vérifie la clé client, valide le payload, met à
 //   jour l'état de l'installation, ajoute une ligne d'historique pour la période, et ouvre ou ferme les incidents d'erreurs ;
-// - report : passage horaire planifié qui ouvre un incident « silence » pour une installation muette, et rend un rapport JSON.
+// - report : passage horaire planifié qui ouvre un incident « silence » pour une installation muette, renvoie un e-mail qui
+//   n'a pas pu partir, et rend un rapport JSON.
 // Un e-mail (sujet SNS ALERT_TOPIC_ARN) part seulement quand un incident s'ouvre ou se ferme chez un client : jamais pour une
-// version ancienne ni pour un rapport sans changement.
+// version ancienne ni pour un rapport sans changement. L'état retient ce qui a été annoncé (`notified`) : un e-mail en échec
+// est retenté, un e-mail réussi n'est jamais renvoyé. Plafond d'e-mails par client et par heure (ALERT_MAX_PER_HOUR).
 // Persistance : table DynamoDB si TELEMETRY_TABLE est renseignée (SDK AWS fourni par le runtime Lambda Node 22), mémoire de
 // l'instance sinon (tests locaux, aucun accès AWS). Une partition par installation (pk « client#installation#env ») : la ligne
-// d'état (sk « ETAT ») et une ligne par période (sk « P#<horodatage> »), expirées RETENTION_DAYS jours après leur écriture.
+// d'état (sk « ETAT », attribut `etat` indexé par l'index « etats ») et une ligne par période (sk « P#<début de période> »,
+// réécrite à l'identique si le hub renvoie la même période), expirées RETENTION_DAYS jours après leur écriture.
 // La console de suivi (clevoa-console/) lit cette table, en lecture seule.
 import { createHash, timingSafeEqual } from "node:crypto";
 
 const MAX_BODY = 8192; // un payload légitime fait environ 1,5 Ko avec les statistiques de cinq connecteurs
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-const SEMVER = /^\d{1,4}\.\d{1,4}\.\d{1,4}(-[0-9A-Za-z.-]{1,20})?$/;
+const SEMVER = /^\d{1,4}\.\d{1,4}\.\d{1,4}(-(alpha|beta|rc)\.\d{1,3})?$/; // aucun texte libre jusque dans les e-mails
 const NAME = /^[a-z0-9_-]{1,32}$/;
+const okName = (n) => NAME.test(n) && !(n in Object.prototype); // ni « __proto__ » ni « constructor »
 export const ERROR_TYPES = ["auth", "quota", "timeout", "unreachable", "other", "user"];
 export const STATE = "ETAT";
 const env = (n, d) => process.env[n] || d;
@@ -46,7 +50,7 @@ const int = (v, max) => Number.isInteger(v) && v >= 0 && v <= max;
 function validStats(stats) {
   if (!stats || typeof stats !== "object" || Array.isArray(stats)) return false;
   const names = Object.keys(stats);
-  if (names.length > 20 || names.some((n) => !NAME.test(n))) return false;
+  if (names.length > 20 || names.some((n) => !okName(n))) return false;
   return Object.values(stats).every((s) => s && typeof s === "object" && !Array.isArray(s)
     && Object.keys(s).sort().join() === "authUsers,calls,errors,p50,p95,users"
     && int(s.calls, 1e8) && int(s.users, 1e6) && int(s.authUsers, s.users) && int(s.p50, 600_000) && int(s.p95, 600_000)
@@ -66,7 +70,7 @@ export function validate(p) {
   if (p.date !== undefined && (typeof p.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(p.date))) return "date : AAAA-MM-JJ attendu";
   if (!p.connectors || typeof p.connectors !== "object" || Array.isArray(p.connectors)) return "connectors doit être un objet de booléens";
   const names = Object.keys(p.connectors);
-  if (names.length > 20 || names.some((n) => !NAME.test(n)) || Object.values(p.connectors).some((v) => typeof v !== "boolean")) return "connectors doit être un objet de booléens";
+  if (names.length > 20 || names.some((n) => !okName(n)) || Object.values(p.connectors).some((v) => typeof v !== "boolean")) return "connectors doit être un objet de booléens";
   if (!int(p.requests, 1e9)) return "requests doit être un entier positif";
   if (p.seats !== undefined && !int(p.seats, 1e6)) return "seats doit être un entier positif"; // optionnel : hubs antérieurs à 1.2
   if (p.since !== undefined && (typeof p.since !== "string" || p.since.length > 30 || !/^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(p.since))) return "since : date ISO attendue"; // optionnels : hubs antérieurs à 1.3.2-rc.2
@@ -100,6 +104,26 @@ export function errorIncidents(stats = {}) {
   return out.sort();
 }
 
+/** Incidents d'erreurs après une période. Un incident s'ouvre selon errorIncidents ; un incident ouvert ne se ferme que sur
+ *  preuve (assez d'appels avec un taux normal, ou un collaborateur sans refus d'authentification). Une période creuse (nuit,
+ *  week-end, redémarrage) ou un hub sans statistiques le laisse ouvert : pas d'e-mails qui alternent. « silence » se ferme au contact. */
+export function nextIncidents(before = [], stats) {
+  const open = before.filter((c) => c !== "silence");
+  if (!stats) return open;
+  const rate = num("ERROR_RATE", "0.2"), minCalls = num("ERROR_MIN_CALLS", "10");
+  const healed = (code) => {
+    const [kind, c] = code.split(":"), s = stats[c];
+    if (!s) return false;
+    return kind === "auth" ? s.users > s.authUsers : s.calls >= minCalls && systemErrors(s) / s.calls <= rate;
+  };
+  return [...new Set([...errorIncidents(stats), ...open.filter((c) => !healed(c))])].sort();
+}
+
+/** Délai de silence d'une installation : SILENCE_HOURS (14 h) pour un hub qui envoie toutes les 6 heures, SILENCE_HOURS_LEGACY
+ *  (50 h) pour un hub antérieur à 1.3.2-rc.2, qui n'envoie qu'une fois par jour. Partagé avec la console. */
+export const silenceMs = (i) => (i.cadence === 24 ? num("SILENCE_HOURS_LEGACY", "50") : num("SILENCE_HOURS", "14")) * 3600_000;
+const codes = (s) => (s ? s.split(",") : []);
+
 /** Phrase lisible d'un incident, pour l'e-mail et la console. */
 export function describe(code, item = {}) {
   if (code === "silence") return `aucun contact depuis le ${item.lastSeen ?? "?"} (hub arrêté, flux sortant bloqué ou clé retirée)`;
@@ -111,21 +135,37 @@ export function describe(code, item = {}) {
   return `${label(c)} : ${Math.round((100 * systemErrors(s)) / s.calls)} % d'erreurs sur la période (${systemErrors(s)} sur ${s.calls} appels : ${detail})`;
 }
 
-/** Envoie un e-mail seulement si des incidents s'ouvrent ou se ferment ; une erreur d'envoi n'interrompt jamais la fonction. */
-async function notify(item, opened, closed, publish) {
-  if (!opened.length && !closed.length) return null;
+/** Plafond d'e-mails par client et par heure : une clé divulguée ne peut pas inonder la messagerie de Clevoa. Le dernier e-mail
+ *  autorisé est suivi d'un avertissement ; au-delà, les alertes restent dans CloudWatch et dans la console. */
+async function budget(db, client, now) {
+  const max = num("ALERT_MAX_PER_HOUR", "10");
+  try {
+    const n = await db.count(`${client}#alertes`, `H#${now.toISOString().slice(0, 13)}`, Math.floor(now.getTime() / 1000) + 2 * 86400);
+    return n < max ? "ok" : n === max ? "last" : "over";
+  } catch (e) { console.error("[clevoa] compteur d'alertes illisible", e.name); return "ok"; }
+}
+
+/** Envoie un e-mail seulement si des incidents s'ouvrent ou se ferment. Renvoie vrai si l'annonce est faite (ou volontairement
+ *  retenue par le plafond), faux si l'envoi a échoué : l'appelant ne la marque pas comme annoncée et elle sera retentée. */
+async function notify(item, opened, closed, { publish, db, now = new Date() } = {}) {
+  if (!opened.length && !closed.length) return true;
   const where = `${item.client} · ${item.env ?? "?"} · ${item.version} · installation ${item.installation}`;
   const subject = opened.length ? `Clevoa AI Gateway : incident chez ${item.client}` : `Clevoa AI Gateway : rétabli chez ${item.client}`;
   const back = (c) => (c === "silence" ? "le hub a repris contact" : `${label(c.split(":")[1])} fonctionne de nouveau normalement`);
   const lines = [where, "", ...opened.map((c) => `Nouvel incident : ${describe(c, item)}`), ...closed.map((c) => `Rétabli : ${back(c)}`)];
   console.log("[clevoa] ALERTE", JSON.stringify({ pk: item.pk, opened, closed }));
-  if (!process.env.ALERT_TOPIC_ARN && !publish) return null;
+  if (!process.env.ALERT_TOPIC_ARN && !publish) return true;
+  const quota = await budget(db, item.client, now);
+  if (quota === "over") { console.warn("[clevoa] e-mail non envoyé : plafond horaire atteint", JSON.stringify({ pk: item.pk })); return true; }
   const send = publish ?? (async (subj, message) => {
     const sns = await import("@aws-sdk/client-sns"); // fourni par le runtime Lambda Node 22
     await new sns.SNSClient({}).send(new sns.PublishCommand({ TopicArn: process.env.ALERT_TOPIC_ARN, Subject: subj, Message: message }));
   });
-  try { await send(subject, lines.join("\n")); return null; }
-  catch (e) { console.error("[clevoa] échec de l'alerte SNS", e.name); return e.name; }
+  try {
+    await send(subject, lines.join("\n"));
+    if (quota === "last") await send(`Clevoa AI Gateway : trop d'alertes chez ${item.client}`, `${num("ALERT_MAX_PER_HOUR", "10")} e-mails d'incident en une heure pour ${item.client} : les suivants sont retenus jusqu'à l'heure suivante (journaux CloudWatch et console). Volume anormal : retirer la clé du client de CLEVOA_KEYS.`);
+    return true;
+  } catch (e) { console.error("[clevoa] échec de l'alerte SNS", e.name); return false; }
 }
 
 // ---------- Persistance ----------
@@ -136,6 +176,13 @@ export function memoryStore() {
     async get(pk) { return items.get(k(pk, STATE)) ?? null; },
     async put(item) { const prev = items.get(k(item.pk, item.sk)); items.set(k(item.pk, item.sk), item.sk === STATE ? { ...item, firstSeen: prev?.firstSeen ?? item.firstSeen ?? item.lastSeen } : item); },
     async list() { return [...items.values()].filter((i) => i.sk === STATE); },
+    async count(pk, sk) { const it = items.get(k(pk, sk)) ?? { pk, sk, n: 0 }; it.n++; items.set(k(pk, sk), it); return it.n; },
+    /** Mise à jour conditionnelle de l'état : seulement si ni un contact ni un autre passage ne l'a changé depuis la lecture. */
+    async claim(pk, expect, fields) {
+      const it = items.get(k(pk, STATE));
+      if (!it || it.lastSeen !== expect.lastSeen || it.notified !== expect.notified) return false;
+      items.set(k(pk, STATE), { ...it, ...fields }); return true;
+    },
     async history(pk, from = "") { return [...items.values()].filter((i) => i.pk === pk && i.sk.startsWith("P#") && i.sk >= `P#${from}`).sort((a, b) => (a.sk < b.sk ? -1 : 1)); },
   };
 }
@@ -147,11 +194,12 @@ export const fromAttr = (a) => ("S" in a ? a.S : "N" in a ? Number(a.N) : "BOOL"
   : Object.fromEntries(Object.entries(a.M).map(([k, x]) => [k, fromAttr(x)])));
 const fromItem = (it) => fromAttr({ M: it });
 
-/** Stockage DynamoDB (clé pk + sk). La ligne d'état garde son premier contact ; les lignes de période sont écrites une fois.
- *  `cmds` reçoit les classes de commandes du SDK ; la console n'utilise que get, list et history (lecture seule). */
-export function dynamoStore(table, { client, UpdateItemCommand, ScanCommand, QueryCommand, GetItemCommand }) {
-  const scanAll = async (input) => { const out = []; let ExclusiveStartKey;
-    do { const r = await client.send(new ScanCommand({ ...input, ExclusiveStartKey })); for (const it of r.Items || []) out.push(fromItem(it)); ExclusiveStartKey = r.LastEvaluatedKey; } while (ExclusiveStartKey);
+/** Stockage DynamoDB (clé pk + sk). La ligne d'état garde son premier contact ; les lignes d'état sont listées par l'index
+ *  creux « etats » (sans lire l'historique). Le second argument reçoit les classes de commandes du SDK ; la console n'utilise
+ *  que get, list et history (lecture seule). */
+export function dynamoStore(table, { client, UpdateItemCommand, QueryCommand, GetItemCommand }) {
+  const queryAll = async (input) => { const out = []; let ExclusiveStartKey;
+    do { const r = await client.send(new QueryCommand({ ...input, ExclusiveStartKey })); for (const it of r.Items || []) out.push(fromItem(it)); ExclusiveStartKey = r.LastEvaluatedKey; } while (ExclusiveStartKey);
     return out; };
   return {
     async get(pk) { const r = await client.send(new GetItemCommand({ TableName: table, Key: { pk: { S: pk }, sk: { S: STATE } } })); return r.Item ? fromItem(r.Item) : null; },
@@ -167,15 +215,27 @@ export function dynamoStore(table, { client, UpdateItemCommand, ScanCommand, Que
         ExpressionAttributeValues: { ...Object.fromEntries(names.map((n, i) => [`:v${i}`, toAttr(fields[n])])), ...(keepFirst ? { ":now": { S: firstSeen ?? item.lastSeen } } : {}) },
       }));
     },
-    list: () => scanAll({ TableName: table, FilterExpression: "sk = :e", ExpressionAttributeValues: { ":e": { S: STATE } } }),
-    async history(pk, from = "") {
-      const out = []; let ExclusiveStartKey;
-      do {
-        const r = await client.send(new QueryCommand({ TableName: table, KeyConditionExpression: "pk = :p AND sk BETWEEN :a AND :b",
-          ExpressionAttributeValues: { ":p": { S: pk }, ":a": { S: `P#${from}` }, ":b": { S: "P#~" } }, ExclusiveStartKey }));
-        for (const it of r.Items || []) out.push(fromItem(it)); ExclusiveStartKey = r.LastEvaluatedKey;
-      } while (ExclusiveStartKey);
-      return out;
+    list: () => queryAll({ TableName: table, IndexName: "etats", KeyConditionExpression: "etat = :e", ExpressionAttributeValues: { ":e": { S: STATE } } }),
+    history: (pk, from = "") => queryAll({ TableName: table, KeyConditionExpression: "pk = :p AND sk BETWEEN :a AND :b",
+      ExpressionAttributeValues: { ":p": { S: pk }, ":a": { S: `P#${from}` }, ":b": { S: "P#~" } } }),
+    async count(pk, sk, expiresAt) {
+      const r = await client.send(new UpdateItemCommand({ TableName: table, Key: { pk: { S: pk }, sk: { S: sk } }, UpdateExpression: "ADD #n :one SET expiresAt = :t",
+        ExpressionAttributeNames: { "#n": "n" }, ExpressionAttributeValues: { ":one": { N: "1" }, ":t": { N: String(expiresAt) } }, ReturnValues: "UPDATED_NEW" }));
+      return Number(r.Attributes.n.N);
+    },
+    async claim(pk, expect, fields) {
+      const names = Object.keys(fields);
+      try {
+        await client.send(new UpdateItemCommand({
+          TableName: table, Key: { pk: { S: pk }, sk: { S: STATE } },
+          UpdateExpression: `SET ${names.map((n, i) => `#f${i} = :v${i}`).join(", ")}`,
+          ConditionExpression: `#seen = :seen AND ${expect.notified === undefined ? "attribute_not_exists(#told)" : "#told = :told"}`,
+          ExpressionAttributeNames: { ...Object.fromEntries(names.map((n, i) => [`#f${i}`, n])), "#seen": "lastSeen", "#told": "notified" },
+          ExpressionAttributeValues: { ...Object.fromEntries(names.map((n, i) => [`:v${i}`, toAttr(fields[n])])), ":seen": { S: expect.lastSeen },
+            ...(expect.notified === undefined ? {} : { ":told": { S: expect.notified } }) },
+        }));
+        return true;
+      } catch (e) { if (e.name === "ConditionalCheckFailedException") return false; throw e; }
     },
   };
 }
@@ -186,7 +246,7 @@ async function store() {
   if (current) return current;
   if (!process.env.TELEMETRY_TABLE) return (current = memoryStore());
   const sdk = await import("@aws-sdk/client-dynamodb"); // fourni par le runtime Lambda Node 22 : rien à empaqueter
-  return (current = dynamoStore(process.env.TELEMETRY_TABLE, { client: new sdk.DynamoDBClient({}), UpdateItemCommand: sdk.UpdateItemCommand, ScanCommand: sdk.ScanCommand, QueryCommand: sdk.QueryCommand, GetItemCommand: sdk.GetItemCommand }));
+  return (current = dynamoStore(process.env.TELEMETRY_TABLE, { client: new sdk.DynamoDBClient({}), UpdateItemCommand: sdk.UpdateItemCommand, QueryCommand: sdk.QueryCommand, GetItemCommand: sdk.GetItemCommand }));
 }
 export const setStore = (s) => { current = s; };
 
@@ -216,18 +276,22 @@ export async function telemetry(event, { publish } = {}) {
   try { db = await store(); prev = await db.get(pk); }
   catch (e) { console.error("[clevoa] échec de lecture", e.name); return reply(500, { status: "error", error: "enregistrement impossible" }); }
   const before = prev?.incidents ?? [];
-  // Les statistiques décident des incidents d'erreurs ; un hub sans statistiques (antérieur à 1.3.2-rc.2) garde les siens.
-  const errors = p.stats ? errorIncidents(p.stats) : before.filter((c) => c !== "silence");
+  const told = prev ? prev.notified ?? before.join(",") : ""; // incidents déjà annoncés par e-mail
+  const incidents = nextIncidents(before, p.stats);
   const item = {
-    pk, sk: STATE, client, installation, version: p.version, env: p.env ?? null, connectors: p.connectors, requests: p.requests,
-    seats: p.seats ?? null, reportedDate: p.date ?? null, lastSeen: seen, expiresAt, incidents: errors, lastStats: p.stats ?? null,
+    pk, sk: STATE, etat: STATE, client, installation, version: p.version, env: p.env ?? null, connectors: p.connectors, requests: p.requests,
+    seats: p.seats ?? null, reportedDate: p.date ?? null, lastSeen: seen, expiresAt, incidents, lastStats: p.stats ?? null,
+    cadence: p.stats ? 6 : 24, // hub antérieur à 1.3.2-rc.2 : un envoi par jour
   };
   try {
-    await db.put(item);
-    await db.put({ pk, sk: `P#${seen}`, since: p.since ?? null, version: p.version, requests: p.requests, seats: p.seats ?? null, stats: p.stats ?? null, expiresAt });
+    // Clé de période = début de période : un envoi répété (réponse perdue, le hub renvoie la même période) réécrit la même ligne.
+    await db.put({ pk, sk: `P#${p.since ?? seen}`, at: seen, since: p.since ?? null, version: p.version, requests: p.requests, seats: p.seats ?? null, stats: p.stats ?? null, expiresAt });
   } catch (e) { console.error("[clevoa] échec d'enregistrement", e.name); return reply(500, { status: "error", error: "enregistrement impossible" }); }
-  console.log("[clevoa] contact", JSON.stringify({ pk, version: item.version, env: item.env, requests: item.requests, seats: item.seats, incidents: errors }));
-  await notify(item, errors.filter((c) => !before.includes(c)), before.filter((c) => !errors.includes(c)), publish); // « silence » se ferme au premier contact
+  const announced = await notify(item, incidents.filter((c) => !codes(told).includes(c)), codes(told).filter((c) => !incidents.includes(c)), { publish, db, now });
+  item.notified = announced ? incidents.join(",") : told; // e-mail en échec : retenté au prochain contact ou au passage horaire
+  try { await db.put(item); }
+  catch (e) { console.error("[clevoa] échec d'enregistrement", e.name); return reply(500, { status: "error", error: "enregistrement impossible" }); }
+  console.log("[clevoa] contact", JSON.stringify({ pk, version: item.version, env: item.env, requests: item.requests, seats: item.seats, incidents }));
 
   const body = { status: "active", recorded: seen };
   if (process.env.MIN_VERSION) body.minimum = process.env.MIN_VERSION; // le hub signale dans ses journaux une version sous le minimum
@@ -236,31 +300,39 @@ export async function telemetry(event, { publish } = {}) {
 }
 
 // ---------- Fonction « report » (planifiée chaque heure) ----------
-/** Ouvre l'incident « silence » d'une installation muette depuis SILENCE_HOURS heures (14 par défaut : deux envois de 6 h
- *  manqués) ; au-delà de SILENCE_MAX_DAYS jours (30), l'installation est « perdue » : listée, sans alerte. Les versions sous
- *  MIN_VERSION sont listées sans e-mail. Renvoie le rapport (invocation à la demande : serverless invoke -f report). */
+/** Ouvre l'incident « silence » d'une installation muette (14 h, ou 50 h pour un hub qui n'envoie qu'une fois par jour) ;
+ *  au-delà de SILENCE_MAX_DAYS jours (30), l'installation est « perdue » : listée, sans alerte. Renvoie aussi un e-mail qui
+ *  n'avait pas pu partir. Chaque changement est une mise à jour conditionnelle : un contact du hub ou un second passage
+ *  simultané l'emporte, sans double e-mail ni état écrasé. Les versions sous MIN_VERSION sont listées sans e-mail. */
 export async function report(_event = {}, { now = Date.now(), publish } = {}) {
   const db = await store();
   const items = await db.list();
-  const silenceMs = num("SILENCE_HOURS", "14") * 3600_000, lostMs = num("SILENCE_MAX_DAYS", "30") * 86400_000;
+  const lostMs = num("SILENCE_MAX_DAYS", "30") * 86400_000;
   const min = process.env.MIN_VERSION;
   const age = (i) => now - Date.parse(i.lastSeen);
   const row = (i) => ({ pk: i.pk, client: i.client, env: i.env, version: i.version, lastSeen: i.lastSeen, incidents: i.incidents ?? [] });
-  const silent = items.filter((i) => age(i) > silenceMs && age(i) <= lostMs);
+  const live = items.filter((i) => age(i) <= lostMs);
+  const silent = live.filter((i) => age(i) > silenceMs(i));
   const result = {
     generatedAt: new Date(now).toISOString(), total: items.length,
     silent: silent.map(row), lost: items.filter((i) => age(i) > lostMs).map(row),
-    outdated: min ? items.filter((i) => age(i) <= lostMs && compareVersions(i.version, min) < 0).map(row) : [],
+    outdated: min ? live.filter((i) => compareVersions(i.version, min) < 0).map(row) : [],
     incidents: items.filter((i) => (i.incidents ?? []).length).map(row),
   };
-  const errors = [];
-  for (const i of silent.filter((x) => !(x.incidents ?? []).includes("silence"))) {
-    const updated = { ...i, incidents: [...(i.incidents ?? []), "silence"].sort() };
-    await db.put(updated);
-    const e = await notify(updated, ["silence"], [], publish);
-    if (e) errors.push(e);
+  let failed = 0;
+  for (const i of live) {
+    const was = i.incidents ?? [], told = i.notified ?? was.join(",");
+    const incidents = silent.includes(i) && !was.includes("silence") ? [...was, "silence"].sort() : was;
+    const target = incidents.join(",");
+    if (target === told && incidents === was) continue;
+    if (!(await db.claim(i.pk, { lastSeen: i.lastSeen, notified: i.notified }, { incidents, notified: target }))) continue; // déjà traité ailleurs
+    const updated = { ...i, incidents, notified: target };
+    if (!(await notify(updated, incidents.filter((c) => !codes(told).includes(c)), codes(told).filter((c) => !incidents.includes(c)), { publish, db, now: new Date(now) }))) {
+      failed++;
+      await db.claim(i.pk, { lastSeen: i.lastSeen, notified: target }, { notified: told }).catch(() => {}); // retenté au prochain passage
+    }
   }
-  if (errors.length) result.alertErrors = errors;
+  if (failed) result.alertErrors = failed;
   console.log("[clevoa] rapport", JSON.stringify({ total: result.total, silent: result.silent.length, lost: result.lost.length, outdated: result.outdated.length, incidents: result.incidents.length }));
   return result;
 }

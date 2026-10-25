@@ -43,12 +43,28 @@ test("Historique : 30 jours de périodes de 6 h ; installation invalide refusée
   assert.equal((await fetch(`${url}/inconnu`, { headers: auth })).status, 404);
 });
 
-test("État : même règle que le backend (silence au-delà de 14 h, perdue au-delà de 30 jours)", () => {
+test("État : même règle que le backend (silence au-delà de 14 h, ou 50 h pour un hub d'avant 1.3.2-rc.2 ; perdue au-delà de 30 jours)", () => {
   const now = Date.parse("2026-10-25T12:00:00Z");
   assert.equal(status({ lastSeen: "2026-10-25T09:00:00Z", incidents: [] }, now), "ok");
   assert.equal(status({ lastSeen: "2026-10-25T09:00:00Z", incidents: ["erreurs:sagex3"] }, now), "incident");
   assert.equal(status({ lastSeen: "2026-10-24T20:00:00Z", incidents: [] }, now), "silencieuse");
   assert.equal(status({ lastSeen: "2026-09-01T00:00:00Z", incidents: [] }, now), "perdue");
+  assert.equal(status({ lastSeen: "2026-10-24T08:00:00Z", incidents: [], cadence: 24 }, now), "ok", "hub d'avant 1.3.2-rc.2 (un envoi par jour) : 28 h n'est pas un silence");
+  assert.equal(status({ lastSeen: "2026-10-23T08:00:00Z", incidents: [], cadence: 24 }, now), "silencieuse", "au-delà de 50 h");
+});
+
+test("Requête mal formée : 400 sans arrêter la console ; script servi à part, CSP sans script en ligne", async () => {
+  const { request } = await import("node:http");
+  const status = await new Promise((resolve, reject) => {
+    const r = request({ host: "127.0.0.1", port: server.address().port, path: "//", method: "GET" }, (res) => { res.resume(); resolve(res.statusCode); });
+    r.on("error", reject); r.end();
+  });
+  assert.equal(status, 400);
+  assert.equal((await fetch(`${url}/health`)).status, 200, "la console répond toujours");
+  const js = await fetch(`${url}/app.js`, { headers: auth });
+  assert.equal(js.status, 200); assert.match(js.headers.get("content-type"), /javascript/);
+  const csp = (await fetch(`${url}/`, { headers: auth })).headers.get("content-security-policy");
+  assert.match(csp, /script-src 'self';/); assert.ok(!/script-src[^;]*unsafe-inline/.test(csp));
 });
 
 test("Échecs répétés du mot de passe : 429 après 10 essais en une minute", async () => {

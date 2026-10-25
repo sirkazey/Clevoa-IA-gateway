@@ -7,23 +7,30 @@ conservation : [sécurité § 4](../docs/admin/securite.md#4-télémétrie-clevo
 
 | Élément | Rôle |
 |---|---|
-| `POST /api/v1/telemetry` (fonction `telemetry`) | vérifie `X-Clevoa-Key`, valide le payload (champs connus seulement, statistiques bornées, 8 Ko au plus), met à jour la fiche de l'installation, ajoute une ligne d'historique, ouvre ou ferme les incidents d'erreurs, répond `{"status":"active"}` et, s'ils sont configurés, `minimum` et `latest` |
-| Fonction `report`, chaque heure à HH:07 UTC | ouvre l'incident « silence » d'une installation sans contact depuis `SILENCE_HOURS` (14 h, soit deux envois manqués) ; au-delà de `SILENCE_MAX_DAYS` (30 jours), l'installation est « perdue » : listée, sans e-mail ; renvoie aussi les versions sous `MIN_VERSION` (visibles dans la console, sans e-mail) |
-| Table DynamoDB `clevoa-backend-<stage>-installations` | clé `pk` = `client#installation#environnement`, `sk` = `ETAT` pour la fiche (version, connecteurs déclarés, sièges, premier et dernier contact, incidents en cours, statistiques du dernier envoi) ou `P#<date de réception>` pour une ligne d'historique (statistiques d'une période de 6 h) ; chaque ligne expire `RETENTION_DAYS` (400) jours après son écriture |
+| `POST /api/v1/telemetry` (fonction `telemetry`) | vérifie `X-Clevoa-Key`, valide le payload (champs connus seulement, statistiques bornées, 8 Ko au plus), ajoute ou réécrit la ligne d'historique de la période, ouvre ou ferme les incidents d'erreurs, met à jour la fiche de l'installation, répond `{"status":"active"}` et, s'ils sont configurés, `minimum` et `latest` |
+| Fonction `report`, chaque heure à HH:07 UTC | ouvre l'incident « silence » d'une installation muette ; renvoie un e-mail d'incident qui n'avait pas pu partir ; au-delà de `SILENCE_MAX_DAYS` (30 jours), l'installation est « perdue » : listée, sans e-mail ; liste aussi les versions sous `MIN_VERSION` (visibles dans la console, sans e-mail). Chaque changement est une mise à jour conditionnelle : un contact du hub ou un second passage simultané l'emporte, sans double e-mail |
+| Table DynamoDB `clevoa-backend-<stage>-installations` | clé `pk` = `client#installation#environnement`, `sk` = `ETAT` pour la fiche (version, cadence d'envoi, connecteurs déclarés, sièges, premier et dernier contact, incidents en cours et déjà annoncés, statistiques du dernier envoi) ou `P#<début de période>` pour une ligne d'historique (statistiques d'une période de 6 h ; un envoi répété de la même période réécrit sa ligne) ; compteur d'e-mails par client et par heure (`<client>#alertes`) ; index creux `etats` sur les seules fiches ; chaque ligne expire `RETENTION_DAYS` (400) jours après son écriture |
 | Sujet SNS `clevoa-backend-<stage>-alertes` | e-mails d'incident, abonnement créé une fois à la main |
-| Politique IAM `clevoa-backend-<stage>-console-lecture` | `Scan`, `Query`, `GetItem`, `DescribeTable` sur la table, rien d'autre : à attacher à l'utilisateur IAM de la console |
+| Politique IAM `clevoa-backend-<stage>-console-lecture` | `Query`, `GetItem`, `DescribeTable` sur la table et son index `etats`, rien d'autre : à attacher à l'utilisateur IAM de la console |
 
-**Incidents**, évalués sur chaque envoi (la dernière période de 6 heures) et par connecteur :
+**Incidents**, ouverts sur chaque envoi (la dernière période de 6 heures) et par connecteur :
 
 | Incident | Condition (variable, valeur par défaut) |
 |---|---|
-| `auth:<connecteur>` | tous les collaborateurs qui ont appelé l'outil ont reçu un refus d'authentification, à partir de `AUTH_MIN_USERS` (2) collaborateurs : application OAuth, secret ou mot de passe à vérifier chez le client |
+| `auth:<connecteur>` | tous les collaborateurs qui ont appelé l'outil ont été refusés en authentification sans être servis une seule fois sur la période, à partir de `AUTH_MIN_USERS` (2) collaborateurs : application OAuth, secret ou mot de passe à vérifier chez le client |
 | `erreurs:<connecteur>` | plus de `ERROR_RATE` (20 %) d'erreurs du système (délai, système injoignable, quota, authentification, autre) sur au moins `ERROR_MIN_CALLS` (10) appels ; les erreurs d'usage (outil hors liste blanche, compte non connecté) ne comptent pas |
-| `silence` | aucun contact depuis `SILENCE_HOURS` (14 h) |
+| `silence` | aucun contact depuis `SILENCE_HOURS` (14 h, deux envois manqués) ; `SILENCE_HOURS_LEGACY` (50 h) pour un hub antérieur à la 1.3.2-rc.2, qui n'envoie qu'une fois par jour |
+
+Un incident d'erreurs ne se ferme que sur preuve : au moins `ERROR_MIN_CALLS` appels avec un taux normal, ou un
+collaborateur authentifié. Une période creuse (nuit, week-end, redémarrage du hub) le laisse ouvert ; « silence » se
+ferme au premier contact. Un hub antérieur à la 1.3.2-rc.2 n'envoie pas de statistiques : seul l'incident « silence »
+le concerne.
 
 Un e-mail part à l'ouverture d'un incident (« Clevoa AI Gateway : incident chez <client> », avec la cause en clair) et
-un autre à sa fermeture (« rétabli chez <client> ») ; rien tant que l'incident dure, rien pour une version ancienne. Un
-hub antérieur à la 1.3.2-rc.2 n'envoie pas de statistiques : seul l'incident « silence » le concerne.
+un autre à sa fermeture (« rétabli chez <client> ») ; rien tant que l'incident dure, rien pour une version ancienne.
+La fiche retient ce qui a été annoncé : un e-mail en échec (SNS indisponible) est retenté au contact suivant ou au
+passage horaire, un e-mail parti n'est jamais renvoyé. Au plus `ALERT_MAX_PER_HOUR` (10) e-mails par client et par
+heure : le dernier est suivi d'un avertissement « trop d'alertes », les suivants restent dans CloudWatch et la console.
 
 Aucune dépendance à installer : le SDK AWS (DynamoDB, SNS) est fourni par le runtime Lambda Node 22. Sans
 `TELEMETRY_TABLE` (tests, poste local), les fiches sont gardées en mémoire. `CLEVOA_KEYS` liste des entrées
@@ -81,15 +88,17 @@ Retrait immédiat de la fiche :
 aws dynamodb delete-item --table-name clevoa-backend-prod-installations --key '{"pk":{"S":"<client>#<identifiant>#<ENV>"},"sk":{"S":"ETAT"}}'
 ```
 
-Limites connues, à reprendre au premier déploiement : les deux fonctions partagent un rôle IAM (la fonction
-`telemetry` détient aussi `Scan` et `Publish`) ; pas de limitation de débit par route sur l'API (une clé divulguée
-permet de créer des fiches en nombre, à révoquer en la retirant de `CLEVOA_KEYS`) ; `reservedConcurrency: 5` exige un
-compte AWS dont le quota dépasse 10 exécutions simultanées.
+Limites connues, à reprendre au premier déploiement : les deux fonctions partagent un rôle IAM ; le débit de l'API est
+plafonné à 2 requêtes par seconde (rafale de 10) par une extension de l'étape `HttpApiStage` dont la prise en compte est
+à vérifier dans la console API Gateway après le premier déploiement ; une clé divulguée permet encore de créer des
+fiches dans ce débit (à révoquer en la retirant de `CLEVOA_KEYS`) ; `reservedConcurrency: 5` exige un compte AWS dont
+le quota dépasse 10 exécutions simultanées. Un contact du hub qui arrive à la milliseconde où le passage horaire ouvre
+un « silence » peut effacer cet incident sans e-mail « rétabli » (cas jugé négligeable).
 
 Retirer la pile : `serverless remove --stage <stage>` supprime aussi la table et l'historique des contacts.
 
 ## Tester sans AWS
 
 ```bash
-cd clevoa-backend && npm test     # 14 tests : clés, validation, fiche et historique, séparation des clients, incidents et e-mails, silence, adaptateur DynamoDB
+cd clevoa-backend && npm test     # 19 tests : clés, validation, fiche et historique, incidents, e-mails, silence, passages concurrents, plafond, adaptateur DynamoDB
 ```

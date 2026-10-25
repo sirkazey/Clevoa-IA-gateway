@@ -27,7 +27,8 @@ function installation({ client, id, env, version, seats, connectors, base, now, 
       stats[c] = { calls, errors, users, authUsers: 0, p50, p95: Math.round(p50 * (2.2 + rand())) };
     }
     const requests = Object.values(stats).reduce((n, s) => n + s.calls, 0);
-    periods.push({ pk, sk: `P#${new Date(t).toISOString()}`, since: new Date(t - 6 * 3600_000).toISOString(), version, requests, seats, stats });
+    const since = new Date(t - 6 * 3600_000).toISOString();
+    periods.push({ pk, sk: `P#${since}`, at: new Date(t).toISOString(), since, version, requests, seats, stats });
   }
   const lastStats = periods.at(-1)?.stats ?? {};
   const incidents = [];
@@ -35,7 +36,7 @@ function installation({ client, id, env, version, seats, connectors, base, now, 
   if (silentHours > 14) incidents.push("silence");
   const state = { pk, sk: STATE, client, installation: id, env, version, seats, requests: periods.at(-1)?.requests ?? 0,
     connectors: Object.fromEntries(Object.keys(connectors).map((c) => [c, true])), lastSeen: new Date(last).toISOString(),
-    firstSeen: periods[0]?.sk.slice(2), incidents, lastStats };
+    firstSeen: periods[0]?.at, incidents, lastStats, cadence: 6 };
   return { state, periods };
 }
 
@@ -47,7 +48,7 @@ export function demoSource(now = Date.now()) {
       connectors: { salesforce: 1, sagex3: 1.4, sharepoint: 0.6, myreport: 0.3 }, incident: { connector: "sagex3", type: "unreachable", rate: 0.35, hours: 10 } }),
     installation({ client: "charlois-preprod", id: "67fd7c7b-73c4-4506-bd49-051fa600d04f", env: "PRE-PROD", version: "1.3.2-rc.2", seats: 4, base: 10, now, rand,
       connectors: { salesforce: 1, sagex3: 1, sharepoint: 1, dropbox: 1, myreport: 1 } }),
-    installation({ client: "client-exemple", id: "0c8e3f52-7d41-4b9a-9e2f-6a5b4c3d2e1f", env: "PRODUCTION", version: "1.3.1", seats: 9, base: 25, now, rand,
+    installation({ client: "client-exemple", id: "0c8e3f52-7d41-4b9a-9e2f-6a5b4c3d2e1f", env: "PRODUCTION", version: "1.3.2-rc.2", seats: 9, base: 25, now, rand,
       connectors: { salesforce: 1, sharepoint: 0.8 }, silentHours: 26 }),
   ];
   return {

@@ -157,6 +157,12 @@ test("Statistiques : par connecteur, appels, erreurs par type, collaborateurs di
   assert.equal(s.p50, 51); assert.ok(s.p95 >= 95 && s.p95 <= 100);
   const text = JSON.stringify(summary());
   for (const x of ["cle-alice", "cle-bob", "secret-dans-le-message", "Sage X3 401"]) assert.ok(!text.includes(x), `rien de ${x}`);
+  // Refus d'authentification passager : le collaborateur est servi ensuite, il ne compte plus parmi les refusés.
+  record("sf-test", "cle-dan", 10, Object.assign(new Error("401"), { status: 401 })); record("sf-test", "cle-dan", 10);
+  record("sf-test", "cle-eve", 10, Object.assign(new Error("401"), { status: 401 }));
+  assert.equal(summary()["sf-test"].authUsers, 1, "seule Eve n'a jamais été servie");
+  record("lent-test", "cle-alice", 3_600_000);
+  assert.equal(summary()["lent-test"].p95, 600_000, "latence plafonnée à 10 min (borne du backend)");
 });
 
 test("Statistiques : un envoi échoué les conserve pour le suivant ; un envoi réussi ouvre une nouvelle période", async (t) => {
@@ -176,6 +182,14 @@ test("Statistiques : un envoi échoué les conserve pour le suivant ; un envoi r
     await tm.send(CONNECTORS);
     assert.deepEqual(bodies.at(-1).stats, {}, "nouvelle période vide, rien compté deux fois");
   } finally { f.mock.restore(); }
+  let code = 400;
+  const g = mock.method(globalThis, "fetch", async (_u, init) => { bodies.push(JSON.parse(init.body)); return new Response("{}", { status: code }); });
+  try {
+    tm.record("myreport", "k1", 10);
+    assert.equal(await tm.send(CONNECTORS), null, "période refusée par Clevoa (400)");
+    code = 200; await tm.send(CONNECTORS);
+    assert.deepEqual(bodies.at(-1).stats, {}, "période refusée abandonnée, pas renvoyée en boucle");
+  } finally { g.mock.restore(); }
 });
 
 test("Créneaux : prochain envoi à 03, 09, 15 ou 21 h, heure locale", async () => {

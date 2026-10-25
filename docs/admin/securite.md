@@ -85,7 +85,7 @@ de plus de 8 Ko) :
 | `requests` | nombre d'appels d'outils depuis le dernier envoi **réussi**, tous collaborateurs confondus |
 | `seats` | collaborateurs ayant connecté au moins un outil (base de la licence par siège), un entier |
 | `since` | début de la période couverte par `stats` (dernier envoi réussi, ou démarrage du hub) |
-| `stats` | par connecteur utilisé pendant la période : nombre d'appels ; erreurs par type (`auth` jeton expiré ou refusé, `quota`, `timeout`, `unreachable` système injoignable, `other`, `user` erreur d'usage : outil hors liste blanche, compte non connecté) ; nombre de collaborateurs distincts ayant appelé l'outil (`users`) et ayant reçu un refus d'authentification (`authUsers`) ; latences médiane et 95e centile en millisecondes. Les collaborateurs sont comptés par une empreinte salée de leur clé MCP, tenue en mémoire et jamais transmise ; le sel change à chaque démarrage. Aucun nom d'outil appelé, argument, message d'erreur ni identifiant |
+| `stats` | par connecteur utilisé pendant la période : nombre d'appels ; erreurs par type (`auth` jeton expiré ou refusé, `quota`, `timeout`, `unreachable` système injoignable, `other`, `user` erreur d'usage : outil hors liste blanche, compte non connecté) ; nombre de collaborateurs distincts ayant appelé l'outil (`users`) et refusés en authentification sans avoir été servis une seule fois sur la période (`authUsers`) ; latences médiane et 95e centile en millisecondes. Les collaborateurs sont comptés par une empreinte salée de leur clé MCP, tenue en mémoire et jamais transmise ; le sel change à chaque démarrage. Aucun nom d'outil appelé, argument, message d'erreur ni identifiant |
 
 Ne quittent jamais le hub : jetons OAuth, clés MCP, mots de passe, données métier, contenu des requêtes, réponses des
 outils, noms et e-mails des collaborateurs, journaux applicatifs, adresses IP des postes. La clé `CLEVOA_KEY` identifie
@@ -99,7 +99,7 @@ DynamoDB chiffrée : une fiche par installation (dernier état, premier et derni
 ligne par envoi (les compteurs ci-dessus), chacune expirée 400 jours après son écriture (la suppression effective par
 AWS intervient en général sous quelques jours) ; la restauration à un instant donné de la table conserve une copie
 35 jours de plus. Journaux techniques CloudWatch : 90 jours. E-mails d'incident (nom du client, identifiant,
-environnement, connecteur et nature de l'incident), envoyés seulement à l'ouverture et à la fermeture d'un incident :
+environnement, connecteur et nature de l'incident), envoyés seulement à l'ouverture et à la fermeture d'un incident, au plus dix par client et par heure :
 conservés dans la messagerie de Clevoa, à purger selon sa propre politique. Ces données sont consultées par Clevoa dans
 une [console de suivi](../../clevoa-console/README.md) installée sur son réseau privé, en lecture seule. Détail :
 [backend](../../clevoa-backend/README.md).

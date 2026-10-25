@@ -26,7 +26,7 @@ cd clevoa-console && npm install && npm run demo      # http://localhost:8090, t
 
 1. **AWS, une fois** : après `serverless deploy` du backend, créer un utilisateur IAM `clevoa-console` sans accès à la
    console AWS, lui attacher la seule politique `clevoa-backend-prod-console-lecture` (créée par le déploiement :
-   `Scan`, `Query`, `GetItem`, `DescribeTable` sur la table de télémétrie), et créer une clé d'accès.
+   `Query`, `GetItem`, `DescribeTable` sur la table de télémétrie et son index), et créer une clé d'accès.
 2. **NAS** : copier le dépôt (ou ce dossier et `clevoa-backend/handler.js` à leur place), puis dans `clevoa-console/` :
 
    ```bash
@@ -49,13 +49,13 @@ si elle fuit, la désactiver dans IAM et en créer une autre.
 |---|---|
 | `TELEMETRY_TABLE`, `AWS_REGION` | table et région du backend (`clevoa-backend-prod-installations`, `eu-west-3`) |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | utilisateur IAM en lecture seule |
-| `CONSOLE_PASSWORD` | mot de passe de la page (vide : aucun mot de passe, déconseillé) |
+| `CONSOLE_PASSWORD` | mot de passe de la page, obligatoire hors démonstration (la console refuse de démarrer sans) |
 | `CONSOLE_PORT` | port publié (8090) |
-| `MIN_VERSION`, `SILENCE_HOURS`, `SILENCE_MAX_DAYS` | mêmes seuils que le backend, pour l'affichage |
+| `MIN_VERSION`, `SILENCE_HOURS`, `SILENCE_HOURS_LEGACY`, `SILENCE_MAX_DAYS` | mêmes seuils que le backend, pour l'affichage |
 | `CONSOLE_DEMO=1` | données de démonstration, sans AWS |
 
 ## Tester
 
 ```bash
-cd clevoa-console && npm test     # 6 tests : mot de passe, lecture seule, états, historique, entrées refusées
+cd clevoa-console && npm test     # 7 tests : mot de passe, lecture seule, requête mal formée, CSP, états, historique, entrées refusées
 ```

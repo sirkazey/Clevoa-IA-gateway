@@ -5,7 +5,7 @@
 import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import { timingSafeEqual } from "node:crypto";
-import { dynamoStore, describe, compareVersions } from "../clevoa-backend/handler.js";
+import { dynamoStore, describe, compareVersions, silenceMs } from "../clevoa-backend/handler.js";
 import { demoSource } from "./demo.js";
 
 const PORT = Number(process.env.CONSOLE_PORT || 8090);
@@ -14,9 +14,9 @@ const SILENCE_HOURS = Number(process.env.SILENCE_HOURS || 14), LOST_DAYS = Numbe
 const MIN_VERSION = process.env.MIN_VERSION || "";
 const PK = /^[a-z0-9-]{1,40}#[0-9a-z-]{1,40}#(PRODUCTION|PRE-PROD|inconnu)$/;
 const PUBLIC = new URL("./public/", import.meta.url).pathname;
-const FILES = { "/": ["index.html", "text/html; charset=utf-8"], "/favicon.svg": ["favicon.svg", "image/svg+xml"], "/fonts/outfit-variable-latin.woff2": ["fonts/outfit-variable-latin.woff2", "font/woff2"] };
+const FILES = { "/": ["index.html", "text/html; charset=utf-8"], "/app.js": ["app.js", "text/javascript; charset=utf-8"], "/favicon.svg": ["favicon.svg", "image/svg+xml"], "/fonts/outfit-variable-latin.woff2": ["fonts/outfit-variable-latin.woff2", "font/woff2"] };
 const HEADERS = {
-  "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'",
+  "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'",
   "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer", "Cache-Control": "no-store",
 };
 
@@ -25,15 +25,15 @@ async function source() {
   if (process.env.CONSOLE_DEMO === "1") return demoSource();
   if (!process.env.TELEMETRY_TABLE) throw new Error("TELEMETRY_TABLE non renseignée (ou CONSOLE_DEMO=1 pour la démonstration)");
   const sdk = await import("@aws-sdk/client-dynamodb");
-  const s = dynamoStore(process.env.TELEMETRY_TABLE, { client: new sdk.DynamoDBClient({}), ScanCommand: sdk.ScanCommand, QueryCommand: sdk.QueryCommand, GetItemCommand: sdk.GetItemCommand });
+  const s = dynamoStore(process.env.TELEMETRY_TABLE, { client: new sdk.DynamoDBClient({}), QueryCommand: sdk.QueryCommand, GetItemCommand: sdk.GetItemCommand });
   return { demo: false, list: s.list, get: s.get, history: s.history };
 }
 
-/** État lisible d'une installation, d'après la même règle que le backend. */
+/** État lisible d'une installation, d'après la même règle que le backend (silence à 14 h, ou 50 h pour un hub d'avant 1.3.2-rc.2). */
 export function status(i, now = Date.now()) {
   const age = now - Date.parse(i.lastSeen);
   if (age > LOST_DAYS * 86400_000) return "perdue";
-  if (age > SILENCE_HOURS * 3600_000 || (i.incidents ?? []).includes("silence")) return "silencieuse";
+  if (age > silenceMs(i) || (i.incidents ?? []).includes("silence")) return "silencieuse";
   if ((i.incidents ?? []).length) return "incident";
   return "ok";
 }
@@ -71,38 +71,44 @@ function send(res, code, body, type = "application/json; charset=utf-8", extra =
 }
 
 export function createConsole(src) {
-  return createServer(async (req, res) => {
-    const url = new URL(req.url, "http://console");
-    if (req.method !== "GET") return send(res, 405, { error: "lecture seule" });
-    if (url.pathname === "/health") return send(res, 200, { ok: true });
-    const ip = req.socket.remoteAddress, now = Date.now();
-    const f = failures.get(ip);
-    if (f && f.reset > now && f.n >= 10) return send(res, 429, { error: "trop d'échecs, réessayez dans une minute" });
-    if (failures.size > 1000) for (const [k, v] of failures) if (v.reset < now) failures.delete(k); // purge paresseuse
-    if (!authorized(req)) {
-      failures.set(ip, f && f.reset > now ? { n: f.n + 1, reset: f.reset } : { n: 1, reset: now + 60_000 });
-      return send(res, 401, { error: "mot de passe requis" }, undefined, { "WWW-Authenticate": 'Basic realm="Console Clevoa", charset="UTF-8"' });
+  return createServer((req, res) => handle(src, req, res).catch((e) => { // aucune requête, même mal formée, n'arrête la console
+    console.error("[console] erreur", e.name, e.message);
+    if (!res.headersSent) send(res, 500, { error: "erreur interne" }); else res.destroy();
+  }));
+}
+
+async function handle(src, req, res) {
+  let url;
+  try { url = new URL(req.url, "http://console"); } catch { return send(res, 400, { error: "requête invalide" }); }
+  if (req.method !== "GET") return send(res, 405, { error: "lecture seule" });
+  if (url.pathname === "/health") return send(res, 200, { ok: true });
+  const ip = req.socket.remoteAddress, now = Date.now();
+  const f = failures.get(ip);
+  if (f && f.reset > now && f.n >= 10) return send(res, 429, { error: "trop d'échecs, réessayez dans une minute" });
+  if (failures.size > 1000) for (const [k, v] of failures) if (v.reset < now) failures.delete(k); // purge paresseuse
+  if (!authorized(req)) {
+    failures.set(ip, f && f.reset > now ? { n: f.n + 1, reset: f.reset } : { n: 1, reset: now + 60_000 });
+    return send(res, 401, { error: "mot de passe requis" }, undefined, { "WWW-Authenticate": 'Basic realm="Console Clevoa", charset="UTF-8"' });
+  }
+  try {
+    if (FILES[url.pathname]) { const [file, type] = FILES[url.pathname]; return send(res, 200, readFileSync(PUBLIC + file), type); }
+    if (url.pathname === "/api/installations") return send(res, 200, { demo: src.demo, generatedAt: new Date().toISOString(), silenceHours: SILENCE_HOURS, minVersion: MIN_VERSION || null, installations: overview(await src.list()) });
+    if (url.pathname === "/api/history") {
+      const pk = url.searchParams.get("pk") || "", days = Math.min(Math.max(Number(url.searchParams.get("days")) || 30, 1), 395);
+      if (!PK.test(pk)) return send(res, 400, { error: "installation invalide" });
+      const from = new Date(Date.now() - days * 86400_000).toISOString();
+      const periods = (await src.history(pk, from)).map((p) => ({ at: p.at ?? p.sk.slice(2), since: p.since, version: p.version, requests: p.requests, seats: p.seats, stats: p.stats ?? {} }));
+      return send(res, 200, { pk, days, periods });
     }
-    try {
-      if (FILES[url.pathname]) { const [file, type] = FILES[url.pathname]; return send(res, 200, readFileSync(PUBLIC + file), type); }
-      if (url.pathname === "/api/installations") return send(res, 200, { demo: src.demo, generatedAt: new Date().toISOString(), silenceHours: SILENCE_HOURS, minVersion: MIN_VERSION || null, installations: overview(await src.list()) });
-      if (url.pathname === "/api/history") {
-        const pk = url.searchParams.get("pk") || "", days = Math.min(Math.max(Number(url.searchParams.get("days")) || 30, 1), 395);
-        if (!PK.test(pk)) return send(res, 400, { error: "installation invalide" });
-        const from = new Date(Date.now() - days * 86400_000).toISOString();
-        const periods = (await src.history(pk, from)).map((p) => ({ at: p.sk.slice(2), since: p.since, version: p.version, requests: p.requests, seats: p.seats, stats: p.stats ?? {} }));
-        return send(res, 200, { pk, days, periods });
-      }
-      return send(res, 404, { error: "introuvable" });
-    } catch (e) {
-      console.error("[console] erreur", e.name, e.message);
-      return send(res, 502, { error: "lecture de la table impossible : identifiants AWS, région ou nom de table à vérifier" });
-    }
-  });
+    return send(res, 404, { error: "introuvable" });
+  } catch (e) {
+    console.error("[console] erreur", e.name, e.message);
+    return send(res, 502, { error: "lecture de la table impossible : identifiants AWS, région ou nom de table à vérifier" });
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const src = await source();
-  if (!PASSWORD && !src.demo) console.warn("[console] CONSOLE_PASSWORD vide : toute personne du réseau local peut ouvrir la console");
+  if (!PASSWORD && !src.demo) { console.error("[console] CONSOLE_PASSWORD obligatoire (sauf démonstration) : démarrage refusé"); process.exit(1); }
   createConsole(src).listen(PORT, () => console.log(`Console Clevoa sur le port ${PORT}${src.demo ? " · données de démonstration" : ` · table ${process.env.TELEMETRY_TABLE}`}`));
 }

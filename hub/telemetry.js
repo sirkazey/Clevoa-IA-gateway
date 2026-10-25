@@ -12,6 +12,7 @@ const KEY = process.env.CLEVOA_KEY || "";
 const HOURS = [3, 9, 15, 21];
 const TIMEOUT = 10_000;
 const MAX_SAMPLES = 2000; // latences gardées par connecteur et par période : au-delà, échantillonnage uniforme
+const MAX_MS = 600_000; // latence plafonnée à 10 minutes (borne acceptée par le backend)
 export const ERROR_TYPES = ["auth", "quota", "timeout", "unreachable", "other", "user"];
 let requests = 0;
 export const count = () => { requests++; };
@@ -21,7 +22,9 @@ export const count = () => { requests++; };
 const SALT = randomBytes(16);
 const who = (key) => createHash("sha256").update(SALT).update(String(key)).digest("base64url").slice(0, 16);
 let stats = new Map(), since = new Date().toISOString();
-const fresh = () => ({ calls: 0, errors: Object.fromEntries(ERROR_TYPES.map((t) => [t, 0])), users: new Set(), authUsers: new Set(), lat: [], seen: 0 });
+// authUsers : collaborateurs refusés en authentification ; okUsers : collaborateurs servis au moins une fois. Seuls les refusés
+// jamais servis sur la période comptent (un jeton rafraîchi après un 401 n'est pas une panne d'authentification).
+const fresh = () => ({ calls: 0, errors: Object.fromEntries(ERROR_TYPES.map((t) => [t, 0])), users: new Set(), authUsers: new Set(), okUsers: new Set(), lat: [], seen: 0 });
 
 /** Classe une erreur d'outil par type, d'après son statut et la forme du message (jamais transmis). « user » : outil non connecté
  *  ou refusé par la liste blanche, une erreur d'usage qui ne compte pas dans le taux d'erreur du système. */
@@ -39,17 +42,19 @@ export function category(e) {
 export function record(connector, key, ms, error) {
   let s = stats.get(connector);
   if (!s) stats.set(connector, (s = fresh()));
-  s.calls++; s.users.add(who(key)); s.seen++;
-  if (error) { const t = category(error); s.errors[t]++; if (t === "auth") s.authUsers.add(who(key)); }
-  if (s.lat.length < MAX_SAMPLES) s.lat.push(ms);
-  else { const i = Math.floor(Math.random() * s.seen); if (i < MAX_SAMPLES) s.lat[i] = ms; } // échantillon uniforme sur la période
+  const u = who(key);
+  s.calls++; s.users.add(u); s.seen++;
+  if (error) { const t = category(error); s.errors[t]++; if (t === "auth") s.authUsers.add(u); } else s.okUsers.add(u);
+  const v = Math.min(Math.max(ms, 0), MAX_MS);
+  if (s.lat.length < MAX_SAMPLES) s.lat.push(v);
+  else { const i = Math.floor(Math.random() * s.seen); if (i < MAX_SAMPLES) s.lat[i] = v; } // échantillon uniforme sur la période
 }
 
 const pct = (sorted, p) => (sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))] : 0);
 /** Résumé envoyable : seulement des nombres, par connecteur utilisé. */
 export const summary = (m = stats) => Object.fromEntries([...m].map(([id, s]) => {
   const sorted = [...s.lat].sort((a, b) => a - b);
-  return [id, { calls: s.calls, errors: { ...s.errors }, users: s.users.size, authUsers: s.authUsers.size, p50: Math.round(pct(sorted, 50)), p95: Math.round(pct(sorted, 95)) }];
+  return [id, { calls: s.calls, errors: { ...s.errors }, users: s.users.size, authUsers: [...s.authUsers].filter((u) => !s.okUsers.has(u)).length, p50: Math.round(pct(sorted, 50)), p95: Math.round(pct(sorted, 95)) }];
 }));
 
 /** Remet dans la période courante les statistiques d'un envoi échoué (rien ne se perd, rien n'est compté deux fois). */
@@ -57,7 +62,7 @@ function restore(old) {
   for (const [id, o] of old) {
     const s = stats.get(id) ?? fresh(); stats.set(id, s);
     s.calls += o.calls; s.seen += o.seen; for (const t of ERROR_TYPES) s.errors[t] += o.errors[t];
-    for (const u of o.users) s.users.add(u); for (const u of o.authUsers) s.authUsers.add(u);
+    for (const u of o.users) s.users.add(u); for (const u of o.authUsers) s.authUsers.add(u); for (const u of o.okUsers) s.okUsers.add(u);
     s.lat = [...o.lat, ...s.lat].slice(0, MAX_SAMPLES);
   }
 }
@@ -93,6 +98,7 @@ export async function send(connectors, seats = () => 0, installation = () => und
     const r = await fetch(URL_, { method: "POST", redirect: "error", headers: { "Content-Type": "application/json", "X-Clevoa-Key": KEY }, body: JSON.stringify(body), signal: AbortSignal.timeout(TIMEOUT) });
     const data = await r.json().catch(() => ({}));
     if (r.ok) requests = Math.max(0, requests - body.requests); // les appels comptés pendant l'envoi restent pour le prochain
+    else if (r.status === 400 || r.status === 413) console.error(`[telemetry] période refusée par Clevoa (${r.status}) : statistiques abandonnées`); // les renvoyer échouerait de même
     else { restore(sent); since = from; }
     // Rien de la réponse n'est journalisé tel quel : statut court en minuscules, version X.Y.Z stricte, sinon ignorés.
     const status = typeof data.status === "string" && /^[a-z]{1,20}$/.test(data.status) ? data.status : "";
