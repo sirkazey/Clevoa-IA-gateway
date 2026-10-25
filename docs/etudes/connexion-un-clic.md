@@ -5,6 +5,11 @@ un collaborateur peut-il brancher le hub dans Claude Desktop (et Claude web, mob
 clic, sans Node.js, sans mode développeur ni bloc de configuration à copier, pour plusieurs clients et pour des
 collaborateurs qui ne sont pas tous dans le même annuaire.
 
+**Contraintes fixées par la DSI de Charlois (25/10/2026)** : le « Connect » dans Claude est autorisé ; **aucun port
+ne doit être ouvert sur un pare-feu** (aucun flux entrant). Les collaborateurs relèvent de trois annuaires : Entra de
+Charlois, Entra d'Oakwood Cooperage (autre tenant), Google de la société en cours d'acquisition. La direction de
+Clevoa ne veut pas dépendre d'un tiers sans nécessité.
+
 Chaque affirmation porte sa source (documentation officielle, consultée le 25/10/2026) ou sa preuve (essai exécuté).
 Ce qui n'est pas prouvé est marqué **à prouver**. Rien n'est décidé tant que le prototype du § 7 n'a pas réussi.
 
@@ -19,13 +24,16 @@ Ce qui n'est pas prouvé est marqué **à prouver**. Rien n'est décidé tant qu
    ([S8]) ; Charlois est en Team. ChatGPT et Copilot appellent aussi depuis leur cloud ([C1], [O2]).
 3. **Le hub devient son propre serveur d'autorisation OAuth**, avec les briques du SDK MCP qu'il utilise déjà. C'est la
    seule voie qui marche pour Claude, ChatGPT et Copilot à la fois (§ 3). Preuve locale réussie (§ 6).
-4. **Cloudflare porte l'exposition et l'identité, pas l'OAuth** : un tunnel sortant (aucun port ouvert chez le client)
-   et Cloudflare Access comme fournisseur d'identité unique du hub, qui propose au collaborateur le bon annuaire :
-   Entra de Charlois, Entra d'Oakwood Cooperage, Google de la société acquise, ou un code par e-mail. Le « Managed
-   OAuth » de Cloudflare, qui ferait d'Access le serveur d'autorisation, est écarté : bêta, et échec signalé avec
-   claude.ai ([CF6]).
-5. **Pas d'usine à gaz** : par client, un conteneur `cloudflared` à côté du hub, une application Access, des règles de
-   pare-feu Cloudflare. Pas de Worker, pas de portail MCP, pas de VPC, pas de proxy par application.
+4. **L'identité est gérée par le hub lui-même**, sans intermédiaire : il parle directement, en OIDC, à chaque
+   annuaire (Entra de Charlois, Entra d'Oakwood Cooperage, Google de la société acquise) et propose sa propre page
+   « Se connecter avec… ». Il le fait déjà pour un annuaire Entra (`hub/sso.js`). Pas de coût par utilisateur, pas de
+   tiers qui voit qui se connecte.
+5. **Aucun port ouvert : un tunnel sortant.** Le hub (un conteneur à côté de lui) ouvre une connexion sortante vers
+   un relais joignable depuis internet ; Claude appelle le relais. Deux relais possibles, le hub restant neutre (§ 4) :
+   Cloudflare Tunnel (gratuit, rien à exploiter, mais Cloudflare voit les données en clair) ou un relais open source
+   hébergé par Clevoa (indépendance et chiffrement de bout en bout, mais un service à exploiter).
+6. **Pas d'usine à gaz** : un serveur OAuth dans le hub (briques du SDK), une page de choix d'annuaire, un conteneur
+   de tunnel. Ni Cloudflare Access, ni Worker, ni portail MCP, ni proxy par application.
 
 ## 2. Ce que les assistants exigent (documenté)
 
@@ -55,59 +63,66 @@ déprécié au profit des documents CIMD, que Claude et ChatGPT savent utiliser 
 ```
  Claude (cloud Anthropic)      ChatGPT (cloud OpenAI)      Copilot (cloud Microsoft)
             \                          |                           /
-             \_________ HTTPS  charlois-mcp.clevoa.fr ____________/
+             \__________ HTTPS  charlois-mcp.<domaine Clevoa> ____/
                                        |
-                     Cloudflare (compte Clevoa, zone clevoa.fr)
-                     - règle pare-feu : /mcp réservé aux adresses des trois éditeurs
-                     - /authorize, /token, /register, /.well-known/* : ouverts (navigateur et éditeurs)
-                     - portail du hub (/, /api/*) : non publié
+                    RELAIS (au choix, § 4.1) : Cloudflare Tunnel ou relais open source Clevoa
+                    seules routes publiées : /mcp, /authorize, /token, /register, /.well-known/*
+                    /mcp limité aux adresses des trois éditeurs ; portail du hub non publié
+                                       ▲
+                     connexion SORTANTE initiée depuis le réseau de Charlois
+ ======================================|========== pare-feu de Charlois : aucun port entrant ==
+                         [conteneur tunnel]  à côté du hub
                                        |
-                        tunnel sortant (port 7844), aucun port entrant chez Charlois
- ======================================|====================== réseau de Charlois ======
-                              [cloudflared]  conteneur à côté du hub
-                                       |
-                          [Hub MCP]  serveur d'autorisation OAuth + serveur MCP
-                          |        \
-                          |         \__ connexion du collaborateur (OIDC) ──► Cloudflare Access
-                          |                                                    page de choix :
-                          |                                                    · Microsoft (Charlois)
-                          |                                                    · Microsoft (Oakwood Cooperage)
-                          |                                                    · Google (société acquise)
-                          |                                                    · code par e-mail (secours)
-                          ├─► Sage X3, MyReport (réseau interne, inchangé)
-                          └─► Salesforce, SharePoint, Dropbox (inchangé, jetons de chaque collaborateur)
+                    [Hub MCP] serveur d'autorisation OAuth + serveur MCP
+                     |   page « Se connecter avec… » ──► Entra Charlois │ Entra Oakwood │ Google
+                     ├─► Sage X3, MyReport (réseau interne, inchangé)
+                     └─► Salesforce, SharePoint, Dropbox (inchangé, jetons de chaque collaborateur)
 ```
 
-**Parcours d'un collaborateur** : dans Claude, « Connect » → page Cloudflare « Se connecter avec… » (son annuaire) →
-s'il n'est pas déjà connecté, connexion habituelle (Microsoft ou Google, avec la double authentification de son
-entreprise) → retour dans Claude, connecté. Le hub le reconnaît par son adresse e-mail, vérifiée par son fournisseur
-([CF5]) ; s'il manque une application (Salesforce, par exemple), la réponse de l'outil lui donne le lien pour la
-connecter une fois.
+**Parcours d'un collaborateur** : dans Claude, « Connect » → page du hub « Se connecter avec Microsoft (Charlois),
+Microsoft (Oakwood Cooperage) ou Google » → connexion habituelle de son entreprise (double authentification comprise),
+souvent sans saisie s'il est déjà connecté → retour dans Claude, connecté. Le hub le reconnaît par l'identifiant que
+lui donne son annuaire ; s'il manque une application (Salesforce, par exemple), la réponse de l'outil lui donne le lien
+pour la connecter une fois.
 
-**Ce que fait Cloudflare Access, et seulement ça** : une application « Access for SaaS » en OIDC par client, avec
-plusieurs fournisseurs d'identité et une page de choix ([CF3]), et une règle d'accès par domaines d'e-mail :
-`@charlois.com`, le domaine d'Oakwood Cooperage, celui de la société acquise ([CF5]). Pas de compte local à mot de
-passe chez Cloudflare : le « compte local » est un code à usage unique envoyé par e-mail, valable 10 minutes, envoyé
-seulement à une adresse autorisée ([CF3]). Il ne vaut que la boîte mail du collaborateur (facteur unique) : à réserver
-au secours.
+**Ce que fait le hub** : serveur d'autorisation OAuth pour les assistants (jetons d'accès de 15 minutes,
+renouvellement avec rotation et, à chaque renouvellement, vérification auprès de l'annuaire que le compte est toujours
+actif) ; client OIDC de chaque annuaire configuré ; serveur MCP inchangé ; les clés actuelles restent pour Claude Code
+et les scripts.
 
-**Ce que fait le hub** : serveur d'autorisation (jetons d'accès de 15 minutes, renouvellement avec rotation, à chaque
-renouvellement vérification que le collaborateur est toujours autorisé chez Access) ; serveur MCP inchangé ; les clés
-actuelles restent pour Claude Code et les scripts.
+### 4.1 Le relais : deux options, le hub ne dépend d'aucune
 
-**Multi-clients** : un compte Cloudflare Clevoa ; par client, un tunnel, une application Access, ses fournisseurs
-d'identité et sa règle de domaines ; le tout scriptable (API ou Terraform) ([CF1]). Même image du hub pour tous.
+| | Cloudflare Tunnel (`cloudflared`) | Relais open source hébergé par Clevoa (frp ou rathole) |
+|---|---|---|
+| Port entrant chez le client | aucun ([CF1]) | aucun |
+| Coût | gratuit, jusqu'à 1 000 tunnels ([CF1]) ; domaine géré dans Cloudflare | un petit serveur en France (quelques euros par mois) |
+| Exploitation | aucune : Cloudflare l'exploite | Clevoa : disponibilité, mises à jour de sécurité, supervision, sauvegarde |
+| Données | Cloudflare termine HTTPS sur son réseau : il voit les requêtes et réponses MCP en clair | en tunnel TCP pur, HTTPS va jusqu'au hub : le relais ne voit que des octets chiffrés (**à prouver** selon l'outil) |
+| Protection devant le hub | réseau Cloudflare (attaques par saturation, pare-feu) | celle du serveur relais, à construire |
+| Dépendance | un tiers de plus | aucun tiers en plus ; un service de plus pour Clevoa |
+| Licence | service propriétaire, logiciel `cloudflared` open source | frp : Apache 2.0 ; rathole : à vérifier dans son dépôt |
+
+Recommandation : **prototyper avec les deux**, puis choisir sur pièces. Le choix n'engage pas le produit : le hub n'a
+besoin que d'une adresse publique, et changer de relais se fait sans toucher à son code. Un client peut aussi fournir
+son propre relais.
+
+**Multi-clients** : par client, un conteneur de tunnel à côté de son hub et un nom d'hôte (`<client>-mcp.<domaine>`),
+la même image du hub, les annuaires de ce client dans sa configuration.
 
 ## 5. Coûts et limites (documentés)
 
 | Élément | Coût ou limite | Source |
 |---|---|---|
-| Tunnels | 1 000 gratuits par compte | [CF1] |
-| Cloudflare Zero Trust (Access) | gratuit jusqu'à **50 utilisateurs au total**, puis 7 $ par utilisateur et par mois ; chaque personne qui se connecte consomme un siège, **tous clients confondus** dans le compte Clevoa | [CF7] |
-| Fournisseurs d'identité | 50 par compte (un par annuaire Entra, un par Google Workspace) | [CF8] |
-| Page de connexion Access | une seule par compte : pas aux couleurs de chaque client | [CF8] |
+| Identité (OIDC direct vers Entra et Google) | aucun coût par utilisateur ; une inscription d'application par annuaire (Entra Charlois, Entra Oakwood, Google) | — |
+| Cloudflare Tunnel (option) | gratuit, 1 000 tunnels par compte | [CF1] |
+| Relais open source (option) | coût du serveur ; temps d'exploitation de Clevoa | — |
 | Délai d'une requête à travers Cloudflare | 125 s ; le hub coupe déjà Sage X3 à 30 s | [CF9], `hub/connectors/sagex3.js` |
-| Nom d'hôte | un seul niveau sous la zone (`charlois-mcp.clevoa.fr`) pour rester couvert par le certificat standard | à vérifier à la création |
+| Délai d'un appel d'outil côté Claude | 240 s | [S3] |
+| Nom d'hôte | un seul niveau sous la zone pour rester couvert par le certificat standard | à vérifier à la création |
+
+Cloudflare Access (page de choix d'annuaire hébergée par Cloudflare) n'est plus nécessaire : gratuit jusqu'à
+50 utilisateurs au total, tous clients confondus, puis 7 $ par utilisateur et par mois ([CF7]) ; écarté au profit de la
+page du hub.
 
 ## 6. Ce qui est prouvé, ce qui reste à prouver
 
@@ -116,40 +131,41 @@ d'identité et sa règle de domaines ; le tout scriptable (API ou Terraform) ([C
 | Flux OAuth complet avec le SDK MCP 1.32.1 du hub : métadonnées RFC 9728 et RFC 8414, `401` avec `WWW-Authenticate`, DCR, PKCE S256 (mauvais vérificateur refusé), paramètre `resource` et refus d'un jeton d'une autre audience, appel d'outil avec le jeton, renouvellement avec rotation (ancien jeton refusé), révocation immédiate | **prouvé en local** (HTTP, sans vraie connexion d'utilisateur, stockage en mémoire) |
 | Métadonnées publiques d'Entra (absence de PKCE annoncé, de DCR, de RFC 8414) | **prouvé** (`curl`, 25/10/2026) |
 | Exigences de Claude, adresses d'Anthropic, connecteur d'organisation Team | **documenté** [S1]–[S8] |
-| Plusieurs fournisseurs d'identité par application Access, page de choix, code par e-mail, règle par domaines | **documenté** [CF3] [CF5] |
-| Parcours réel : Claude Team → hub derrière un tunnel → page Access → retour dans Claude | **à prouver** (§ 7) |
-| La page de choix Access s'affiche bien dans la fenêtre de connexion ouverte par Claude | **à prouver** |
+| Tunnel sortant sans port entrant (Cloudflare) | **documenté** [CF1] |
+| Parcours réel : Claude Team → relais → hub → page de choix → annuaire → retour dans Claude | **à prouver** (§ 7) |
+| Connexion de deux tenants Entra (Charlois, Oakwood) et de Google sur le même hub | **à prouver** ; une inscription d'application par annuaire |
+| Relais open source en TCP pur (chiffrement jusqu'au hub) | **à prouver** |
 | ChatGPT et Copilot Studio contre le serveur d'autorisation du hub | **à prouver** (documenté côté éditeurs) |
-| SharePoint pour Oakwood Cooperage (autre tenant) : l'application Entra du hub doit être multi-tenant et consentie par Oakwood ; aujourd'hui un seul tenant et un site par défaut (`MS_TENANT_ID`, `SP_SITE`) | **à étudier** ; les utilisateurs Google n'ont pas de SharePoint (un connecteur Google Drive serait un autre sujet) |
+| SharePoint pour Oakwood Cooperage (autre tenant) : application Entra multi-tenant consentie par Oakwood ; aujourd'hui un seul tenant et un site par défaut (`MS_TENANT_ID`, `SP_SITE`) | **à étudier** ; les utilisateurs Google n'ont pas de SharePoint (un connecteur Google Drive serait un autre sujet) |
 
 ## 7. Prototype avant de développer
 
 Un prototype jetable, sur la préproduction et un nom d'hôte de test, sans toucher au code de production :
 
-1. Hub de préproduction avec un serveur d'autorisation minimal (briques du SDK, jetons en mémoire).
-2. `cloudflared` à côté, dans le compte Cloudflare de Clevoa ; application Access for SaaS avec deux fournisseurs :
-   Google et code par e-mail (puis un Entra de test).
+1. Hub de préproduction avec un serveur d'autorisation minimal (briques du SDK, jetons en mémoire) et une page de
+   choix d'annuaire (un Entra et un Google de test).
+2. Relais n° 1 : `cloudflared` à côté du hub. Relais n° 2 : frp ou rathole vers un petit serveur de Clevoa.
 3. Connecteur ajouté dans un compte Claude de Clevoa (un connecteur personnalisé est possible dès l'offre gratuite
    [S1]), puis dans l'organisation Team de Charlois par son Owner.
 
-**Critère de réussite** : un collaborateur de test clique « Connect » dans Claude Desktop, choisit son annuaire, revient
-connecté, interroge Sage X3 de préproduction, sans rien installer ni copier ; la désactivation de son accès chez
-Access coupe l'assistant en moins de 15 minutes. Puis le même essai avec ChatGPT (si un espace Business est disponible)
-et Copilot Studio.
+**Critère de réussite** : un collaborateur de test clique « Connect » dans Claude Desktop, choisit son annuaire,
+revient connecté, interroge Sage X3 de préproduction, sans rien installer ni copier, et **sans aucun port entrant
+ouvert** ; la désactivation de son compte dans l'annuaire coupe l'assistant en moins de 15 minutes. Puis le même essai
+avec ChatGPT (si un espace Business est disponible) et Copilot Studio.
 
-Si le prototype échoue sur la page Access dans Claude, repli : le hub délègue directement à chaque annuaire (Entra
-Charlois, Entra Oakwood, Google) avec sa propre page de choix, sans Cloudflare Access ; Cloudflare ne sert alors que de
-tunnel.
+Éléments à fournir par Clevoa pour le prototype : un nom de domaine de test ; un compte Cloudflare (relais n° 1) et un
+petit serveur (relais n° 2) ; une inscription d'application dans un Entra de test et un client OAuth Google de test.
 
 ## 8. Ce que cela remet en cause
 
 * Décisions d'octobre 2026 : pas de serveur OAuth dans le hub ; claude.ai web et mobile non pris en charge ; hub non
   exposé à internet. À remplacer par une décision datée **après** le prototype.
-* Contrat et DPO : Anthropic (ou OpenAI, Microsoft) détient des jetons d'accès au hub de chaque collaborateur ;
-  Cloudflare termine le chiffrement HTTPS sur son réseau avant de réacheminer par le tunnel : il voit donc en clair
-  les requêtes et réponses MCP (données métier comprises) et les connexions des collaborateurs. À inscrire au registre
-  des traitements de Charlois et au contrat (sous-traitant).
-* Sécurité : le hub devient joignable depuis internet sur ses seules routes MCP et OAuth ; le portail reste interne.
+* Contrat et DPO : Anthropic (ou OpenAI, Microsoft) détient des jetons d'accès au hub de chaque collaborateur. Avec
+  Cloudflare Tunnel, Cloudflare termine le chiffrement HTTPS sur son réseau : il voit en clair les requêtes et réponses
+  MCP (données métier comprises), donc sous-traitant à inscrire au registre et au contrat ; avec un relais open source
+  en TCP pur, le relais ne voit que des données chiffrées.
+* Sécurité : aucun port entrant chez le client, mais le hub devient atteignable via le relais sur ses seules routes MCP
+  et OAuth ; le portail reste interne.
   Une revue de sécurité indépendante est un préalable à la production.
 
 ## Sources
@@ -170,6 +186,7 @@ tunnel.
 * [C5] Microsoft, pas de DCR avec Entra : https://learn.microsoft.com/microsoft-365/copilot/extensibility/plugin-authentication-dynamic-client-registration
 * [M1] Spécification d'autorisation MCP 2026-07-28 : https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization
 * [CF1] Cloudflare, Tunnels for Platforms : https://developers.cloudflare.com/tunnel/features/tunnels-for-platforms/
+* [R1] frp (licence Apache 2.0) : https://github.com/fatedier/frp
 * [CF2] Cloudflare, Managed OAuth : https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/managed-oauth/
 * [CF3] Cloudflare, fournisseurs d'identité et code par e-mail : https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/ et https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/one-time-pin/
 * [CF4] Cloudflare, workers-oauth-provider : https://github.com/cloudflare/workers-oauth-provider
