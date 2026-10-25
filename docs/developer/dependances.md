@@ -25,8 +25,8 @@ Avant d'ajouter une dépendance, vérifier :
 | `@modelcontextprotocol/sdk` | ^1.32.1 | protocole MCP (serveur, client, transports, routeur OAuth du prototype) | MIT | SDK officiel du protocole |
 | `express` | ^5.2.1 | serveur HTTP | MIT | standard Node |
 | `zod` | ^4.0.0 | validation des arguments des outils | MIT | requis par le SDK MCP |
-| `express-rate-limit` | 8.7.1 | toutes les limites de débit du hub (portail, échecs d'authentification, supervision, plafond par système) | MIT | remplace le limiteur maison (2026-10-25) ; déjà fourni par le SDK MCP |
-| `openid-client` | 6.8.8 | SSO Entra et SharePoint : échange de code, refresh, vérification de l'id_token **signature comprise** | MIT | bibliothèque certifiée OpenID ; remplace la vérification maison sans signature (2026-10-25) |
+| `express-rate-limit` | 8.7.1 | toutes les limites de débit du hub (portail, échecs d'authentification, supervision, plafond par système) | MIT | remplace le limiteur maison (2026-10-25) ; déjà fourni par le SDK MCP. Effets : en-têtes `RateLimit` sur les réponses, adresses IPv6 regroupées par préfixe /56 |
+| `openid-client` | 6.8.8 | SSO Entra et SharePoint : échange de code, refresh, vérification de l'id_token **signature comprise** | MIT | bibliothèque certifiée OpenID ; remplace la vérification maison sans signature (2026-10-25). Exige une horloge juste (± 30 s) : NTP sur l'hôte |
 
 Dépendances transitives notables : `jose` et `oauth4webapi` (même auteur qu'openid-client, aucune dépendance propre).
 Inventaire complet : le SBOM produit par la CI (§ 3), 97 composants en production au 25 octobre 2026, tous sous licence
@@ -47,7 +47,7 @@ MIT, ISC ou BSD.
 | `node:22-alpine` (hub, bouchon, sauvegarde, console) | figée par empreinte | Dependabot (docker, docker-compose), Trivy image |
 | `nginx:1.28-alpine` (profil `proxy`) | tag | Dependabot (docker-compose) |
 | `cloudflare/cloudflared` (prototype « un clic », branche `proto/oauth-tunnel`) | 2026.10.0, figée par empreinte | Dependabot (docker-compose) une fois fusionné |
-| Actions GitHub de la CI | tags (`@v7`…) | Dependabot (github-actions) |
+| Actions GitHub de la CI | figées par empreinte de commit (version en commentaire) | Dependabot (github-actions) met à jour l'empreinte et le commentaire |
 | `semgrep/semgrep` (CI) | 1.181.1 | mise à jour manuelle |
 
 ## 3. Suivi automatique
@@ -80,5 +80,3 @@ apparaître la CI en rouge.
 
 * Activer dans les réglages du dépôt les **alertes Dependabot** et les **mises à jour de sécurité Dependabot** (réglages de
   sécurité du dépôt : à faire par le propriétaire, pas par une modification de code).
-* Épingler les actions GitHub par empreinte de commit plutôt que par tag (durcissement de la chaîne d'approvisionnement de
-  la CI) : chantier séparé.

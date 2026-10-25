@@ -46,7 +46,11 @@ const perMinute = (max, error) => rateLimit({ windowMs: 60_000, limit: max, stan
 const rules = new Map();
 const limit = (rule, max) => rules.get(rule) ?? rules.set(rule, perMinute(max, "Trop de requêtes, réessayez dans une minute.")).get(rule);
 // Échecs d'authentification (clé MCP, cookie du portail, jeton de supervision) : seuls les échecs sont comptés, 20 par minute et par IP.
-const authFailures = perMinute(20, "Trop d'échecs d'authentification, réessayez dans une minute.");
+// La supervision garde sa réponse texte avec WWW-Authenticate, comme avant express-rate-limit.
+const authFailures = rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: "draft-8", legacyHeaders: false,
+  handler: (req, res) => (req.path.startsWith("/metrics")
+    ? res.status(429).set("WWW-Authenticate", 'Basic realm="supervision"').type("text/plain").send("jeton de supervision requis\n")
+    : res.status(429).json({ error: "Trop d'échecs d'authentification, réessayez dans une minute." })) });
 
 // ---------- Identité ----------
 // Cookie "mcp_key" pour le portail ; en-tête "Authorization: Bearer <clé>" UNIQUEMENT pour les clients MCP
