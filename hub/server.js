@@ -67,7 +67,13 @@ const requireKey = (read) => (req, res, next) => {
 const portalUser = requireKey(cookieKey);
 // Tout appel MCP authentifié marque l'assistant comme branché ; une écriture impossible (disque plein) ne bloque jamais l'appel.
 const seen = (req, _res, next) => { try { store.assistantSeen(req.key); } catch (e) { console.error(`[store] dernier usage non enregistré : ${e.code ?? e.message}`); } next(); };
-const mcpUser = [requireKey(mcpKey), seen];
+// Débit par clé MCP authentifiée (et non par IP : tout un bureau sort par la même adresse) : 300 requêtes par minute, très au-dessus
+// d'un assistant normal (une question = quelques requêtes), mais une clé fuitée ou un assistant qui boucle ne martèle pas les systèmes.
+const MCP_PER_MIN = 300;
+const mcpRate = rateLimit({ windowMs: 60_000, limit: MCP_PER_MIN, standardHeaders: "draft-8", legacyHeaders: false,
+  keyGenerator: (req) => createHash("sha256").update(req.key).digest("base64url"), // empreinte : jamais la clé en mémoire du limiteur
+  message: { error: `Trop de requêtes avec cette clé (${MCP_PER_MIN} par minute) : réessayez dans une minute.` } });
+const mcpUser = [requireKey(mcpKey), mcpRate, seen];
 // Les POST du portail changent l'état du collaborateur : un navigateur qui annonce une autre origine (formulaire d'un site frère sous le
 // même domaine, que SameSite=Lax laisse passer) est refusé. Les clients MCP n'appellent pas ces routes.
 const ORIGIN = new URL(PUBLIC_URL).origin;

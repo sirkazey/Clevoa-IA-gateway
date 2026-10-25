@@ -484,3 +484,12 @@ test("Portail « Assistant : branché » d'après les appels MCP réels : jour d
   const rot = await fetch(`${hub.url}/api/key/rotate`, { method: "POST", headers: { cookie: `mcp_key=${erin}` } }).then((r) => r.json());
   assert.equal((await me(rot.key)).assistantAt, null, "nouvelle clé : aucun assistant ne la connaît encore");
 });
+
+test("Débit par clé MCP : 300 requêtes par minute, puis 429 pour cette clé seulement ; une autre clé de la même adresse passe", async () => {
+  const ping = (key) => fetch(`${hub.url}/mcp`, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", Authorization: `Bearer ${key}` }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }) });
+  let last;
+  for (let i = 0; i < 301; i++) { last = await ping(KEY_DAN); if (last.status === 429) break; await last.text(); }
+  assert.equal(last.status, 429, "au-delà de 300 requêtes dans la minute");
+  assert.match((await last.json()).error, /300 par minute/);
+  const other = await ping(KEY_CAROL); assert.equal(other.status, 200, "une autre clé n'est pas freinée"); await other.text();
+});
