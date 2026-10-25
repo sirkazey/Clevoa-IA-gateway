@@ -64,7 +64,9 @@ const requireKey = (read) => (req, res, next) => {
   res.status(401).json({ error: "Clé MCP inconnue ou absente : utilisez l'en-tête Authorization: Bearer <clé> obtenue sur le portail." });
 };
 const portalUser = requireKey(cookieKey);
-const mcpUser = [requireKey(mcpKey), (req, _res, next) => { store.assistantSeen(req.key); next(); }]; // tout appel MCP authentifié : l'assistant est branché
+// Tout appel MCP authentifié marque l'assistant comme branché ; une écriture impossible (disque plein) ne bloque jamais l'appel.
+const seen = (req, _res, next) => { try { store.assistantSeen(req.key); } catch (e) { console.error(`[store] dernier usage non enregistré : ${e.code ?? e.message}`); } next(); };
+const mcpUser = [requireKey(mcpKey), seen];
 // Les POST du portail changent l'état du collaborateur : un navigateur qui annonce une autre origine (formulaire d'un site frère sous le
 // même domaine, que SameSite=Lax laisse passer) est refusé. Les clients MCP n'appellent pas ces routes.
 const ORIGIN = new URL(PUBLIC_URL).origin;
