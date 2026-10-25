@@ -445,11 +445,12 @@ function showClient(kind) {
 function paintSummary() {
   if (!ME) return;
   const real = ME.systems.filter((s) => !s.mock && (s.configured || s.apiKey)), ready = ME.systems.filter((s) => s.connected || s.mock).length, total = ME.systems.length;
-  const copied = store.get("cfgCopied") === "1";
+  const copied = store.get("cfgCopied") === "1", used = ME.assistantAt; // used : constaté par le hub (appel MCP avec la clé), quel que soit le navigateur
+  const assistant = used ? `branché (dernier usage ${used === new Date().toISOString().slice(0, 10) ? "aujourd'hui" : `le ${new Date(used).toLocaleDateString("fr-FR")}`})` : copied ? "configuration copiée, pas encore utilisée" : "à brancher";
   const down = (STATUS?.systems ?? []).filter((x) => ["injoignable", "erreurs"].includes(x.state)).map((x) => ME.systems.find((s) => s.id === x.id)?.label).filter(Boolean);
-  const action = !ready && real.length ? ["Connecter une application", "#outils"] : !copied ? ["Brancher mon assistant", "#assistant"] : null;
+  const action = !ready && real.length ? ["Connecter une application", "#outils"] : !copied && !used ? ["Brancher mon assistant", "#assistant"] : null;
   $("#summary").innerHTML = `<p><span><b>${ready}</b> application${ready > 1 ? "s" : ""} sur ${total} connectée${ready > 1 ? "s" : ""}</span><span class="sep" aria-hidden="true"></span>`
-    + `<span>Assistant : <b>${copied ? "configuration copiée" : "à brancher"}</b></span><span class="sep" aria-hidden="true"></span>`
+    + `<span>Assistant : <b>${assistant}</b></span><span class="sep" aria-hidden="true"></span>`
     + `<span>${down.length ? `<b class="alert">Incident : ${esc(down.join(", "))}</b>` : "Aucun incident signalé"}</span></p>`
     + (action ? `<a class="btn primary" href="${action[1]}">${action[0]} ${ico("arrow", "icon sm")}</a>` : "");
 }

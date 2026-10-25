@@ -82,7 +82,8 @@ pré-production les pointe par défaut vers le bouchon `mcp-stub`.
 `hub/public/index.html`, une page sans dépendance externe (CSP stricte). Depuis la 1.4.0, un écran de travail : bandeau
 de situation, une ligne par application groupée par domaine (`domain` du connecteur ou `CONNECTOR_DOMAINS`), colonne
 « Service », assistant à brancher en colonne de droite, exemples de questions par domaine. `GET /api/me` (version,
-environnement, instance et nom du serveur, SSO, e-mail, clé, systèmes avec leur état et leur domaine) alimente les
+environnement, instance et nom du serveur, SSO, e-mail, clé, `assistantAt` = jour du dernier appel MCP avec la clé, écrit au
+plus une fois par jour et effacé à la régénération de la clé, systèmes avec leur état et leur domaine) alimente les
 lignes ; `GET /api/status` (`health.js`, rafraîchi chaque minute) donne l'état de chaque système, sans volume ni
 identité ; `GET /metrics` (jeton `METRICS_TOKEN`) l'expose à la supervision ; `GET /api/test/:system` exécute le diagnostic ;
 `POST /api/:system/apikey`, `POST /api/disconnect/:system`, `POST /api/key/rotate`, `POST /api/logout` changent l'état

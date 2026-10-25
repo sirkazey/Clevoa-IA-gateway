@@ -15,6 +15,7 @@ const TOOLS = ["salesforce_tools", "salesforce_call", "sagex3_representations", 
 const KEY_NO_REFRESH = "test-key-bob-no-refresh-token";
 const KEY_CAROL = "test-key-carol-0123456789";
 const KEY_DAN = "test-key-dan-apikey-0123456789";
+const KEY_ERIN = "cle-erin-assistant-0123456789abcdef";
 
 let up, hub;
 
@@ -26,6 +27,7 @@ before(async () => {
       [KEY]: connectedUser(up.url),
       [KEY_NO_REFRESH]: { createdAt: "2026-01-01T00:00:00.000Z", sagex3: { access_token: "sage-token-bob" } },
       [KEY_DAN]: { createdAt: "2026-01-01T00:00:00.000Z", sagex3: { apiKey: "syr-key-dan" } },
+      [KEY_ERIN]: { createdAt: "2026-01-01T00:00:00.000Z", sagex3: { apiKey: "syr-key-erin" } }, // réservée au test « Assistant : branché »
       [KEY_CAROL]: { createdAt: "2026-01-01T00:00:00.000Z", email: "carol@example.com",
         salesforce: { access_token: "sf-token-carol", instance_url: up.url }, sagex3: { access_token: "sage-token-carol" } },
     },
@@ -449,4 +451,17 @@ test("Session SSE liée à sa clé : une autre clé valide ne peut pas poster da
     }
     assert.equal(sfCalls("tools/call").length, 0, "aucun appel d'écriture ne part vers le serveur Salesforce");
   } finally { await c.close(); }
+});
+
+test("Portail « Assistant : branché » d'après les appels MCP réels : jour du dernier appel (une écriture par jour), effacé à la régénération de la clé", async () => {
+  const me = (key) => fetch(`${hub.url}/api/me`, { headers: { cookie: `mcp_key=${key}` } }).then((r) => r.json());
+  const today = new Date().toISOString().slice(0, 10);
+  const bob = KEY_ERIN;
+  assert.equal((await me(bob)).assistantAt, null, "jamais appelé par un assistant : à brancher");
+  const c = await sseClient(bob);
+  try { await c.listTools(); } finally { await c.close(); }
+  assert.equal((await me(bob)).assistantAt, today, "connexion MCP constatée par le hub, quel que soit le navigateur");
+  assert.equal(hub.readUsers()[bob].assistantAt, today, "conservé dans users.json (jour seulement, pas l'heure)");
+  const rot = await fetch(`${hub.url}/api/key/rotate`, { method: "POST", headers: { cookie: `mcp_key=${bob}` } }).then((r) => r.json());
+  assert.equal((await me(rot.key)).assistantAt, null, "nouvelle clé : aucun assistant ne la connaît encore");
 });

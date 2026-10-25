@@ -9,7 +9,9 @@ l'assistant interroge les outils **avec vos droits, en lecture seule**.
 1. Ouvrir l'adresse du portail communiquée par votre DSI (exemple : `https://mcp.<entreprise>.fr`). Si le SSO
    Microsoft Entra ID est activé, votre identité est reconnue automatiquement ; sinon le portail vous attribue une clé
    personnelle au premier passage. Le bandeau du haut résume la situation (applications connectées, assistant
-   branché ou non, incident en cours) et propose la prochaine action.
+   branché ou non, incident en cours) et propose la prochaine action. « Assistant : branché » s'affiche dès que votre
+   assistant a interrogé le hub avec votre clé, quel que soit l'ordinateur ou le navigateur ; après une nouvelle clé,
+   il repasse à « à brancher » jusqu'au premier appel avec celle-ci.
 2. Dans **Vos applications**, classées par domaine (Commerce, Finance, Documents…), chaque ligne indique l'état de
    votre connexion (« À connecter », « Connecté », « Simulé », « Non configuré ») et celui du **service** mesuré par la
    passerelle : « Opérationnel » avec le temps de réponse, « Lent », « Erreurs », « Injoignable », ou « Pas d'appel
