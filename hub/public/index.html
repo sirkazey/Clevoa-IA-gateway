@@ -12,7 +12,9 @@
 <style>
   /* Charte Clevoa (kit officiel) : encre #2B2540, violet #6B30D9 ; sur fond sombre : blanc et violet clair #B79CF0.
      Neutres dérivés de l'encre ; couleurs d'état fonctionnelles (succès, erreur, alerte), contrastes WCAG AA vérifiés.
-     Police Outfit (SIL OFL 1.1), servie par le hub : aucune ressource externe (CSP default-src 'self'). */
+     Police Outfit (SIL OFL 1.1), servie par le hub : aucune ressource externe (CSP default-src 'self').
+     1.4.0 : écran de travail dense (une ligne par application, classées par domaine, état du service mesuré par la passerelle),
+     assistant à brancher visible sans défilement, exemples de questions par domaine. */
   @font-face { font-family:"Outfit"; src:url("/fonts/outfit-variable-latin.woff2") format("woff2"); font-weight:100 900; font-style:normal; font-display:swap }
   :root {
     --ink:#2B2540; --text:#49445B; --muted:#6F6B7D;
@@ -23,7 +25,7 @@
     --font:"Outfit", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     --mono:ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
     --r-sm:8px; --r:12px; --r-lg:16px; --pill:999px;
-    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px; --s8:72px;
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
     --shadow:0 1px 2px rgb(43 37 64 / 6%);
     color-scheme:light;
   }
@@ -41,9 +43,9 @@
     --code-bg:#100D18; --code-ink:#EDECED; --shadow:none; color-scheme:dark }
 
   *, *::before, *::after { box-sizing:border-box }
-  html { -webkit-text-size-adjust:100%; scroll-behavior:smooth; scroll-padding-top:88px }
-  body { margin:0; min-height:100vh; display:flex; flex-direction:column; background:var(--page); color:var(--text); font:400 16px/1.55 var(--font); -webkit-font-smoothing:antialiased }
-  h1, h2, h3 { color:var(--ink); font-weight:600; margin:0; letter-spacing:-.015em; text-wrap:balance }
+  html { -webkit-text-size-adjust:100%; scroll-behavior:smooth; scroll-padding-top:72px }
+  body { margin:0; min-height:100vh; display:flex; flex-direction:column; background:var(--page); color:var(--text); font:400 15px/1.5 var(--font); -webkit-font-smoothing:antialiased }
+  h1, h2, h3 { color:var(--ink); font-weight:600; margin:0; letter-spacing:-.01em }
   p { margin:0 }
   a { color:var(--accent) }
   code, pre, .mono { font-family:var(--mono) }
@@ -53,160 +55,164 @@
   .skip { position:absolute; left:var(--s4); top:-60px; z-index:30; background:var(--accent); color:var(--on-accent); padding:var(--s2) var(--s4); border-radius:var(--pill); text-decoration:none; font-weight:500 }
   .skip:focus { top:var(--s3) }
   :focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:var(--r-sm) }
-  .wrap { max-width:1120px; margin:0 auto; padding-left:max(20px, env(safe-area-inset-left, 0px)); padding-right:max(20px, env(safe-area-inset-right, 0px)) }
+  .wrap { max-width:1200px; margin:0 auto; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)) }
   .icon { width:20px; height:20px; flex:none; fill:none; stroke:currentColor; stroke-width:1.75; stroke-linecap:round; stroke-linejoin:round }
   .icon.sm { width:16px; height:16px }
 
   /* ---- En-tête ---- */
   .topbar { position:sticky; top:0; z-index:20; background:var(--bg); border-bottom:1px solid var(--line) }
-  .topbar .wrap { display:flex; align-items:center; justify-content:space-between; gap:var(--s4); min-height:68px }
-  .brand { display:flex; align-items:center; gap:var(--s3); min-width:0; text-decoration:none; color:var(--ink) }
-  .brand img { height:28px; width:auto; display:block }
+  .topbar .wrap { display:flex; align-items:center; justify-content:space-between; gap:var(--s4); min-height:56px }
+  .brand { display:flex; align-items:center; gap:var(--s3); min-width:0; color:var(--ink) }
+  .brand img { height:24px; width:auto; display:block }
   .brand .logo-dark { display:none }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .brand .logo-light { display:none } :root:not([data-theme="light"]) .brand .logo-dark { display:block } }
   :root[data-theme="dark"] .brand .logo-light { display:none } :root[data-theme="dark"] .brand .logo-dark { display:block }
-  .brand .product { font-weight:500; font-size:1.02rem; padding-left:var(--s3); border-left:1px solid var(--line-strong); white-space:nowrap }
+  .brand .product { font-weight:500; padding-left:var(--s3); border-left:1px solid var(--line-strong); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  .brand .product small { color:var(--muted); font-weight:400 }
   .env { font:500 .72rem/1 var(--font); letter-spacing:.04em; color:var(--muted); border:1px solid var(--line); border-radius:var(--pill); padding:6px 10px; white-space:nowrap }
   .env b { font-weight:600; color:var(--accent) } .env b.prod { color:var(--ok) }
   .who { display:flex; align-items:center; gap:var(--s3); min-width:0 }
-  .profile { display:flex; align-items:center; gap:var(--s2); min-width:0; font-size:.9rem }
-  .avatar { width:32px; height:32px; border-radius:50%; background:var(--accent-soft); color:var(--accent); display:grid; place-items:center; font-weight:600; font-size:.85rem; flex:none }
+  .profile { display:flex; align-items:center; gap:var(--s2); min-width:0; font-size:.88rem }
+  .avatar { width:30px; height:30px; border-radius:50%; background:var(--accent-soft); color:var(--accent); display:grid; place-items:center; font-weight:600; font-size:.82rem; flex:none }
   .profile .id { display:flex; flex-direction:column; min-width:0; line-height:1.25 }
   .profile .id strong { color:var(--ink); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:30ch }
-  .profile .id small { color:var(--muted); font-size:.76rem; white-space:nowrap }
-  .iconbtn { width:40px; height:40px; display:grid; place-items:center; border:1px solid var(--line); border-radius:50%; background:var(--surface); color:var(--ink); cursor:pointer; flex:none }
+  .profile .id small { color:var(--muted); font-size:.74rem; white-space:nowrap }
+  .iconbtn { width:36px; height:36px; display:grid; place-items:center; border:1px solid var(--line); border-radius:50%; background:var(--surface); color:var(--ink); cursor:pointer; flex:none }
   .iconbtn:hover { border-color:var(--line-strong); background:var(--surface-2) }
 
   /* ---- Boutons ---- */
-  .btn { display:inline-flex; align-items:center; justify-content:center; gap:var(--s2); min-height:44px; padding:10px 22px; border-radius:var(--pill); border:1px solid var(--line-strong); background:var(--surface); color:var(--ink); font:500 .95rem/1.2 var(--font); text-decoration:none; cursor:pointer; white-space:nowrap; transition:background-color .15s, border-color .15s, color .15s }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:var(--s2); min-height:36px; padding:6px 14px; border-radius:var(--pill); border:1px solid var(--line-strong); background:var(--surface); color:var(--ink); font:500 .86rem/1.2 var(--font); text-decoration:none; cursor:pointer; white-space:nowrap; transition:background-color .15s, border-color .15s, color .15s }
   .btn:hover { background:var(--surface-2); border-color:var(--muted) }
   .btn.primary { background:var(--accent); border-color:var(--accent); color:var(--on-accent); font-weight:600 }
   .btn.primary:hover { background:var(--accent-hover); border-color:var(--accent-hover); color:var(--bg) }
-  .btn.quiet { border-color:transparent; background:transparent; color:var(--muted); padding-inline:12px }
-  .btn.quiet:hover { color:var(--ink); background:var(--surface-2) }
-  .btn.danger { color:var(--ko); border-color:var(--line-strong) } .btn.danger:hover { background:var(--ko-soft); border-color:var(--ko) }
-  .btn.sm { min-height:36px; padding:6px 14px; font-size:.86rem }
-  .btn.block { width:100% }
+  .btn.danger { color:var(--ko) } .btn.danger:hover { background:var(--ko-soft); border-color:var(--ko) }
+  .btn.icon-only { width:36px; padding:0 }
   .btn[aria-disabled="true"], .btn:disabled { opacity:.5; cursor:not-allowed; pointer-events:none }
   .btn[aria-busy="true"] { cursor:progress }
-  .link { background:none; border:0; padding:0; color:var(--muted); font:inherit; font-size:.86rem; text-decoration:underline; text-underline-offset:3px; cursor:pointer }
+  .link { background:none; border:0; padding:0; color:var(--muted); font:inherit; font-size:.84rem; text-decoration:underline; text-underline-offset:3px; cursor:pointer }
   .link:hover { color:var(--ink) }
 
-  /* ---- Accueil ---- */
-  .hero { padding:var(--s8) 0 var(--s6); text-align:center }
-  .badge { display:inline-flex; align-items:center; gap:var(--s2); padding:6px 14px; border-radius:var(--pill); border:1px solid color-mix(in srgb, var(--accent) 35%, transparent); background:var(--accent-soft); color:var(--accent); font-size:.78rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase }
-  .hero h1 { margin:var(--s5) auto var(--s4); max-width:20ch; font-size:clamp(2.1rem, 5vw, 3.4rem); line-height:1.08; font-weight:600 }
-  .hero h1 span { color:var(--accent); display:block }
-  .hero .lead { max-width:62ch; margin:0 auto; color:var(--muted); font-size:clamp(1rem, 1.6vw, 1.12rem) }
+  /* ---- Bandeau de situation ---- */
+  .summary { display:flex; align-items:center; justify-content:space-between; gap:var(--s3) var(--s4); flex-wrap:wrap; margin:var(--s4) 0; padding:var(--s3) var(--s4); background:var(--surface); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow) }
+  .summary p { display:flex; align-items:center; gap:var(--s2) var(--s4); flex-wrap:wrap; color:var(--muted); font-size:.9rem }
+  .summary p b { color:var(--ink); font-weight:600 }
+  .summary .sep { width:1px; height:16px; background:var(--line-strong) }
+  .summary p b.alert { color:var(--ko) }
 
-  .steps { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:var(--s4); margin:var(--s6) 0 0; padding:0; list-style:none; text-align:left; counter-reset:step }
-  .step { display:flex; gap:var(--s3); align-items:flex-start; padding:var(--s4) var(--s5); background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); box-shadow:var(--shadow) }
-  .step .num { width:32px; height:32px; border-radius:50%; display:grid; place-items:center; flex:none; font-weight:600; font-size:.9rem; border:1px solid var(--line-strong); color:var(--muted) }
-  .step[data-state="current"] { border-color:var(--accent) } .step[data-state="current"] .num { background:var(--accent); border-color:var(--accent); color:var(--on-accent) }
-  .step[data-state="done"] .num { background:var(--ok-soft); border-color:transparent; color:var(--ok) }
-  .step b { display:block; color:var(--ink); font-weight:600 }
-  .step small { color:var(--muted); font-size:.86rem }
-  .next { display:flex; align-items:center; justify-content:center; gap:var(--s4); flex-wrap:wrap; margin-top:var(--s5) }
-  .next p { color:var(--muted) }
+  /* ---- Disposition : applications à gauche, assistant à droite ---- */
+  .layout { display:grid; grid-template-columns:minmax(0, 1.7fr) minmax(0, 1fr); gap:var(--s4); align-items:start }
+  .panel-box { background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); box-shadow:var(--shadow); min-width:0 }
+  .box-head { display:flex; align-items:center; justify-content:space-between; gap:var(--s3); flex-wrap:wrap; padding:var(--s3) var(--s4); border-bottom:1px solid var(--line) }
+  .box-head h2 { font-size:1.05rem }
+  .box-head p { color:var(--muted); font-size:.8rem }
+  .aside { position:sticky; top:72px }
 
-  /* ---- Sections ---- */
-  .section { padding:var(--s7) 0 var(--s2) }
-  .section-head { display:flex; align-items:flex-end; justify-content:space-between; gap:var(--s4); flex-wrap:wrap; margin-bottom:var(--s5) }
-  .eyebrow { color:var(--accent); font-size:.78rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; margin-bottom:var(--s2) }
-  .section-head h2 { font-size:clamp(1.5rem, 3vw, 2rem); line-height:1.15 }
-  .section-head p.sub { color:var(--muted); margin-top:var(--s2); max-width:64ch }
-
-  /* ---- Outils ---- */
-  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap:var(--s4) }
-  .card { background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); padding:var(--s5); display:flex; flex-direction:column; gap:var(--s4); min-width:0; box-shadow:var(--shadow) }
-  .tool-head { display:flex; align-items:flex-start; gap:var(--s3) }
-  .tool-icon { width:44px; height:44px; border-radius:var(--r); display:grid; place-items:center; background:var(--accent-soft); color:var(--accent); flex:none }
-  .tool-icon .icon { width:22px; height:22px }
-  .tool-name { flex:1; min-width:0 }
-  .tool-name h3 { font-size:1.12rem; line-height:1.3 }
-  .tool-name p { color:var(--muted); font-size:.86rem }
-  .tag { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:var(--pill); font-size:.76rem; font-weight:600; white-space:nowrap; background:var(--surface-2); color:var(--muted) }
+  /* ---- Applications ---- */
+  .domain { padding:var(--s2) var(--s4) 0; font-size:.72rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--muted) }
+  .apps { list-style:none; margin:0; padding:0 0 var(--s2) }
+  .app { border-top:1px solid var(--line) }
+  .domain + .apps .app:first-child { border-top:0 }
+  .app-row { display:grid; grid-template-columns:minmax(0, 1.4fr) 112px minmax(0, 1.3fr) auto; align-items:center; gap:var(--s3); padding:var(--s2) var(--s4); min-height:56px }
+  .app-name { display:flex; align-items:center; gap:var(--s3); min-width:0 }
+  .app-icon { width:32px; height:32px; border-radius:var(--r-sm); display:grid; place-items:center; background:var(--accent-soft); color:var(--accent); flex:none }
+  .app-icon .icon { width:18px; height:18px }
+  .app-name h3 { font-size:.95rem; line-height:1.25 }
+  .app-name p { color:var(--muted); font-size:.78rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  .app-name > div { min-width:0 }
+  .tag { justify-self:start; display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:var(--pill); font-size:.74rem; font-weight:600; white-space:nowrap; background:var(--surface-2); color:var(--muted) }
   .tag::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor }
   .tag.ok { background:var(--ok-soft); color:var(--ok) } .tag.todo { background:var(--accent-soft); color:var(--accent) } .tag.sim { background:var(--warn-soft); color:var(--warn) } .tag.off { background:var(--surface-2); color:var(--muted) }
-  .tool-state { font-size:.88rem; color:var(--muted) }
-  .tool-actions { display:flex; flex-wrap:wrap; gap:var(--s2); align-items:center }
-  .tool-foot { display:flex; align-items:center; justify-content:space-between; gap:var(--s3); flex-wrap:wrap; padding-top:var(--s4); border-top:1px solid var(--line); margin-top:auto }
-  .apikey { display:grid; gap:var(--s3) }
-  .apikey .or { display:flex; align-items:center; gap:var(--s3); color:var(--muted); font-size:.8rem } .apikey .or::before, .apikey .or::after { content:""; flex:1; height:1px; background:var(--line) }
-  .field { display:grid; gap:6px }
-  .field label { font-size:.84rem; font-weight:500; color:var(--ink) }
-  .field input { font:inherit; font-size:.95rem; min-height:44px; padding:10px 14px; border:1px solid var(--line-strong); border-radius:var(--r); background:var(--bg); color:var(--ink); width:100% }
-  .field input:hover { border-color:var(--muted) }
+  .svc { display:flex; align-items:center; gap:var(--s2); font-size:.82rem; color:var(--muted); min-width:0 }
+  .svc .dot { width:9px; height:9px; border-radius:50%; flex:none; background:var(--line-strong) }
+  .svc b { color:var(--ink); font-weight:500; white-space:nowrap }
+  .svc > span:last-child { line-height:1.3 }
+  .svc.ok .dot { background:var(--ok) } .svc.lent .dot { background:var(--warn) } .svc.erreurs .dot, .svc.injoignable .dot { background:var(--ko) }
+  .svc.erreurs b, .svc.injoignable b { color:var(--ko) } .svc.lent b { color:var(--warn) }
+  .svc.simule .dot { background:var(--warn) }
+  .app-actions { display:flex; align-items:center; gap:var(--s2); justify-content:flex-end }
+  .more[aria-expanded="true"] { background:var(--surface-2); border-color:var(--muted) }
+  .more .icon { transition:transform .15s } .more[aria-expanded="true"] .icon { transform:rotate(180deg) }
+  .drawer { padding:0 var(--s4) var(--s4) calc(var(--s4) + 32px + var(--s3)); display:grid; gap:var(--s3) }
+  .drawer .why { font-size:.84rem; color:var(--muted) }
+  .drawer-links { display:flex; gap:var(--s4); flex-wrap:wrap; align-items:center }
+  .apikey { display:grid; gap:var(--s3); grid-template-columns:repeat(auto-fit, minmax(min(100%, 200px), 1fr)); align-items:end }
+  .field { display:grid; gap:4px }
+  .field label { font-size:.8rem; font-weight:500; color:var(--ink) }
+  .field input { font:inherit; font-size:.9rem; min-height:36px; padding:6px 12px; border:1px solid var(--line-strong); border-radius:var(--r-sm); background:var(--bg); color:var(--ink); width:100% }
   .field input:focus-visible { outline:2px solid var(--accent); outline-offset:0; border-color:var(--accent) }
-  .hint { font-size:.8rem; color:var(--muted) }
+  .hint { font-size:.76rem; color:var(--muted); grid-column:1 / -1 }
   .result:empty { display:none }
-  .callout { display:flex; gap:var(--s3); align-items:flex-start; padding:var(--s3) var(--s4); border-radius:var(--r); font-size:.88rem; line-height:1.45; word-break:break-word }
+  .callout { display:flex; gap:var(--s3); align-items:flex-start; padding:var(--s2) var(--s3); border-radius:var(--r-sm); font-size:.84rem; line-height:1.45; word-break:break-word }
   .callout .icon { margin-top:1px }
-  .callout.ok { background:var(--ok-soft); color:var(--text) } .callout.ok .icon { color:var(--ok) }
-  .callout.ko { background:var(--ko-soft); color:var(--text) } .callout.ko .icon { color:var(--ko) }
+  .callout.ok { background:var(--ok-soft) } .callout.ok .icon { color:var(--ok) }
+  .callout.ko { background:var(--ko-soft) } .callout.ko .icon { color:var(--ko) }
   .callout.wait { background:var(--surface-2); color:var(--muted) }
   .callout strong { color:var(--ink); font-weight:600 }
-  .callout code { font-size:.8rem }
-  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:var(--s2) }
-  .chips span { font:.74rem var(--mono); padding:3px 9px; border-radius:var(--pill); background:var(--surface); border:1px solid var(--line); color:var(--text) }
-  .skeleton { height:220px; background:var(--surface-2); border:1px solid var(--line); border-radius:var(--r-lg) }
-  .empty { text-align:center; padding:var(--s7) var(--s5); border:1px dashed var(--line-strong); border-radius:var(--r-lg); color:var(--muted) }
-  .empty h3 { margin-bottom:var(--s2) }
+  .callout code { font-size:.78rem }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px }
+  .chips span { font:.72rem var(--mono); padding:2px 8px; border-radius:var(--pill); background:var(--surface); border:1px solid var(--line) }
+  .skeleton { height:56px; margin:var(--s2) var(--s4); background:var(--surface-2); border-radius:var(--r-sm) }
+  .empty { text-align:center; padding:var(--s6) var(--s4); color:var(--muted) }
+  .legend { padding:var(--s2) var(--s4) var(--s3); border-top:1px solid var(--line); font-size:.76rem; color:var(--muted) }
 
   /* ---- Assistant ---- */
-  .assistant { display:grid; grid-template-columns:minmax(0, 1.6fr) minmax(0, 1fr); gap:var(--s4); align-items:start }
-  .tabs { display:inline-flex; gap:4px; padding:4px; border-radius:var(--pill); background:var(--surface-2); border:1px solid var(--line); flex-wrap:wrap; margin-bottom:var(--s4) }
-  .tab { font:inherit; font-size:.88rem; font-weight:500; min-height:36px; padding:6px 16px; border-radius:var(--pill); border:0; background:transparent; color:var(--muted); cursor:pointer }
+  .assist { padding:var(--s4); display:grid; grid-template-columns:minmax(0, 1fr); gap:var(--s3) }
+  .assist > * { min-width:0 }
+  .assist .tabs { justify-self:start }
+  .tabs { display:inline-flex; gap:4px; padding:3px; border-radius:var(--r); background:var(--surface-2); border:1px solid var(--line); flex-wrap:wrap }
+  .tab { font:inherit; font-size:.82rem; font-weight:500; min-height:32px; padding:4px 12px; border-radius:var(--r-sm); border:0; background:transparent; color:var(--muted); cursor:pointer }
   .tab:hover { color:var(--ink) }
   .tab[aria-selected="true"] { background:var(--surface); color:var(--ink); box-shadow:0 0 0 1px var(--line) }
-  .howto { margin:0 0 var(--s4); padding-left:1.3em; display:grid; gap:6px }
+  .howto { margin:0; padding-left:1.2em; display:grid; gap:4px; font-size:.84rem }
   .howto li::marker { color:var(--accent); font-weight:600 }
-  .code { position:relative; border-radius:var(--r); background:var(--code-bg); color:var(--code-ink) }
-  .code pre { margin:0; padding:var(--s4) var(--s5); overflow:auto; font-size:.8rem; line-height:1.6 }
-  .code-bar { display:flex; justify-content:space-between; align-items:center; gap:var(--s2); padding:var(--s2) var(--s2) var(--s2) var(--s5); border-bottom:1px solid rgb(255 255 255 / 12%); font-size:.78rem; color:#B5B4B9 }
-  .code-bar .btn { color:#FFFFFF; border-color:rgb(255 255 255 / 25%); background:transparent }
+  .howto code, .note code { font-size:.8em; padding:1px 5px; border-radius:6px; background:var(--surface-2); color:var(--ink); word-break:break-all }
+  .code { border-radius:var(--r); background:var(--code-bg); color:var(--code-ink) }
+  .code pre { margin:0; padding:var(--s3) var(--s4); overflow:auto; font-size:.74rem; line-height:1.55 }
+  .code-bar { display:flex; justify-content:space-between; align-items:center; gap:var(--s2); padding:6px 6px 6px var(--s4); border-bottom:1px solid rgb(255 255 255 / 12%); font-size:.74rem; color:#B5B4B9 }
+  .code-bar .btn { color:#FFFFFF; border-color:rgb(255 255 255 / 25%); background:transparent; min-height:30px; padding:4px 10px; font-size:.78rem }
   .code-bar .btn:hover { background:rgb(255 255 255 / 10%); border-color:rgb(255 255 255 / 45%) }
-  .note { font-size:.86rem; color:var(--muted); margin-top:var(--s3) }
-  .note code, .tool-state code, .howto code { font-size:.82em; padding:1px 6px; border-radius:6px; background:var(--surface-2); color:var(--ink) }
-  .keycard h3 { font-size:1.1rem; display:flex; align-items:center; gap:var(--s2) }
-  .keycard ul { margin:0; padding-left:1.1em; display:grid; gap:6px; color:var(--muted); font-size:.88rem }
+  .keyline { display:flex; align-items:center; justify-content:space-between; gap:var(--s3); flex-wrap:wrap; padding-top:var(--s3); border-top:1px solid var(--line); font-size:.8rem; color:var(--muted) }
+  .keyline span { display:flex; align-items:center; gap:6px }
 
-  /* ---- Prompts ---- */
-  .prompts { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap:var(--s4) }
-  .prompt { text-align:left; font:inherit; color:var(--text); background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); padding:var(--s5); cursor:pointer; display:grid; gap:var(--s3); align-content:space-between; min-width:0; box-shadow:var(--shadow); transition:border-color .15s }
-  .prompt:hover { border-color:var(--accent) }
-  .prompt q { quotes:"« " " »"; color:var(--ink); font-size:1.02rem; line-height:1.45 }
-  .prompt .meta { display:flex; justify-content:space-between; align-items:center; gap:var(--s3); font-size:.78rem; color:var(--muted) }
-  .prompt .meta span:last-child { display:inline-flex; align-items:center; gap:6px; color:var(--accent); font-weight:500 }
+  /* ---- Exemples de questions ---- */
+  .prompts-box { margin-top:var(--s4) }
+  .prompts-box .tabs { margin:var(--s3) var(--s4) 0 }
+  .prompts { list-style:none; margin:0; padding:var(--s2) 0; display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 420px), 1fr)) }
+  .prompt { width:100%; text-align:left; font:inherit; color:var(--text); background:none; border:0; border-top:1px solid var(--line); padding:var(--s3) var(--s4); cursor:pointer; display:flex; gap:var(--s3); align-items:flex-start; justify-content:space-between }
+  .prompt:hover { background:var(--surface-2) }
+  .prompt q { quotes:"« " " »"; color:var(--ink); font-size:.9rem; line-height:1.45 }
+  .prompt small { display:block; color:var(--muted); font-size:.74rem; margin-top:2px }
+  .prompt .copy { color:var(--accent); flex:none; display:inline-flex; align-items:center; gap:4px; font-size:.78rem; font-weight:500 }
+  .prompt.off q { color:var(--muted) }
 
   /* ---- Administration, connexion, pied de page ---- */
-  details.admin { margin-top:var(--s7); border:1px solid var(--line); border-radius:var(--r-lg); background:var(--surface) }
-  details.admin summary { cursor:pointer; padding:var(--s4) var(--s5); font-weight:500; color:var(--ink); display:flex; align-items:center; gap:var(--s2) }
+  details.admin { margin-top:var(--s4); border:1px solid var(--line); border-radius:var(--r-lg); background:var(--surface) }
+  details.admin summary { cursor:pointer; padding:var(--s3) var(--s4); font-weight:500; color:var(--ink) }
   details.admin summary small { color:var(--muted); font-weight:400 }
   details.admin .tbl { overflow:auto; border-top:1px solid var(--line) }
-  table { width:100%; border-collapse:collapse; font-size:.84rem }
-  td { padding:10px var(--s5); border-top:1px solid var(--line); vertical-align:top } tr:first-child td { border-top:0 }
-  td:first-child { font:.8rem var(--mono); color:var(--ink); white-space:nowrap } td:last-child { color:var(--muted); word-break:break-all }
-  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--line-strong); margin-right:8px } .dot.on { background:var(--ok) }
-  .panel { max-width:520px; margin:var(--s8) auto; text-align:center; background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); padding:var(--s7) var(--s6); display:grid; gap:var(--s4); justify-items:center; box-shadow:var(--shadow) }
+  table { width:100%; border-collapse:collapse; font-size:.82rem }
+  td { padding:8px var(--s4); border-top:1px solid var(--line); vertical-align:top } tr:first-child td { border-top:0 }
+  td:first-child { font:.78rem var(--mono); color:var(--ink); white-space:nowrap } td:last-child { color:var(--muted); word-break:break-all }
+  .on-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--line-strong); margin-right:8px } .on-dot.on { background:var(--ok) }
+  .panel { max-width:520px; margin:var(--s7) auto; text-align:center; background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); padding:var(--s6) var(--s5); display:grid; gap:var(--s4); justify-items:center; box-shadow:var(--shadow) }
   .panel img { height:44px; width:auto }
-  .panel h1 { font-size:1.6rem }
+  .panel h1 { font-size:1.5rem }
   .panel p { color:var(--muted) }
-  footer.foot { margin-top:var(--s8); border-top:1px solid var(--line); background:var(--bg) }
-  footer.foot .wrap { display:flex; align-items:center; justify-content:space-between; gap:var(--s4); flex-wrap:wrap; padding-top:var(--s5); padding-bottom:calc(var(--s5) + env(safe-area-inset-bottom, 0px)); font-size:.82rem; color:var(--muted) }
+  .panel .btn { min-height:44px; padding:10px 22px; font-size:.95rem }
+  footer.foot { margin-top:var(--s6); border-top:1px solid var(--line); background:var(--bg) }
+  footer.foot .wrap { display:flex; align-items:center; justify-content:space-between; gap:var(--s4); flex-wrap:wrap; padding-top:var(--s4); padding-bottom:calc(var(--s4) + env(safe-area-inset-bottom, 0px)); font-size:.8rem; color:var(--muted) }
   footer.foot .sig { display:flex; align-items:center; gap:var(--s2) }
   footer.foot img { height:16px; width:auto }
   footer.foot b { color:var(--ink); font-weight:600 }
   .toast { position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom, 0px)); transform:translate(-50%, 8px); z-index:40; background:var(--ink); color:var(--bg); padding:10px 18px; border-radius:var(--pill); font-size:.9rem; font-weight:500; opacity:0; transition:opacity .2s, transform .2s; pointer-events:none }
   .toast.show { opacity:1; transform:translate(-50%, 0) }
 
-  @media (max-width: 900px) { .assistant { grid-template-columns:minmax(0, 1fr) } .steps { grid-template-columns:minmax(0, 1fr) } }
-  @media (max-width: 640px) {
+  @media (max-width: 980px) { .layout { grid-template-columns:minmax(0, 1fr) } .aside { position:static } }
+  @media (max-width: 720px) {
     .brand .product, .profile .id, .env { display:none }
-    .hero { padding-top:var(--s7) }
-    .section { padding-top:var(--s6) }
-    .card { padding:var(--s4) }
-    .tool-actions .btn, .next .btn { width:100% }
+    .app-row { grid-template-columns:minmax(0, 1fr) auto; grid-template-areas:"name state" "svc actions"; row-gap:var(--s2); padding-block:var(--s3) }
+    .app-name { grid-area:name } .app-row > .tag { grid-area:state; justify-self:end } .svc { grid-area:svc } .app-actions { grid-area:actions }
+    .drawer { padding-left:var(--s4) }
   }
   @media (prefers-reduced-motion: reduce) { html { scroll-behavior:auto } *, *::before, *::after { transition:none !important } }
 </style>
@@ -230,30 +236,32 @@
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></symbol>
   <symbol id="i-logout" viewBox="0 0 24 24"><path d="M14 4.5h3.5a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H14"/><path d="M10 16l-4-4 4-4M6 12h9"/></symbol>
   <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
 </svg>
 <a class="skip" href="#contenu">Aller au contenu</a>
 
 <header class="topbar">
   <div class="wrap">
     <span class="brand">
-      <img class="logo-light" src="/brand/clevoa-logo-couleur.svg" alt="Clevoa" width="108" height="28">
-      <img class="logo-dark" src="/brand/clevoa-logo-couleur-fond-sombre.svg" alt="Clevoa" width="108" height="28">
-      <span class="product">AI Gateway</span>
+      <img class="logo-light" src="/brand/clevoa-logo-couleur.svg" alt="Clevoa" width="92" height="24">
+      <img class="logo-dark" src="/brand/clevoa-logo-couleur-fond-sombre.svg" alt="Clevoa" width="92" height="24">
+      <span class="product">AI Gateway <small id="instance"></small></span>
     </span>
     <div class="who">
       <span class="env" id="env">v… · ENV : …</span>
       <div class="profile" id="profile" aria-live="polite"></div>
-      <button class="iconbtn" id="theme" type="button" aria-label="Passer en thème sombre"><svg class="icon"><use href="#i-moon"/></svg></button>
+      <button class="iconbtn" id="theme" type="button" aria-label="Passer en thème sombre"><svg class="icon sm"><use href="#i-moon"/></svg></button>
     </div>
   </div>
 </header>
 
 <main id="contenu" tabindex="-1">
+  <h1 class="sr-only">Clevoa AI Gateway : vos applications dans votre assistant IA</h1>
   <!-- Visiteur déconnecté (SSO) -->
   <section class="wrap" id="signin" hidden>
     <div class="panel">
       <img src="/brand/clevoa-socle-couleur.svg" alt="" width="60" height="44">
-      <h1>Connectez-vous pour accéder à vos outils</h1>
+      <h2>Connectez-vous pour accéder à vos outils</h2>
       <p>Votre identité Microsoft 365 vous donne accès à votre espace personnel : vos connexions, votre clé et la configuration de votre assistant IA.</p>
       <a class="btn primary" href="/auth/sso">Se connecter avec Microsoft <svg class="icon sm"><use href="#i-arrow"/></svg></a>
     </div>
@@ -262,106 +270,83 @@
   <!-- Passerelle injoignable -->
   <section class="wrap" id="offline" hidden>
     <div class="panel" role="alert">
-      <h1>Passerelle injoignable</h1>
+      <h2>Passerelle injoignable</h2>
       <p>Le portail ne parvient pas à joindre la passerelle. Vérifiez votre connexion réseau ou VPN, puis réessayez.</p>
       <button class="btn primary" type="button" onclick="load()"><svg class="icon sm"><use href="#i-refresh"/></svg>Réessayer</button>
     </div>
   </section>
 
-  <div id="app">
-    <section class="wrap hero" aria-labelledby="titre">
-      <span class="badge" id="instance">Passerelle IA · lecture seule</span>
-      <h1 id="titre">Vos outils métier, dans votre assistant IA. <span>Avec vos droits, rien de plus.</span></h1>
-      <p class="lead">Connectez vos comptes une fois. Votre assistant interroge ensuite Salesforce, Sage X3, SharePoint, Dropbox et MyReport avec <strong>vos</strong> droits d'accès, en lecture seule. Aucune donnée métier n'est stockée par la passerelle.</p>
-      <ol class="steps" id="steps" aria-label="Votre progression">
-        <li class="step" data-step="1"><span class="num">1</span><div><b>Connectez vos outils</b><small id="step1">Une fois pour toutes</small></div></li>
-        <li class="step" data-step="2"><span class="num">2</span><div><b>Vérifiez les connexions</b><small id="step2">Un test par outil</small></div></li>
-        <li class="step" data-step="3"><span class="num">3</span><div><b>Branchez votre assistant</b><small id="step3">Copier, coller, redémarrer</small></div></li>
-      </ol>
-      <div class="next" id="next"></div>
-    </section>
+  <div class="wrap" id="app">
+    <div class="summary" id="summary" aria-live="polite"><p>Chargement…</p></div>
 
-    <section class="wrap section" id="outils" aria-labelledby="titre-outils">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Étape 1 et 2 · Vos outils</p>
-          <h2 id="titre-outils">Connectez et vérifiez vos outils</h2>
-          <p class="sub">Chaque connexion utilise votre propre compte. Le bouton « Tester » vérifie l'accès sans rien modifier.</p>
+    <div class="layout">
+      <section class="panel-box" id="outils" aria-labelledby="titre-outils">
+        <div class="box-head">
+          <div>
+            <h2 id="titre-outils">Vos applications</h2>
+            <p>Chaque connexion utilise votre propre compte, en lecture seule.</p>
+          </div>
+          <button class="btn" type="button" id="test-all" onclick="testAll(this)"><svg class="icon sm"><use href="#i-refresh"/></svg>Tout tester</button>
         </div>
-        <button class="btn sm" type="button" id="test-all" onclick="testAll(this)"><svg class="icon sm"><use href="#i-refresh"/></svg>Tout tester</button>
-      </div>
-      <div class="grid" id="systems" aria-busy="true">
-        <div class="skeleton" aria-hidden="true"></div><div class="skeleton" aria-hidden="true"></div><div class="skeleton" aria-hidden="true"></div>
-        <span class="sr-only">Chargement de vos outils…</span>
-      </div>
-    </section>
+        <div id="systems" aria-busy="true">
+          <div class="skeleton" aria-hidden="true"></div><div class="skeleton" aria-hidden="true"></div><div class="skeleton" aria-hidden="true"></div>
+          <span class="sr-only">Chargement de vos applications…</span>
+        </div>
+        <p class="legend" id="legend">Service : état mesuré par la passerelle, d'après les appels de la dernière heure et une vérification de joignabilité.</p>
+      </section>
 
-    <section class="wrap section" id="assistant" aria-labelledby="titre-assistant">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Étape 3 · Votre assistant</p>
-          <h2 id="titre-assistant">Branchez votre assistant IA</h2>
-          <p class="sub">Copiez le bloc correspondant à votre assistant. Il contient votre clé personnelle : ne le partagez pas.</p>
-        </div>
-      </div>
-      <div class="assistant">
-        <div>
+      <aside class="panel-box aside" id="assistant" aria-labelledby="titre-assistant">
+        <div class="box-head"><h2 id="titre-assistant">Brancher votre assistant</h2></div>
+        <div class="assist">
           <div class="tabs" role="tablist" aria-label="Assistant" id="client-tabs">
-            <button class="tab" role="tab" id="tab-http" aria-controls="panel-http" aria-selected="true" onclick="showClient('http')">Claude Code, ChatGPT, Copilot</button>
-            <button class="tab" role="tab" id="tab-desktop" aria-controls="panel-desktop" aria-selected="false" tabindex="-1" onclick="showClient('desktop')">Claude Desktop</button>
+            <button class="tab" role="tab" id="tab-desktop" aria-controls="panel-desktop" aria-selected="true" onclick="showClient('desktop')">Claude Desktop</button>
+            <button class="tab" role="tab" id="tab-http" aria-controls="panel-http" aria-selected="false" tabindex="-1" onclick="showClient('http')">Claude Code et autres</button>
           </div>
-          <div role="tabpanel" id="panel-http" aria-labelledby="tab-http">
+          <div role="tabpanel" id="panel-desktop" aria-labelledby="tab-desktop">
             <ol class="howto">
-              <li>Copiez le bloc ci-dessous.</li>
-              <li>Claude Code : collez-le dans <code>.mcp.json</code> à la racine du projet, puis relancez <code>claude</code>. Autres clients MCP HTTP : URL <code id="mcp-url"></code> et en-tête <code>Authorization: Bearer</code>.</li>
-              <li>Posez une première question, par exemple un exemple ci-dessous.</li>
-            </ol>
-            <div class="code">
-              <div class="code-bar"><span>Configuration MCP (HTTP)</span><span>
-                <button class="btn sm reveal" type="button" aria-pressed="false" onclick="toggleKey()"><svg class="icon sm"><use href="#i-eye"/></svg><span>Afficher la clé</span></button>
-                <button class="btn sm" type="button" onclick="copyCfg('http')"><svg class="icon sm"><use href="#i-copy"/></svg>Copier</button></span></div>
-              <pre id="cfg" tabindex="0" aria-label="Configuration MCP HTTP">…</pre>
-            </div>
-          </div>
-          <div role="tabpanel" id="panel-desktop" aria-labelledby="tab-desktop" hidden>
-            <ol class="howto">
-              <li>Prérequis : Node.js installé sur le poste (le pont <code>mcp-remote</code> transmet l'en-tête que Claude Desktop ne sait pas poser).</li>
-              <li>Claude Desktop → Paramètres → Développeur → Modifier la configuration : collez l'entrée dans <code>claude_desktop_config.json</code>, à l'intérieur de <code>mcpServers</code>.</li>
+              <li>Node.js installé sur le poste (le pont <code>mcp-remote</code> transmet votre clé).</li>
+              <li>Paramètres → Développeur → Modifier la configuration : collez l'entrée dans <code>mcpServers</code>.</li>
               <li>Quittez Claude Desktop depuis la barre système, puis relancez-le.</li>
             </ol>
             <div class="code">
               <div class="code-bar"><span>claude_desktop_config.json</span><span>
-                <button class="btn sm reveal" type="button" aria-pressed="false" onclick="toggleKey()"><svg class="icon sm"><use href="#i-eye"/></svg><span>Afficher la clé</span></button>
-                <button class="btn sm" type="button" onclick="copyCfg('desktop')"><svg class="icon sm"><use href="#i-copy"/></svg>Copier</button></span></div>
+                <button class="btn reveal" type="button" aria-pressed="false" onclick="toggleKey()"><svg class="icon sm"><use href="#i-eye"/></svg><span>Afficher la clé</span></button>
+                <button class="btn" type="button" onclick="copyCfg('desktop')"><svg class="icon sm"><use href="#i-copy"/></svg>Copier</button></span></div>
               <pre id="cfg-desktop" tabindex="0" aria-label="Configuration Claude Desktop">…</pre>
             </div>
           </div>
+          <div role="tabpanel" id="panel-http" aria-labelledby="tab-http" hidden>
+            <ol class="howto">
+              <li>Claude Code : collez le bloc dans <code>.mcp.json</code> à la racine du projet, puis relancez <code>claude</code>.</li>
+              <li>ChatGPT, Copilot et autres clients MCP HTTP : URL <code id="mcp-url"></code>, en-tête <code>Authorization: Bearer</code> suivi de votre clé.</li>
+            </ol>
+            <div class="code">
+              <div class="code-bar"><span>.mcp.json</span><span>
+                <button class="btn reveal" type="button" aria-pressed="false" onclick="toggleKey()"><svg class="icon sm"><use href="#i-eye"/></svg><span>Afficher la clé</span></button>
+                <button class="btn" type="button" onclick="copyCfg('http')"><svg class="icon sm"><use href="#i-copy"/></svg>Copier</button></span></div>
+              <pre id="cfg" tabindex="0" aria-label="Configuration MCP HTTP">…</pre>
+            </div>
+          </div>
+          <div class="keyline">
+            <span><svg class="icon sm" aria-hidden="true"><use href="#i-key"/></svg>Clé personnelle, à ne pas partager.</span>
+            <button class="link" type="button" onclick="rotateKey()">Régénérer la clé</button>
+          </div>
         </div>
-        <aside class="card keycard" aria-labelledby="titre-cle">
-          <h3 id="titre-cle"><svg class="icon"><use href="#i-key"/></svg>Votre clé personnelle</h3>
-          <ul>
-            <li>Elle identifie votre assistant auprès de la passerelle et ne circule jamais dans une URL.</li>
-            <li>Elle est masquée à l'écran ; les boutons « Copier » la copient en entier.</li>
-            <li>Clé divulguée ou poste perdu : régénérez-la. L'ancienne cesse de fonctionner aussitôt et chaque assistant doit être reconfiguré.</li>
-          </ul>
-          <button class="btn danger" type="button" onclick="rotateKey()"><svg class="icon sm"><use href="#i-refresh"/></svg>Régénérer la clé</button>
-        </aside>
-      </div>
-    </section>
+      </aside>
+    </div>
 
-    <section class="wrap section" id="exemples" aria-labelledby="titre-exemples">
-      <div class="section-head">
+    <section class="panel-box prompts-box" id="exemples" aria-labelledby="titre-exemples">
+      <div class="box-head">
         <div>
-          <p class="eyebrow">Bibliothèque de prompts</p>
-          <h2 id="titre-exemples">Exemples de questions</h2>
-          <p class="sub">Cliquez sur une question pour la copier, puis collez-la dans votre assistant. Chaque réponse cite sa source (« Source : … »).</p>
+          <h2 id="titre-exemples">Questions qui fonctionnent</h2>
+          <p>Cliquez pour copier, puis collez dans votre assistant. Chaque réponse cite sa source.</p>
         </div>
       </div>
-      <div class="tabs" role="tablist" aria-label="Thème des exemples" id="tabs"></div>
-      <div class="prompts" id="prompts" role="tabpanel" aria-labelledby="tabs"></div>
+      <div class="tabs" role="tablist" aria-label="Domaine des exemples" id="tabs"></div>
+      <div role="tabpanel" aria-labelledby="titre-exemples"><ul class="prompts" id="prompts"></ul></div>
     </section>
 
-    <div class="wrap" id="config-section" hidden>
+    <div id="config-section" hidden>
       <details class="admin">
         <summary>Configuration de l'instance <small>· réservée à l'administrateur, secrets masqués</small></summary>
         <div class="tbl"><table id="config"></table></div>
@@ -379,37 +364,38 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
-const PROMPTS = {
-  "Prise en main": [
-    ["Quels systèmes et quels outils puis-je interroger via ce connecteur ? Explique-moi comment formuler une bonne question.", "Tous · outils"],
-    ["Liste les objets Salesforce que je peux interroger et explique-moi les cinq principaux.", "Salesforce · objets"],
-    ["Quels champs sont disponibles sur les écritures comptables (GACCENTRY) ?", "Sage X3 · describe"],
-  ],
-  "Analyse de données": [
-    ["Quel est le chiffre d'affaires facturé des 12 derniers mois, par mois ?", "Sage X3 · SINVOICE"],
-    ["Top 10 des clients par CA sur les 12 derniers mois, avec leur encours.", "Sage X3 · SINVOICE + BPCUSTOMER"],
-    ["Pipeline Salesforce : opportunités ouvertes > 50 k€ avec date de clôture ce trimestre.", "Salesforce · Opportunity"],
-    ["Taux de conversion des opportunités créées sur les 12 derniers mois, par commercial.", "Salesforce · Opportunity + User"],
-  ],
-  "Contrôle de gestion": [
-    ["Liste des factures fournisseurs échues non réglées, triées par montant.", "Sage X3 · PINVOICE"],
-    ["Pour le client X : commandes Salesforce de l'année vs factures Sage X3 — y a-t-il un écart ?", "Croisé Salesforce + Sage X3"],
-    ["Via MyReport : CA HT et marge brute des 12 derniers mois, puis compare avec les factures Sage X3.", "MyReport · proxy MCP + Sage X3"],
-    ["Retrouve le dernier budget prévisionnel dans le dossier Finance SharePoint et résume ses hypothèses.", "SharePoint · search + read"],
-    ["Liste les fichiers du dossier /Finance/Clôtures de Dropbox modifiés ce mois-ci.", "Dropbox · list_folder"],
-  ],
-};
-// Présentation des outils (libellé de catégorie et icône) ; un outil inconnu garde une présentation générique.
+// Domaines d'applications, dans l'ordre d'affichage ; le domaine de chaque application vient de /api/me (CONNECTOR_DOMAINS).
+const DOMAINS = { commerce: "Commerce", finance: "Finance", industrie: "Industrie", documents: "Documents", rh: "Ressources humaines", autre: "Autres" };
+// Exemples de questions : [question, systèmes interrogés, précision]. Un onglet par domaine présent, plus « Croisées » et « Prise en main ».
+const PROMPTS = [
+  ["Quels systèmes et quels outils puis-je interroger ? Explique-moi comment formuler une bonne question.", [], "Tous les systèmes"],
+  ["D'après les systèmes auxquels j'ai accès, propose trois analyses utiles pour mon métier et lance la première.", [], "Tous les systèmes"],
+  ["Pipeline : opportunités ouvertes de plus de 50 k€ dont la clôture est prévue ce trimestre.", ["salesforce"], "Opportunity"],
+  ["Taux de conversion des opportunités créées sur les 12 derniers mois, par commercial.", ["salesforce"], "Opportunity + User"],
+  ["Comptes sans activité depuis six mois, avec leur dernier contact.", ["salesforce"], "Account + Task"],
+  ["Chiffre d'affaires facturé des 12 derniers mois, par mois.", ["sagex3"], "SINVOICE"],
+  ["Top 10 des clients par CA sur 12 mois, avec leur encours.", ["sagex3"], "SINVOICE + BPCUSTOMER"],
+  ["Factures fournisseurs échues non réglées, triées par montant.", ["sagex3"], "PINVOICE"],
+  ["Via MyReport : CA HT et marge brute des 12 derniers mois.", ["myreport"], "indicateurs publiés"],
+  ["Retrouve le dernier budget prévisionnel dans le dossier Finance et résume ses hypothèses.", ["sharepoint"], "search + read"],
+  ["Fichiers du dossier /Finance/Clôtures modifiés ce mois-ci.", ["dropbox"], "list_folder"],
+  ["Pour le client X : commandes Salesforce de l'année et factures Sage X3. Y a-t-il un écart ?", ["salesforce", "sagex3"], "rapprochement"],
+  ["CA HT MyReport des 12 derniers mois comparé aux factures Sage X3 : explique les écarts.", ["myreport", "sagex3"], "rapprochement"],
+];
+// Présentation des applications (icône et description) ; une application inconnue garde une présentation générique.
 const TOOLS = {
   salesforce: { icon: "crm", desc: "CRM · comptes, contacts, opportunités" },
   sagex3: { icon: "erp", desc: "ERP · factures, commandes, écritures" },
-  sharepoint: { icon: "doc", desc: "Documents · SharePoint et OneDrive" },
-  dropbox: { icon: "cloud", desc: "Documents · dossiers et fichiers Dropbox" },
+  sharepoint: { icon: "doc", desc: "SharePoint et OneDrive" },
+  dropbox: { icon: "cloud", desc: "Dossiers et fichiers Dropbox" },
   myreport: { icon: "chart", desc: "Reporting · indicateurs et tableaux" },
 };
+const SERVICE = { ok: "Opérationnel", lent: "Lent", erreurs: "Erreurs", injoignable: "Injoignable", inconnu: "Pas d'appel récent", simule: "Simulateur" };
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const ico = (id, cls = "icon") => `<svg class="${cls}" aria-hidden="true"><use href="#i-${id}"/></svg>`;
+const secs = (ms) => (ms == null ? "" : ms < 1000 ? `${ms} ms` : `${(ms / 1000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} s`);
+const hhmm = (iso) => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 let toastTimer;
 const toast = (m = "Copié") => { const t = $("#toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 1800); };
 function copy(t, msg = "Copié dans le presse-papiers") {
@@ -421,7 +407,7 @@ const store = { get: (k) => { try { return localStorage.getItem(k); } catch { re
 // ---- Thème : automatique (système) ou commuté, mémorisé localement ----
 const root = document.documentElement;
 const isDark = () => (root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches);
-function paintTheme() { const d = isDark(); $("#theme").setAttribute("aria-label", d ? "Passer en thème clair" : "Passer en thème sombre"); $("#theme").innerHTML = ico(d ? "sun" : "moon"); }
+function paintTheme() { const d = isDark(); $("#theme").setAttribute("aria-label", d ? "Passer en thème clair" : "Passer en thème sombre"); $("#theme").innerHTML = ico(d ? "sun" : "moon", "icon sm"); }
 { const t = store.get("theme"); if (t) root.dataset.theme = t; }
 $("#theme").onclick = () => { root.dataset.theme = isDark() ? "light" : "dark"; store.set("theme", root.dataset.theme); paintTheme(); };
 paintTheme();
@@ -437,7 +423,8 @@ function arrowTabs(list) {
 }
 
 // ---- Configuration des assistants : clé masquée à l'écran, copiée en entier ----
-let ME = null, showKey = false, tested = new Set();
+let ME = null, STATUS = null, showKey = false;
+const open = new Set(); // applications dont le détail est déplié (conservé entre deux rafraîchissements)
 const cfg = (me, key) => ({
   http: `{\n  "mcpServers": {\n    "${me.serverName}": {\n      "type": "http",\n      "url": "${me.mcpUrl}",\n      "headers": { "Authorization": "Bearer ${key}" }\n    }\n  }\n}`,
   desktop: `{\n  "mcpServers": {\n    "${me.serverName}": {\n      "command": "npx",\n      "args": ["-y", "mcp-remote@0.15", "${me.mcpUrl}", "--header", "Authorization:\${MCP_AUTH}"],\n      "env": { "MCP_AUTH": "Bearer ${key}" }\n    }\n  }\n}`,
@@ -449,67 +436,100 @@ function paintCfg() {
   document.querySelectorAll(".reveal").forEach((b) => { b.setAttribute("aria-pressed", String(showKey)); b.querySelector("span").textContent = showKey ? "Masquer la clé" : "Afficher la clé"; });
 }
 function toggleKey() { showKey = !showKey; paintCfg(); }
-function copyCfg(kind) { if (!ME?.key) return; copy(cfg(ME, ME.key)[kind], "Configuration copiée"); store.set("cfgCopied", "1"); paintProgress(); }
+function copyCfg(kind) { if (!ME?.key) return; copy(cfg(ME, ME.key)[kind], "Configuration copiée"); store.set("cfgCopied", "1"); paintSummary(); }
 function showClient(kind) {
-  for (const k of ["http", "desktop"]) { const on = k === kind; $(`#tab-${k}`).setAttribute("aria-selected", String(on)); $(`#tab-${k}`).tabIndex = on ? 0 : -1; $(`#panel-${k}`).hidden = !on; }
+  for (const k of ["desktop", "http"]) { const on = k === kind; $(`#tab-${k}`).setAttribute("aria-selected", String(on)); $(`#tab-${k}`).tabIndex = on ? 0 : -1; $(`#panel-${k}`).hidden = !on; }
 }
 
-// ---- Progression : étape en cours et prochaine action ----
-function paintProgress() {
+// ---- Bandeau de situation : connexions, assistant, état des services, prochaine action ----
+function paintSummary() {
   if (!ME) return;
-  const ready = ME.systems.filter((s) => s.connected || s.mock).length, total = ME.systems.length;
-  const done = [ready > 0, tested.size > 0 || store.get("tested") === "1", store.get("cfgCopied") === "1"];
-  const current = done.indexOf(false);
-  document.querySelectorAll(".step").forEach((el, i) => { el.dataset.state = done[i] ? "done" : i === current ? "current" : "todo"; el.querySelector(".num").innerHTML = done[i] ? ico("check", "icon sm") : String(i + 1); });
-  $("#step1").textContent = total ? `${ready} sur ${total} outil${total > 1 ? "s" : ""} prêt${ready > 1 ? "s" : ""}` : "Aucun outil configuré";
-  $("#step2").textContent = tested.size ? `${tested.size} test${tested.size > 1 ? "s" : ""} réussi${tested.size > 1 ? "s" : ""}` : done[1] ? "Déjà vérifié sur ce poste" : "Un test par outil";
-  $("#step3").textContent = done[2] ? "Configuration copiée" : "Copier, coller, redémarrer";
-  const next = [
-    ["Prochaine étape : connectez au moins un outil.", "#outils", "Connecter mes outils"],
-    ["Prochaine étape : vérifiez qu'un outil répond.", "#outils", "Tester mes connexions"],
-    ["Prochaine étape : copiez la configuration dans votre assistant.", "#assistant", "Brancher mon assistant"],
-  ][current];
-  $("#next").innerHTML = next ? `<p>${next[0]}</p><a class="btn primary" href="${next[1]}">${next[2]} ${ico("arrow", "icon sm")}</a>`
-    : `<p>Tout est prêt. Posez une question à votre assistant.</p><a class="btn" href="#exemples">Voir des exemples ${ico("arrow", "icon sm")}</a>`;
+  const real = ME.systems.filter((s) => !s.mock), ready = ME.systems.filter((s) => s.connected || s.mock).length, total = ME.systems.length;
+  const copied = store.get("cfgCopied") === "1";
+  const down = (STATUS?.systems ?? []).filter((x) => ["injoignable", "erreurs"].includes(x.state)).map((x) => ME.systems.find((s) => s.id === x.id)?.label).filter(Boolean);
+  const action = !ready && real.length ? ["Connecter une application", "#outils"] : !copied ? ["Brancher mon assistant", "#assistant"] : null;
+  $("#summary").innerHTML = `<p><span><b>${ready}</b> application${ready > 1 ? "s" : ""} sur ${total} connectée${ready > 1 ? "s" : ""}</span><span class="sep" aria-hidden="true"></span>`
+    + `<span>Assistant : <b>${copied ? "configuration copiée" : "à brancher"}</b></span><span class="sep" aria-hidden="true"></span>`
+    + `<span>${down.length ? `<b class="alert">Incident : ${esc(down.join(", "))}</b>` : "Aucun incident signalé"}</span></p>`
+    + (action ? `<a class="btn primary" href="${action[1]}">${action[0]} ${ico("arrow", "icon sm")}</a>` : "");
 }
 
-// ---- Rendu ----
+// ---- Applications : une ligne par application, groupées par domaine ----
 function stateOf(s) { // [classe, libellé, explication]
   if (s.mock) return ["sim", "Simulé", "Mode simulé, sans compte : les données sont fictives."];
   if (s.connected) return ["ok", "Connecté", s.method === "apikey" ? "Connecté avec votre jeton personnel." : "Connecté avec votre compte."];
-  if (s.oauth && !s.configured && !s.apiKey) return ["off", "Non configuré", "Votre administrateur doit d'abord activer cet outil."];
+  if (s.oauth && !s.configured && !s.apiKey) return ["off", "Non configuré", "Votre administrateur doit d'abord activer cette application."];
   return ["todo", "À connecter", s.oauth && s.configured ? "Connectez votre compte pour que votre assistant puisse l'interroger." : `Saisissez votre ${esc(s.apiKey?.label || "jeton personnel")}.`];
 }
-function toolCard(s) {
-  const t = TOOLS[s.id] || { icon: "plug", desc: "Outil connecté" }, [cls, tag, why] = stateOf(s);
-  const oauthBtn = !s.oauth || s.mock ? "" : s.configured
-    ? `<a class="btn ${s.connected ? "" : "primary"}" href="/auth/${esc(s.id)}">${s.connected ? "Reconnecter" : "Se connecter"}</a>`
-    : s.apiKey ? "" : `<span class="btn" aria-disabled="true">Se connecter</span>`;
-  const form = s.apiKey && !s.connected ? `
-      <form class="apikey" autocomplete="off" onsubmit="saveApiKey(event, '${esc(s.id)}')">
-        ${s.oauth && s.configured ? `<span class="or">ou</span>` : ""}
-        ${s.apiKey.mode === "basic" ? `<div class="field"><label for="${esc(s.id)}-login">Identifiant</label><input id="${esc(s.id)}-login" name="${esc(s.id)}-login" autocomplete="off" required></div>` : ""}
-        <div class="field"><label for="${esc(s.id)}-apikey">${s.apiKey.mode === "basic" ? "Mot de passe" : "Jeton personnel"}</label><input id="${esc(s.id)}-apikey" name="${esc(s.id)}-apikey" type="password" autocomplete="new-password" required aria-describedby="${esc(s.id)}-hint"></div>
-        <p class="hint" id="${esc(s.id)}-hint">${esc(s.apiKey.label)}, chiffré par la passerelle et jamais réaffiché.</p>
-        <button class="btn" type="submit">Enregistrer</button>
-      </form>` : "";
-  return `
-    <article class="card" aria-labelledby="t-${esc(s.id)}">
-      <div class="tool-head">
-        <span class="tool-icon">${ico(t.icon)}</span>
-        <div class="tool-name"><h3 id="t-${esc(s.id)}">${esc(s.label)}</h3><p>${esc(t.desc)}</p></div>
-        <span class="tag ${cls}">${tag}</span>
-      </div>
-      <p class="tool-state">${why}</p>
-      ${oauthBtn ? `<div class="tool-actions">${oauthBtn}</div>` : ""}
-      ${form}
-      <div class="result" id="res-${esc(s.id)}" role="status" aria-live="polite"></div>
-      <div class="tool-foot">
-        <button class="btn sm" type="button" data-test="${esc(s.id)}" onclick="test('${esc(s.id)}', this)">${ico("refresh", "icon sm")}Tester${s.mock ? " le simulateur" : ""}</button>
-        ${s.connected ? `<button class="link" type="button" onclick="disconnect('${esc(s.id)}')">Déconnecter</button>` : ""}
-      </div>
-    </article>`;
+function service(id) {
+  const x = STATUS?.systems.find((y) => y.id === id);
+  if (!x) return `<div class="svc"><span class="dot" aria-hidden="true"></span><span>Service : …</span></div>`;
+  const parts = [];
+  if (x.p95 != null && x.state !== "injoignable") parts.push(secs(x.p95));
+  if (x.state === "injoignable" && x.probe?.reason) parts.push(x.probe.reason);
+  if (x.state === "inconnu" && STATUS.paused) parts.push("vérification en pause");
+  const title = [x.lastOk && `Dernier appel réussi à ${hhmm(x.lastOk)}`, x.probe && `Vérifié à ${hhmm(x.probe.at)} : ${x.probe.ok ? `joignable en ${secs(x.probe.ms)}` : x.probe.reason}`,
+    STATUS.probe && `Vérification ${STATUS.probeHours}`].filter(Boolean).join(" · ");
+  return `<div class="svc ${esc(x.state)}" title="${esc(title)}"><span class="dot" aria-hidden="true"></span><span><span class="sr-only">Service : </span><b>${esc(SERVICE[x.state] || x.state)}</b>${parts.length ? ` · ${esc(parts.join(" · "))}` : ""}</span></div>`;
 }
+function appRow(s) {
+  const t = TOOLS[s.id] || { icon: "plug", desc: "Application connectée" }, [cls, tag, why] = stateOf(s), id = esc(s.id);
+  const oauthBtn = s.oauth && !s.mock && s.configured && !s.connected ? `<a class="btn primary" href="/auth/${esc(s.id)}">Se connecter</a>` : "";
+  const tokenBtn = s.apiKey && !s.connected && !oauthBtn ? `<button class="btn primary" type="button" onclick="toggle('${id}', true)">Saisir mon jeton</button>` : "";
+  const form = s.apiKey && !s.connected ? `
+      <form class="apikey" autocomplete="off" onsubmit="saveApiKey(event, '${id}')">
+        ${s.apiKey.mode === "basic" ? `<div class="field"><label for="${id}-login">Identifiant</label><input id="${id}-login" name="${id}-login" autocomplete="off" required></div>` : ""}
+        <div class="field"><label for="${id}-apikey">${s.apiKey.mode === "basic" ? "Mot de passe" : "Jeton personnel"}</label><input id="${id}-apikey" name="${id}-apikey" type="password" autocomplete="new-password" required aria-describedby="${id}-hint"></div>
+        <button class="btn" type="submit">Enregistrer</button>
+        <p class="hint" id="${id}-hint">${esc(s.apiKey.label)}, chiffré par la passerelle et jamais réaffiché.</p>
+      </form>` : "";
+  const links = [s.oauth && !s.mock && s.configured && s.connected ? `<a class="link" href="/auth/${esc(s.id)}">Reconnecter</a>` : "",
+    s.connected ? `<button class="link" type="button" onclick="disconnect('${id}')">Déconnecter</button>` : ""].filter(Boolean).join("");
+  return `
+    <li class="app" aria-labelledby="t-${id}">
+      <div class="app-row">
+        <div class="app-name"><span class="app-icon">${ico(t.icon)}</span><div><h3 id="t-${id}">${esc(s.label)}</h3><p>${esc(t.desc)}</p></div></div>
+        <span class="tag ${cls}">${tag}</span>
+        <div id="svc-${id}">${service(s.id)}</div>
+        <div class="app-actions">
+          ${oauthBtn || tokenBtn}
+          <button class="btn icon-only" type="button" data-test="${id}" onclick="test('${id}', this)" aria-label="Tester ${esc(s.label)}" title="Tester l'accès">${ico("refresh", "icon sm")}</button>
+          <button class="btn icon-only more" type="button" id="more-${id}" aria-expanded="${open.has(s.id)}" aria-controls="drawer-${id}" onclick="toggle('${id}')" aria-label="Détails ${esc(s.label)}">${ico("down", "icon sm")}</button>
+        </div>
+      </div>
+      <div class="drawer" id="drawer-${id}" ${open.has(s.id) ? "" : "hidden"}>
+        <p class="why">${why}</p>
+        ${form}
+        <div class="result" id="res-${id}" role="status" aria-live="polite"></div>
+        ${links ? `<div class="drawer-links">${links}</div>` : ""}
+      </div>
+    </li>`;
+}
+function toggle(id, force) {
+  const on = force ?? !open.has(id);
+  if (on) open.add(id); else open.delete(id);
+  $(`#drawer-${id}`).hidden = !on; $(`#more-${id}`).setAttribute("aria-expanded", String(on));
+  if (on && force) $(`#${id}-login, #${id}-apikey`)?.focus();
+}
+function paintSystems() {
+  const groups = Object.keys(DOMAINS).map((d) => [d, ME.systems.filter((s) => (DOMAINS[s.domain] ? s.domain : "autre") === d)]).filter(([, l]) => l.length);
+  $("#systems").removeAttribute("aria-busy");
+  $("#systems").innerHTML = ME.systems.length
+    ? groups.map(([d, list]) => `<h3 class="domain" id="dom-${d}">${DOMAINS[d]}</h3><ul class="apps" aria-labelledby="dom-${d}">${list.map(appRow).join("")}</ul>`).join("")
+    : `<div class="empty"><h3>Aucune application n'est encore disponible</h3><p>Votre administrateur n'a configuré aucune application sur cette passerelle.</p></div>`;
+  $("#test-all").hidden = !ME.systems.length;
+}
+function paintStatus() {
+  if (!ME) return;
+  for (const s of ME.systems) { const el = $(`#svc-${s.id}`); if (el) el.innerHTML = service(s.id); }
+  $("#legend").textContent = "Service : état mesuré par la passerelle, d'après les appels de la dernière heure"
+    + (STATUS?.probe ? ` et une vérification de joignabilité toutes les 10 minutes, ${STATUS.probeHours}.` : ".");
+  paintSummary();
+}
+async function loadStatus() {
+  try { const r = await fetch("/api/status"); if (r.ok) { STATUS = await r.json(); paintStatus(); } } catch { /* la page reste utilisable sans l'état des services */ }
+}
+
 function view(name) { $("#app").hidden = name !== "app"; $("#signin").hidden = name !== "signin"; $("#offline").hidden = name !== "offline"; }
 let seq = 0;
 async function load() {
@@ -518,7 +538,7 @@ async function load() {
   if (n !== seq) return; // une réponse plus récente a pris le relais
   $("#env").innerHTML = `v${esc(me.version)} · ENV: <b class="${me.env === "PRODUCTION" ? "prod" : ""}">${esc(me.env)}</b>`;
   $("#env-foot").textContent = `${me.instance || "Clevoa AI Gateway"} · v${me.version} · ${me.env}`;
-  if (me.instance) { $("#instance").textContent = me.instance; document.title = `Clevoa AI Gateway · ${me.instance}`; } // libellé de l'instance (INSTANCE_LABEL)
+  if (me.instance) { $("#instance").textContent = `· ${me.instance}`; document.title = `Clevoa AI Gateway · ${me.instance}`; } // libellé de l'instance (INSTANCE_LABEL)
   // SSO : un visiteur non identifié part vers Microsoft Entra ID (transparent si le navigateur a déjà une session Microsoft 365),
   // sauf juste après « Se déconnecter » (?sso=off) : la session Microsoft, elle, est toujours ouverte, on attend un clic.
   if (me.sso && !me.key) {
@@ -529,53 +549,72 @@ async function load() {
   const who = me.email || "Collaborateur non identifié";
   $("#profile").innerHTML = `<span class="avatar" aria-hidden="true">${me.email ? esc(me.email[0].toUpperCase()) : ico("key", "icon sm")}</span>`
     + `<span class="id"><strong title="${esc(who)}">${esc(who)}</strong><small>${me.sso ? `via Microsoft Entra ID${me.sso === "mock" ? " (simulé)" : ""}` : "Clé personnelle de ce navigateur"}</small></span>`
-    + (me.sso ? `<button class="iconbtn" type="button" onclick="logout()" aria-label="Se déconnecter" title="Se déconnecter">${ico("logout")}</button>` : "");
-  $("#systems").removeAttribute("aria-busy");
-  $("#systems").innerHTML = me.systems.length ? me.systems.map(toolCard).join("")
-    : `<div class="empty"><h3>Aucun outil n'est encore disponible</h3><p>Votre administrateur n'a configuré aucun outil sur cette passerelle.</p></div>`;
-  $("#test-all").hidden = !me.systems.length;
+    + (me.sso ? `<button class="iconbtn" type="button" onclick="logout()" aria-label="Se déconnecter" title="Se déconnecter">${ico("logout", "icon sm")}</button>` : "");
+  paintSystems();
   $("#mcp-url").textContent = me.mcpUrl;
-  paintCfg(); paintProgress();
+  paintCfg(); paintSummary(); renderTabs(); loadStatus();
   $("#config-section").hidden = !me.config;
-  if (me.config) $("#config").innerHTML = me.config.map((v) => `<tr><td><i class="dot ${v.value ? "on" : ""}"></i>${esc(v.name)}</td><td>${v.value ? esc(v.value) : "— vide (défaut ou mode simulé)"}</td></tr>`).join("");
+  if (me.config) $("#config").innerHTML = me.config.map((v) => `<tr><td><i class="on-dot ${v.value ? "on" : ""}"></i>${esc(v.name)}</td><td>${v.value ? esc(v.value) : "— vide (défaut ou mode simulé)"}</td></tr>`).join("");
 }
-function renderTabs(active = Object.keys(PROMPTS)[0]) {
+
+// ---- Exemples de questions par domaine, selon les applications présentes ----
+let promptTab = null;
+function promptGroups() {
+  const sys = Object.fromEntries((ME?.systems ?? []).map((s) => [s.id, s]));
+  const avail = PROMPTS.filter(([, ids]) => ids.every((i) => sys[i]));
+  const dom = (ids) => [...new Set(ids.map((i) => sys[i].domain))];
+  const g = [["Prise en main", avail.filter(([, ids]) => !ids.length)]];
+  for (const d of Object.keys(DOMAINS)) g.push([DOMAINS[d], avail.filter(([, ids]) => ids.length && dom(ids).length === 1 && dom(ids)[0] === d)]); // y compris un rapprochement dans un même domaine
+  g.push(["Croisées", avail.filter(([, ids]) => ids.length > 1 && dom(ids).length > 1)]);
+  return g.filter(([, l]) => l.length).map(([name, list]) => [name, list, sys]);
+}
+function renderTabs(active) {
+  const groups = promptGroups(); if (!groups.length) return;
+  promptTab = groups.some(([n]) => n === active) ? active : groups.some(([n]) => n === promptTab) ? promptTab : groups[0][0];
   const hadFocus = $("#tabs").contains(document.activeElement); // navigation au clavier : le focus suit l'onglet actif après le rendu
-  $("#tabs").innerHTML = Object.keys(PROMPTS).map((t) => `<button class="tab" role="tab" aria-selected="${t === active}" tabindex="${t === active ? 0 : -1}" onclick="renderTabs(this.dataset.t)" data-t="${esc(t)}">${esc(t)}</button>`).join("");
-  $("#prompts").innerHTML = PROMPTS[active].map(([q, src], i) => `<button class="prompt" type="button" onclick="copy(PROMPTS[this.dataset.t][${i}][0], 'Question copiée')" data-t="${esc(active)}"><q>${esc(q)}</q><span class="meta"><span>${esc(src)}</span><span>${ico("copy", "icon sm")}Copier</span></span></button>`).join("");
+  $("#tabs").innerHTML = groups.map(([t]) => `<button class="tab" role="tab" aria-selected="${t === promptTab}" tabindex="${t === promptTab ? 0 : -1}" onclick="renderTabs(this.dataset.t)" data-t="${esc(t)}">${esc(t)}</button>`).join("");
+  const [, list, sys] = groups.find(([n]) => n === promptTab);
+  $("#prompts").innerHTML = list.map(([q, ids, what]) => {
+    const missing = ids.filter((i) => !(sys[i].connected || sys[i].mock)).map((i) => sys[i].label);
+    const src = ids.length ? ids.map((i) => sys[i].label).join(" + ") : "";
+    return `<li><button class="prompt${missing.length ? " off" : ""}" type="button" data-q="${esc(q)}" onclick="copy(this.dataset.q, 'Question copiée')"><span><q>${esc(q)}</q><small>${esc([src, what].filter(Boolean).join(" · "))}${missing.length ? ` · à connecter : ${esc(missing.join(", "))}` : ""}</small></span><span class="copy">${ico("copy", "icon sm")}Copier</span></button></li>`;
+  }).join("");
   if (hadFocus) $('#tabs [aria-selected="true"]').focus();
 }
+
+// ---- Actions ----
 async function test(id, btn) {
+  toggle(id, true);
   const out = $("#res-" + id);
   btn.disabled = true; btn.setAttribute("aria-busy", "true");
   out.innerHTML = `<div class="callout wait">${ico("clock")}<span>Test en cours…</span></div>`;
   try {
     const r = await fetch("/api/test/" + id).then((r) => r.json());
-    if (r.ok) { tested.add(id); store.set("tested", "1"); } else tested.delete(id);
     out.innerHTML = r.ok
       ? `<div class="callout ok">${ico("check")}<div><strong>Accès vérifié.</strong> ${esc(r.message)}${r.tables ? `<div class="chips">${r.tables.map((t) => `<span>${esc(t)}</span>`).join("")}</div>` : ""}</div></div>`
       : `<div class="callout ko">${ico("alert")}<div><strong>Accès refusé ou indisponible.</strong><br><code>${esc(r.error)}</code></div></div>`;
   } catch (e) {
     out.innerHTML = `<div class="callout ko">${ico("alert")}<div><strong>Passerelle injoignable.</strong><br><code>${esc(e.message)}</code></div></div>`;
   }
-  btn.disabled = false; btn.removeAttribute("aria-busy"); paintProgress();
+  btn.disabled = false; btn.removeAttribute("aria-busy");
 }
 async function testAll(btn) { // un test après l'autre : le diagnostic est plafonné par minute
   btn.disabled = true;
   for (const b of document.querySelectorAll("[data-test]")) await test(b.dataset.test, b);
-  btn.disabled = false;
+  btn.disabled = false; loadStatus();
 }
 async function saveApiKey(e, id) {
   e.preventDefault();
   const body = { apiKey: $(`#${id}-apikey`).value, login: $(`#${id}-login`)?.value };
   const r = await fetch("/api/" + id + "/apikey", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  if (!r.ok) return toast("Jeton refusé"); toast("Jeton enregistré"); load();
+  if (!r.ok) return toast("Jeton refusé"); toast("Jeton enregistré"); open.delete(id); load();
 }
-async function disconnect(id) { await fetch("/api/disconnect/" + id, { method: "POST" }); tested.delete(id); load(); }
+async function disconnect(id) { await fetch("/api/disconnect/" + id, { method: "POST" }); load(); }
 async function rotateKey() { if (!confirm("Régénérer votre clé ? Les assistants configurés avec l'ancienne cesseront de fonctionner et devront être reconfigurés.")) return; await fetch("/api/key/rotate", { method: "POST" }); store.set("cfgCopied", ""); toast("Nouvelle clé générée"); load(); }
 async function logout() { const r = await fetch("/api/logout", { method: "POST" }).then((x) => x.json()).catch(() => ({})); location.href = r.next || "/?sso=off"; } // puis déconnexion Microsoft
 arrowTabs($("#tabs")); arrowTabs($("#client-tabs"));
-renderTabs(); load();
+load();
+setInterval(() => { if (ME && !document.hidden) loadStatus(); }, 60_000); // état des services rafraîchi chaque minute
 </script>
 </body>
 </html>

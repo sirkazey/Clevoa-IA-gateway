@@ -245,3 +245,16 @@ réseau ; le bouton « Tester » l'indique.
 
 `CLEVOA_KEY` (obligatoire en production) et `CLEVOA_URL` (figée sur `https://clevoa.fr` en production). Ce qui est
 envoyé, et comment le vérifier : [sécurité § 4](securite.md#4-télémétrie-clevoa).
+
+## 7. État des systèmes, classement et supervision (1.4.0)
+
+| Variable | Rôle |
+|---|---|
+| `PROBE` | vide : le hub vérifie que chaque système réel répond (requête `HEAD` sans identifiant) toutes les 10 minutes, du lundi au vendredi de 7 h à 19 h (heure `TZ`) ; `off` : jamais ; `always` : à toute heure (essai d'installation) |
+| `SLOW_MS` | temps de réponse p95 (ms, appels réussis de la dernière heure) au-delà duquel le portail affiche « Lent » ; défaut 10000 |
+| `CONNECTOR_DOMAINS` | classement des applications sur le portail, ex. `sagex3=industrie,myreport=finance` ; valeurs : `commerce`, `finance`, `industrie`, `documents`, `rh`, `autre` ; par défaut Salesforce en Commerce, Sage X3 et MyReport en Finance, SharePoint et Dropbox en Documents |
+| `METRICS_TOKEN` | jeton de la supervision pour `GET /metrics` ; vide = route désactivée ([exploitation § 11](exploitation.md#11-supervision-du-hub)) |
+
+La vérification part du serveur du hub vers les adresses déjà configurées (`SAGE_URL`, `SF_MCP_URL`, `GRAPH_URL`,
+`DROPBOX_MCP_URL`, `MYREPORT_MCP_URL`) : prévenir l'équipe réseau, un pare-feu ou un WAF peut journaliser ces requêtes
+`HEAD` régulières. Un simulateur n'est jamais vérifié.

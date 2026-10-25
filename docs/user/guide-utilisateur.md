@@ -8,23 +8,27 @@ l'assistant interroge les outils **avec vos droits, en lecture seule**.
 
 1. Ouvrir l'adresse du portail communiquée par votre DSI (exemple : `https://mcp.<entreprise>.fr`). Si le SSO
    Microsoft Entra ID est activé, votre identité est reconnue automatiquement ; sinon le portail vous attribue une clé
-   personnelle au premier passage. En haut de page, trois étapes indiquent où vous en êtes et la prochaine action :
-   connecter vos outils, les vérifier, brancher votre assistant.
-2. Dans **Vos outils**, chaque carte indique l'état de l'outil (« À connecter », « Connecté », « Simulé », « Non
-   configuré »). Cliquer **Se connecter** :
+   personnelle au premier passage. Le bandeau du haut résume la situation (applications connectées, assistant
+   branché ou non, incident en cours) et propose la prochaine action.
+2. Dans **Vos applications**, classées par domaine (Commerce, Finance, Documents…), chaque ligne indique l'état de
+   votre connexion (« À connecter », « Connecté », « Simulé », « Non configuré ») et celui du **service** mesuré par la
+   passerelle : « Opérationnel » avec le temps de réponse, « Lent », « Erreurs », « Injoignable », ou « Pas d'appel
+   récent ». Un service en erreur pour tout le monde n'est pas un problème de votre compte : inutile de vous
+   reconnecter, votre DSI est prévenue par sa supervision. Cliquer **Se connecter** (ou **Saisir mon jeton**) :
    * **Salesforce, SharePoint / OneDrive, Dropbox** : page de connexion de l'éditeur, puis autorisation « lecture ».
    * **Sage X3** : selon la configuration de votre DSI, saisir votre identifiant et votre mot de passe Syracuse, ou votre
      clé d'API Syracuse (chiffrés dans le hub, jamais renvoyés au navigateur) ; OAuth si elle l'a configuré.
    * **MyReport** : coller votre jeton personnel MyReport Server.
-3. Cliquer **Tester** sur une carte, ou **Tout tester** : encadré vert « Accès vérifié » avec le détail (outils ou
-   tables disponibles), encadré rouge avec le message d'erreur. Une erreur n'empêche pas les autres outils de fonctionner.
+3. Cliquer le bouton de test (flèches circulaires) d'une ligne, ou **Tout tester** : le détail de la ligne s'ouvre avec
+   un encadré vert « Accès vérifié » (outils ou tables disponibles) ou rouge avec le message d'erreur. La flèche de
+   droite ouvre ce détail, avec **Reconnecter** et **Déconnecter**. Une erreur n'empêche pas les autres outils de fonctionner.
 
 Un outil « Non configuré » doit d'abord être activé par votre DSI. En pré-production, Sage X3 et MyReport
 peuvent tourner en **simulateur** : les données sont inventées et étiquetées comme telles.
 
 ## 2. Brancher l'assistant
 
-La section **Branchez votre assistant IA** propose deux onglets, chacun avec ses instructions et un bloc de
+Le panneau **Brancher votre assistant**, à droite (en dessous sur un téléphone), propose deux onglets, chacun avec ses instructions et un bloc de
 configuration prêt à copier. Votre clé y figure : elle est masquée à l'écran (bouton **Afficher la clé**), mais le
 bouton **Copier** la copie en entier. Ne la partagez jamais : elle vaut pour tous vos outils connectés.
 
@@ -64,8 +68,9 @@ poser l'en-tête d'autorisation.
 
 ## 3. Poser des questions et lire les réponses
 
-La section **Exemples de questions** du portail (onglets Prise en main, Analyse de données, Contrôle de gestion) donne
-des questions de départ, à copier d'un clic, par exemple « Quel est le chiffre d'affaires facturé des 12 derniers mois, par mois ? ».
+La section **Questions qui fonctionnent** du portail (un onglet par domaine présent, plus « Prise en main » et
+« Croisées » pour les questions qui combinent deux systèmes) donne des questions de départ, à copier d'un clic ; une
+question qui demande une application non connectée l'indique, par exemple « Quel est le chiffre d'affaires facturé des 12 derniers mois, par mois ? ».
 
 Chaque résultat se termine par une ligne **« Source : … »** : `Source : Sage X3 · dossier X3TST_CHREC`,
 `Source : Salesforce · sandbox preprod` ou `· production`. L'assistant est instruit de la citer ; elle permet de

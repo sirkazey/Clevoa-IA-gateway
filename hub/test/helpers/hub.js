@@ -67,6 +67,7 @@ export async function startHub({ upstreamUrl, users = {}, env = {}, store }) {
     CLEVOA_URL: `${upstreamUrl}/api/v1/telemetry`, CLEVOA_KEY: "clevoa-key-test",
     MYREPORT_MCP_URL: `${upstreamUrl}/myreport/sse`, MYREPORT_TOOLS: "liste_indicateurs,valeur_indicateur",
     DROPBOX_APP_KEY: "dbx-app-key", DROPBOX_APP_SECRET: "dbx-app-secret", DROPBOX_API_URL: upstreamUrl, DROPBOX_MCP_URL: `${upstreamUrl}/dropbox-mcp`,
+    PROBE: "off", // sonde HEAD : désactivée par défaut, sinon les tests dépendraient de l'heure (health.test.js la teste)
     ...env,
   };
   const child = spawn(process.execPath, [join(HUB_DIR, "server.js")], { env: childEnv, stdio: ["ignore", "pipe", "pipe"] }); // chemin absolu : utilisable depuis un autre dossier de tests

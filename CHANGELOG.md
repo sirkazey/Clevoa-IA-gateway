@@ -7,6 +7,19 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
+## [1.4.0-rc.1] – 2026-10-25
+
+Version candidate (non qualifiée pour la production) : portail refondu en écran de travail, état des systèmes et
+supervision du hub. Aucun changement d'outil MCP, de connecteur ni de route existante. Compte rendu : `docs/validation/portail-v1.4.md`.
+
+### Ajouté
+- État de chaque système sur le portail (colonne « Service ») : appels réels de la dernière heure et vérification de joignabilité par une requête HEAD sans identifiant, toutes les 10 minutes du lundi au vendredi de 7 h à 19 h (`PROBE`, `SLOW_MS`) ; route `/api/status`, sans volume ni identité.
+- Supervision du hub : `GET /metrics` au format Prometheus (état, joignabilité, appels et erreurs par type, temps de réponse, sièges, télémétrie), protégé par un jeton dédié `METRICS_TOKEN`, absent sans lui.
+- Classement des applications par domaine (Commerce, Finance, Industrie, Documents…), modifiable par `CONNECTOR_DOMAINS`.
+
+### Modifié
+- Portail : bandeau de situation d'une ligne, une ligne par application avec détails repliables, panneau « Brancher votre assistant » en colonne, « Questions qui fonctionnent » par domaine ; axe-core WCAG 2.1 A et AA sans violation.
+
 ## [1.3.2-rc.2] – 2026-10-25
 
 Version candidate (non qualifiée pour la production) : suivi des installations par Clevoa. Aucun changement de route,

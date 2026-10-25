@@ -14,6 +14,8 @@ import * as sharepoint from "./connectors/sharepoint.js";
 import * as dropbox from "./connectors/dropbox.js";
 import * as myreport from "./connectors/myreport.js";
 import * as telemetry from "./telemetry.js";
+import * as health from "./health.js";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { VERSION, APP_ENV, IS_PROD } from "./version.js";
 
 const PORT = process.env.PORT || 8080;
@@ -26,10 +28,14 @@ const CONNECTORS = [salesforce, sagex3, sharepoint, dropbox, myreport].filter((c
 // l'instance affiché sur le portail. Le nom sert de clé JSON côté client : lettres, chiffres, tirets et soulignés seulement.
 const SERVER_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(process.env.MCP_SERVER_NAME || "") ? process.env.MCP_SERVER_NAME : "clevoa-gateway";
 const INSTANCE_LABEL = (process.env.INSTANCE_LABEL || "").trim().slice(0, 80);
+// Domaine de chaque application sur le portail (classement) : celui du connecteur, ou CONNECTOR_DOMAINS="sagex3=industrie,…".
+const DOMAINS = ["commerce", "finance", "industrie", "documents", "rh", "autre"];
+const domainOverride = Object.fromEntries((process.env.CONNECTOR_DOMAINS || "").split(",").map((e) => e.split("=").map((x) => x.trim())).filter(([id, d]) => id && DOMAINS.includes(d)));
+const domainOf = (c) => (Object.hasOwn(domainOverride, c.id) ? domainOverride[c.id] : DOMAINS.includes(c.domain) ? c.domain : "autre");
 const byId = Object.assign(Object.create(null), Object.fromEntries(CONNECTORS.map((c) => [c.id, c]))); // sans prototype : « constructor », « __proto__ »… ne désignent aucun système
 // Variables visibles dans le portail : toutes celles des connecteurs et du hub présentes dans l'environnement (jamais la valeur des secrets).
-const ENV = Object.keys(process.env).filter((n) => /^(PUBLIC_URL|APP_ENV|LOG_LEVEL|TRUST_PROXY|ENCRYPTION_KEY|SSO_MODE|MCP_SERVER_NAME|INSTANCE_LABEL|SF_|SAGE_|MS_|SP_|GRAPH_URL|DROPBOX_|MYREPORT_|CLEVOA_)/.test(n)).sort();
-const masked = (n) => (/SECRET|CLEVOA_KEY|ENCRYPTION_KEY/.test(n) ? "••••••••" : process.env[n]); // CLEVOA_KEY est une clé de licence, masquée comme les secrets
+const ENV = Object.keys(process.env).filter((n) => /^(PUBLIC_URL|APP_ENV|LOG_LEVEL|TRUST_PROXY|ENCRYPTION_KEY|SSO_MODE|MCP_SERVER_NAME|INSTANCE_LABEL|SF_|SAGE_|MS_|SP_|GRAPH_URL|DROPBOX_|MYREPORT_|CLEVOA_|PROBE$|SLOW_MS$|METRICS_TOKEN$|CONNECTOR_DOMAINS$)/.test(n)).sort();
+const masked = (n) => (/SECRET|CLEVOA_KEY|ENCRYPTION_KEY|METRICS_TOKEN/.test(n) ? "••••••••" : process.env[n]); // CLEVOA_KEY est une clé de licence, masquée comme les secrets
 
 // ---------- Limitation de débit (mémoire, par adresse IP) ----------
 // Protège le diagnostic, les jetons et les échecs d'authentification contre la force brute. Fenêtre fixe simple.
@@ -93,11 +99,13 @@ function buildServer(key) {
       try {
         const out = await call(c, key, (tok, schema) => t.run(tok, args, schema));
         telemetry.record(c.id, key, Date.now() - t0); // nombres seulement : appel, durée, empreinte locale de l'appelant
+        health.record(c.id, Date.now() - t0);
         debug(`${t.name} ok ${Date.now() - t0} ms`); // jamais les arguments ni les résultats
         const body = out?.$content ? out.$content : [{ type: "text", text: typeof out === "string" ? out : JSON.stringify(out) }]; // $content : contenu MCP relayé tel quel (image, resource)
         return { content: [...body, { type: "text", text: provenance(c) }] }; // traçabilité : d'où vient chaque donnée
       } catch (e) {
         telemetry.record(c.id, key, Date.now() - t0, e); // type d'erreur seulement, jamais le message
+        health.record(c.id, Date.now() - t0, e);
         debug(`${t.name} erreur ${Date.now() - t0} ms : ${e.status ?? "erreur"}`); // jamais le message (il peut citer une clé demandée)
         return { isError: true, content: [{ type: "text", text: e.message }] };
       }
@@ -146,7 +154,7 @@ app.get("/api/me", limit("me", 60), (req, res) => {
     key,
     mcpUrl: `${PUBLIC_URL}/mcp`,
     systems: CONNECTORS.map((c) => ({
-      id: c.id, label: c.label, mock: !!c.mock, oauth: !!c.oauth, configured: !!c.oauth?.clientId,
+      id: c.id, label: c.label, domain: domainOf(c), mock: !!c.mock, oauth: !!c.oauth, configured: !!c.oauth?.clientId,
       connected: hasCredential(u[c.id]), method: u[c.id]?.apiKey ? "apikey" : u[c.id]?.access_token ? "oauth" : null,
       apiKey: c.apiKey && !c.mock ? c.apiKey : undefined, // le portail propose la saisie d'un jeton personnel
     })),
@@ -189,6 +197,45 @@ app.get("/api/test/:system", limit("diag", 20), portalUser, async (req, res) => 
   catch (e) { res.json({ ok: false, error: e.message.slice(0, 300) }); }
 });
 
+// État des systèmes pour le portail : un état et un temps de réponse par système, jamais un volume ni une identité.
+app.get("/api/status", limit("me", 60), portalUser, (_req, res) => {
+  res.json({ probeHours: health.PROBE_HOURS, paused: process.env.PROBE !== "always" && !health.inProbeHours(), probe: process.env.PROBE !== "off",
+    systems: CONNECTORS.map((c) => ({ id: c.id, ...health.status(c) })) });
+});
+
+// Supervision (Zabbix, PRTG, Centreon, Prometheus…) : format texte Prometheus, jeton METRICS_TOKEN distinct des clés des
+// collaborateurs. Sans jeton configuré, la route n'existe pas. Aucune identité, clé ni donnée métier.
+const METRICS_TOKEN = process.env.METRICS_TOKEN || "";
+const sameToken = (given) => timingSafeEqual(createHash("sha256").update(String(given)).digest(), createHash("sha256").update(METRICS_TOKEN).digest());
+const STATES = ["ok", "lent", "erreurs", "injoignable", "inconnu", "simule"];
+const promLabel = (v) => String(v).replace(/[\\"\n]/g, "_");
+app.get("/metrics", limit("metrics", 30), (req, res) => {
+  if (!METRICS_TOKEN) return res.sendStatus(404);
+  if (!sameToken(mcpKey(req) ?? "")) return res.status(hit("auth-fail", req.ip, 20) ? 429 : 401).type("text/plain").send("jeton de supervision requis\n");
+  const m = [], g = (name, help, type = "gauge") => m.push(`# HELP ${name} ${help}`, `# TYPE ${name} ${type}`);
+  g("clevoa_hub_info", "Version et environnement du hub");
+  m.push(`clevoa_hub_info{version="${promLabel(VERSION)}",env="${promLabel(APP_ENV)}"} 1`);
+  g("clevoa_hub_uptime_seconds", "Durée depuis le démarrage"); m.push(`clevoa_hub_uptime_seconds ${Math.round(process.uptime())}`);
+  g("clevoa_hub_memory_rss_bytes", "Mémoire résidente"); m.push(`clevoa_hub_memory_rss_bytes ${process.memoryUsage().rss}`);
+  g("clevoa_hub_seats", "Collaborateurs ayant connecté au moins un système"); m.push(`clevoa_hub_seats ${store.seats()}`);
+  const sent = telemetry.lastSuccess();
+  g("clevoa_telemetry_last_success_timestamp_seconds", "Dernier envoi de télémétrie accepté par Clevoa (0 : aucun)"); m.push(`clevoa_telemetry_last_success_timestamp_seconds ${sent ? Math.round(sent / 1000) : 0}`);
+  const rows = CONNECTORS.map((c) => ({ c, s: health.status(c), n: health.counters(c.id) }));
+  g("clevoa_system_state", "État du système (1 pour l'état courant)");
+  for (const { c, s } of rows) for (const st of STATES) m.push(`clevoa_system_state{system="${promLabel(c.id)}",state="${st}"} ${s.state === st ? 1 : 0}`);
+  g("clevoa_system_up", "Dernière sonde HEAD : 1 joignable, 0 injoignable (absente si jamais sondé)");
+  for (const { c, n } of rows) if (n.probe) m.push(`clevoa_system_up{system="${promLabel(c.id)}"} ${n.probe.ok ? 1 : 0}`);
+  g("clevoa_system_probe_seconds", "Durée de la dernière sonde HEAD");
+  for (const { c, n } of rows) if (n.probe) m.push(`clevoa_system_probe_seconds{system="${promLabel(c.id)}"} ${(n.probe.ms / 1000).toFixed(3)}`);
+  g("clevoa_system_calls_total", "Appels d'outils depuis le démarrage", "counter");
+  for (const { c, n } of rows) m.push(`clevoa_system_calls_total{system="${promLabel(c.id)}"} ${n.calls}`);
+  g("clevoa_system_errors_total", "Erreurs d'outils par type depuis le démarrage", "counter");
+  for (const { c, n } of rows) for (const t of telemetry.ERROR_TYPES) m.push(`clevoa_system_errors_total{system="${promLabel(c.id)}",type="${t}"} ${n.errors[t] ?? 0}`);
+  g("clevoa_system_latency_p95_seconds", "Temps de réponse p95 des appels réussis de la dernière heure");
+  for (const { c, s } of rows) if (s.p95 != null) m.push(`clevoa_system_latency_p95_seconds{system="${promLabel(c.id)}"} ${(s.p95 / 1000).toFixed(3)}`);
+  res.type("text/plain; version=0.0.4; charset=utf-8").send(m.join("\n") + "\n");
+});
+
 // Transport SSE (standard historique) : GET /sse ouvre le flux, POST /messages?sessionId= reçoit les requêtes.
 const sseSessions = new Map(); // sessionId -> { transport, key } : une session n'est utilisable qu'avec la clé qui l'a ouverte
 app.get("/sse", mcpUser, async (req, res) => {
@@ -219,4 +266,5 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 app.listen(PORT, () => {
   console.log(`Hub MCP v${VERSION} · ENV: ${APP_ENV} · ${PUBLIC_URL} (port ${PORT})${sagex3.mock ? " · Sage X3 simulé" : ""}${myreport.mock ? " · MyReport simulé" : ""}${sso.MODE ? ` · SSO ${sso.MODE}` : ""}${process.env.LOG_LEVEL === "debug" ? " · logs détaillés" : ""}`);
   telemetry.start(CONNECTORS, store.seats, store.installationId);
+  health.start(CONNECTORS);
 });
