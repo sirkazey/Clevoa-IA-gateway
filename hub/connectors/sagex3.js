@@ -167,7 +167,7 @@ export const tools = [
   },
   {
     name: "sagex3_query",
-    description: "Interroge une représentation Sage X3 (lecture seule, droits de l'utilisateur). Filtre SData, ex. (ACCDAT ge @2026-01-01@) and (BPR eq 'C0001'). Toujours trier (orderBy 'ACCDAT desc') ou filtrer sur une date : sans cela, des enregistrements techniques (NUM 00000) arrivent en tête. Pièges par représentation : champ notes de sagex3_describe.",
+    description: "Interroge une représentation Sage X3 (lecture seule, droits de l'utilisateur). Filtre SData, ex. (ACCDAT ge @2026-01-01@) and (BPR eq 'C0001'). Toujours trier (orderBy 'ACCDAT desc') ou filtrer sur une date : sans cela, des enregistrements techniques (NUM 00000) arrivent en tête. Pièges par représentation : champ notes de sagex3_describe. Au plus 500 lignes par appel : une liste coupée est signalée (avertissement), elle ne donne jamais un total.",
     input: {
       representation: name.describe("Ex. PINVOICE"),
       where: z.string().optional().describe("Filtre SData sur tout champ d'en-tête : (CHAMP op 'valeur') and (...) — op : eq, ne, gt, ge, lt, le, like ; dates entre arobases : @2026-01-01@"),
@@ -178,7 +178,9 @@ export const tools = [
       const params = { representation: `${representation}.$query`, count };
       if (where) params.where = where.replace(/'(\d{4}-\d{2}-\d{2})'/g, "@$1@"); // date entre apostrophes → @date@ (seule syntaxe acceptée par X3, vérifié : l'autre donne un 500)
       if (orderBy) params.orderBy = orderBy;
-      return ((await get(tok, representation, params)).$resources || []).map(strip);
+      const page = await get(tok, representation, params), rows = (page.$resources || []).map(strip);
+      // Page suivante annoncée par Syracuse ($links.$next, constaté sur 24R1) : la liste est partielle, le dire au modèle.
+      return page.$links?.$next ? { avertissement: `Liste coupée à ${count} lignes : il y en a d'autres. Ce n'est pas un total ; ne jamais répondre à « combien » en comptant ces lignes.`, lignes: rows } : rows;
     },
   },
   {

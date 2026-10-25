@@ -7,6 +7,12 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
+## [Non publié]
+
+### Corrigé
+- Salesforce : un comptage (`SELECT COUNT() FROM Account`) renvoyait 200 au lieu du total réel (16 610 sur l'org Charlois), car le hub ajoutait `LIMIT 200` à toute SOQL sans limite. Plus aucun `LIMIT` ajouté aux agrégats (`COUNT()`, `COUNT(…)`, `SUM`, `AVG`, `MIN`, `MAX`, `GROUP BY`) ; une liste coupée à 200 lignes par le hub est signalée au modèle (`avertissement`) avec la consigne de compter par `SELECT COUNT()`.
+- Sage X3 : une liste `sagex3_query` coupée par `count` (100 par défaut, 500 au plus) est signalée au modèle (`avertissement`, lignes sous `lignes`) quand Syracuse annonce une page suivante ; elle n'est plus présentable comme un total.
+
 ## [1.4.0-rc.1] – 2026-10-25
 
 Version candidate (non qualifiée pour la production) : portail refondu en écran de travail, état des systèmes et

@@ -101,6 +101,37 @@ test("SSE : sagex3_query et sagex3_get transmettent le Bearer Sage et les param�
   } finally { await c.close(); }
 });
 
+test("Comptages exacts : aucun LIMIT ajouté aux agrégats SOQL (COUNT() renvoyait 200 au lieu de 16 610) ; liste coupée signalée (Salesforce et Sage X3)", async () => {
+  up.reset();
+  const c = await sseClient();
+  try {
+    const n = text(await sfQuery(c, "SELECT COUNT() FROM Contact"));
+    assert.equal(n.totalSize, 16_610, "le total réel, pas la borne de 200");
+    for (const q of ["SELECT COUNT() FROM Contact WHERE Name = 'x'", "SELECT COUNT(Id) FROM Contact", "SELECT AccountId, COUNT(Id) n FROM Contact GROUP BY AccountId",
+      "select sum(Amount), max(CloseDate) from Opportunity", "SELECT LeadSource FROM Lead GROUP BY LeadSource HAVING COUNT(Id) > 1"]) await sfQuery(c, q);
+    const sent = sfCalls("tools/call").map((r) => JSON.parse(r.body).params.arguments.q);
+    assert.ok(sent.slice(-6).every((q) => !/LIMIT/i.test(q)), `aucun LIMIT ajouté aux agrégats : ${sent.slice(-6).join(" | ")}`);
+    const list = text(await sfQuery(c, "SELECT Id FROM Contact"));
+    assert.match(list.avertissement, /coupée à 200 lignes.*SELECT COUNT\(\)/s, "liste bornée par le hub : jamais présentée comme un total");
+    assert.equal(list.resultat.records.length, 200);
+    assert.equal(text(await sfQuery(c, "SELECT Id FROM Account")).avertissement, undefined, "liste complète (2 lignes) : réponse inchangée");
+    assert.equal(text(await sfQuery(c, "SELECT Id FROM Contact LIMIT 300")).avertissement, undefined, "LIMIT choisi par le modèle : réponse inchangée");
+    const cut = text(await c.callTool({ name: "sagex3_query", arguments: { representation: "BPCUSTOMER", count: 1 } }));
+    assert.match(cut.avertissement, /coupée à 1 lignes.*pas un total/s); assert.deepEqual(cut.lignes, [{ BPRNUM: "C0001", BPRNAM: "ACME" }]);
+    assert.ok(Array.isArray(text(await c.callTool({ name: "sagex3_query", arguments: { representation: "BPCUSTOMER", count: 5 } }))), "liste complète : tableau inchangé");
+  } finally { await c.close(); }
+});
+
+test("Agrégats SOQL : détection sur le SELECT principal, littéraux et sous-requêtes neutralisés", async () => {
+  const { aggregate } = await import(`../connectors/salesforce.js?${Date.now()}`);
+  for (const q of ["SELECT COUNT() FROM Account", "SELECT count( ) FROM Account", "SELECT COUNT(Id) FROM Account", "SELECT COUNT_DISTINCT(Name) FROM Account",
+    "SELECT Industry, COUNT(Id) FROM Account GROUP BY Industry", "SELECT Industry FROM Account GROUP BY ROLLUP(Industry)", "SELECT AVG(Amount) FROM Opportunity WHERE (StageName = 'x')"])
+    assert.equal(aggregate(q), true, q);
+  for (const q of ["SELECT Id FROM Account", "SELECT Id, (SELECT COUNT() FROM Contacts) FROM Account", "SELECT Id FROM Account WHERE Name = 'COUNT(x) GROUP BY y'",
+    "SELECT Id FROM Account WHERE Id IN (SELECT AccountId FROM Contact GROUP BY AccountId)", "SELECT Count__c, Max_Amount__c FROM Account", "SELECT Id FROM Account WHERE Name = 'l\\'ami (MAX'"])
+    assert.equal(aggregate(q), false, q);
+});
+
 test("Streamable HTTP (/mcp, Authorization: Bearer) : listTools et callTool", async () => {
   up.reset();
   const c = await httpClient();
