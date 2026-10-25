@@ -25,7 +25,7 @@ test("Schéma versionné : base créée, migrations appliquées une fois, réouv
   db.close();
   assert.equal(db.open(), true);
   const raw = new DatabaseSync(db.FILE, { readOnly: true });
-  assert.equal(raw.prepare("pragma user_version").get().user_version, 1);
+  assert.equal(raw.prepare("pragma user_version").get().user_version, db.MIGRATIONS.length);
   assert.equal(raw.prepare("pragma journal_mode").get().journal_mode, "wal");
   raw.close();
   assert.equal(db.usage("2026-10").systems[0].calls, 1);

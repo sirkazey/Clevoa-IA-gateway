@@ -21,6 +21,10 @@ export const MIGRATIONS = [
    create table usage_users (month text not null, user text not null, primary key (month, user)) without rowid;
    create table audit (at integer not null, user text not null, who text, system text not null, tool text not null, outcome text not null, ms integer not null);
    create index audit_at on audit (at);`,
+  // Prototype « un clic » (proto/oauth-tunnel, jamais fusionné tel quel) : clients inscrits et sessions du serveur OAuth du hub,
+  // contenu chiffré (secret client, refresh token de l'annuaire) ; empreintes seulement pour les jetons du hub.
+  `create table oauth_clients (id text primary key, data text not null) without rowid;
+   create table oauth_sessions (sid text primary key, data text not null, exp integer not null) without rowid;`,
 ];
 
 let db = null, q = null, warned = false;
@@ -51,6 +55,12 @@ export function open(file = FILE) {
       active: db.prepare("select count(*) as n from usage_users where month = ?"),
       audit: db.prepare("insert into audit (at, user, who, system, tool, outcome, ms) values (?, ?, ?, ?, ?, ?, ?)"),
       auditRows: db.prepare("select at, user, who, system, tool, outcome, ms from audit where at >= ? and at < ? order by at"),
+      clients: db.prepare("select id, data from oauth_clients"),
+      sessions: db.prepare("select sid, data from oauth_sessions"),
+      putClient: db.prepare("insert or replace into oauth_clients (id, data) values (?, ?)"),
+      dropClient: db.prepare("delete from oauth_clients where id = ?"),
+      putSession: db.prepare("insert or replace into oauth_sessions (sid, data, exp) values (?, ?, ?)"),
+      dropSession: db.prepare("delete from oauth_sessions where sid = ?"),
     };
     return true;
   } catch (e) {
@@ -87,6 +97,19 @@ export const audit = ({ user, who, system, tool, outcome, ms, at = Date.now() })
 /** Lignes du journal d'audit entre deux dates, e-mails déchiffrés (outil d'administration). */
 export const auditRows = (from, to) => (safely(() => q.auditRows.all(from, to)) ?? []).map((r) => ({ ...r, who: r.who ? decrypt(r.who) : null }));
 
+// ---------- Serveur OAuth du hub (prototype « un clic ») ----------
+/** Clients et sessions enregistrés, déchiffrés ; null si la base est indisponible (le serveur OAuth tient alors en mémoire seulement). */
+export function oauthLoad() {
+  if (!db) return null;
+  const read = (rows, k) => Object.fromEntries(rows.map((r) => [r[k], JSON.parse(decrypt(r.data))]));
+  try { return { clients: read(q.clients.all(), "id"), sessions: read(q.sessions.all(), "sid") }; }
+  catch (e) { console.error(`[db] sessions OAuth illisibles (${e.code ?? e.message}) : reconnexion des assistants nécessaire`); return { clients: {}, sessions: {} }; }
+}
+/** Écrit (ou supprime, `c` absent) un client inscrit : une ligne, jamais tout le fichier. */
+export const oauthClient = (id, c) => safely(() => (c ? q.putClient.run(id, encrypt(JSON.stringify(c))) : q.dropClient.run(id)));
+/** Écrit (ou supprime, `s` absent) une session. */
+export const oauthSession = (sid, s) => safely(() => (s ? q.putSession.run(sid, encrypt(JSON.stringify(s)), s.exp) : q.dropSession.run(sid)));
+
 // ---------- Entretien ----------
 /** Purge des données plus anciennes que leur durée de conservation. */
 export function purge(now = Date.now()) {
@@ -96,6 +119,7 @@ export function purge(now = Date.now()) {
     db.prepare("delete from usage where month < ?").run(oldMonth);
     db.prepare("delete from usage_users where month < ?").run(oldMonth);
     db.prepare("delete from audit where at < ?").run(now - AUDIT_DAYS * DAY);
+    db.prepare("delete from oauth_sessions where exp < ?").run(now);
   });
 }
 /** Instantané cohérent de la base (sauvegarde à chaud de SQLite), publié atomiquement pour le conteneur de sauvegarde. */

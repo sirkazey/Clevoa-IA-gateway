@@ -339,11 +339,19 @@ test("Revalidation après la réponse : compte désactivé → session close ; p
   } finally { idp.state.disabled.clear(); idp.state.down = false; idp.state.badSecret = false; pub = savePub; mcpUrl = saveMcp; await h2.stop(); }
 });
 
-test("Persistance : après redémarrage, l'inscription et la session survivent (refresh), le jeton d'accès en mémoire non ; fichier chiffré, empreintes seulement", async () => {
+test("Persistance (hub.db) : après redémarrage, l'inscription et la session survivent (refresh), le jeton d'accès en mémoire non ; données chiffrées, empreintes seulement, rien dans users.json", async () => {
   const a = await connect("lea", "acquise");
   const raw = hub.rawStore();
   assert.ok(raw.startsWith("enc1:"));
-  const h2 = await startHub({ upstreamUrl: up.url, store: raw, env: await oauthEnv() });
+  const { copyFileSync, existsSync } = await import("node:fs"), { join } = await import("node:path");
+  // Base du hub en marche : fichier et journal WAL copiés ensemble (SQLite rejoue le journal à l'ouverture).
+  const withDb = (dir) => { for (const f of ["hub.db", "hub.db-wal"]) if (existsSync(join(hub.dataDir, f))) copyFileSync(join(hub.dataDir, f), join(dir, f)); };
+  const { DatabaseSync } = await import("node:sqlite");
+  const snap = new DatabaseSync(join(hub.dataDir, "hub.db"), { readOnly: true });
+  const rows = [...snap.prepare("select data from oauth_sessions").all(), ...snap.prepare("select data from oauth_clients").all()]; snap.close();
+  assert.ok(rows.length >= 2 && rows.every((r) => r.data.startsWith("enc1:")), "clients et sessions chiffrés dans hub.db");
+  assert.ok(!rows.some((r) => r.data.includes(a.tok.refresh_token.split(".")[1])), "jamais le refresh token du hub en clair");
+  const h2 = await startHub({ upstreamUrl: up.url, store: raw, prepare: withDb, env: await oauthEnv() });
   try {
     const p2 = h2.env.OAUTH_PUBLIC_URL; await waitPublic(p2);
     const ping = (t) => fetch(`${p2}/mcp`, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", Authorization: `Bearer ${t}` }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }) });
@@ -353,20 +361,32 @@ test("Persistance : après redémarrage, l'inscription et la session survivent (
     assert.equal((await ping((await r.json()).access_token)).status, 200);
   } finally { await h2.stop(); }
   // Même fichier, boucle locale désormais refusée : les clients inscrits avec un retour local ne peuvent plus ouvrir de demande
-  const h3 = await startHub({ upstreamUrl: up.url, store: raw, env: { ...(await oauthEnv()), OAUTH_LOOPBACK: "" } });
+  const h3 = await startHub({ upstreamUrl: up.url, store: raw, prepare: withDb, env: { ...(await oauthEnv()), OAUTH_LOOPBACK: "" } });
   try {
     const p3 = h3.env.OAUTH_PUBLIC_URL; await waitPublic(p3);
     const u = new URL(a.authUrl); u.host = new URL(p3).host;
     assert.equal((await fetch(u, manual)).status, 400, "client revérifié contre la liste d'adresses de retour");
   } finally { await h3.stop(); }
   const { readStore } = await import("./helpers/hub.js");
-  const { writeFileSync, mkdtempSync, rmSync } = await import("node:fs"), { join } = await import("node:path"), { tmpdir } = await import("node:os");
-  const dir = mkdtempSync(join(tmpdir(), "oauth-store-")); writeFileSync(join(dir, "u.json"), raw);
-  const db = readStore(join(dir, "u.json")); rmSync(dir, { recursive: true });
-  const sessions = Object.values(db.oauth.sessions);
-  assert.ok(sessions.length > 0);
-  assert.ok(!JSON.stringify(db.oauth).includes(a.tok.refresh_token.split(".")[1]), "jamais le refresh token du hub en clair, seulement son empreinte");
-  assert.ok(!JSON.stringify(db.oauth).includes("cgo_at_"), "aucun jeton d'accès sur disque");
+  assert.equal(readStore(join(hub.dataDir, "users.json")).oauth, undefined, "plus rien du serveur OAuth dans users.json");
+});
+
+test("Reprise : clients et sessions d'un users.json d'avant la 1.5 passent dans hub.db au premier usage, puis quittent users.json", async () => {
+  const sid = "s".repeat(24), legacy = { users: {}, oauth: { clients: { "cli-ancien": { client_id: "cli-ancien", redirect_uris: ["https://claude.ai/api/mcp/auth_callback"], client_id_issued_at: Math.floor(Date.now() / 1000) } },
+    sessions: { [sid]: { clientId: "cli-ancien", idp: "entra", sub: "oid-x", tid: "t", scopes: ["mcp.read"], refreshHash: "h", revalidatedAt: Date.now(), exp: Date.now() + 86_400_000 } } } };
+  const h = await startHub({ upstreamUrl: up.url, users: {}, store: JSON.stringify(legacy), env: await oauthEnv() });
+  try {
+    const p = h.env.OAUTH_PUBLIC_URL; await waitPublic(p);
+    // Le premier usage du serveur OAuth (ici un renouvellement refusé : mauvais secret) charge l'état et le reprend.
+    await fetch(`${p}/token`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: `cgo_rt_${sid}.${"x".repeat(32)}`, client_id: "cli-ancien" }) });
+    await new Promise((r) => setTimeout(r, 200));
+    const { DatabaseSync } = await import("node:sqlite"), { join } = await import("node:path");
+    const d = new DatabaseSync(join(h.dataDir, "hub.db"), { readOnly: true });
+    const n = [d.prepare("select count(*) as n from oauth_clients").get().n, d.prepare("select count(*) as n from oauth_sessions").get().n]; d.close();
+    assert.deepEqual(n, [1, 1], "client et session repris dans hub.db");
+    assert.equal(h.readUsers && (await import("./helpers/hub.js")).readStore(join(h.dataDir, "users.json")).oauth, undefined, "retirés de users.json");
+    assert.match(h.logs(), /repris de users\.json dans hub\.db/);
+  } finally { await h.stop(); }
 });
 
 test("Verrous de démarrage : URL publique, port, annuaires, domaines, production", async () => {

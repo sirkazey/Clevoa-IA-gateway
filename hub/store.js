@@ -58,9 +58,13 @@ export const store = {
     if (!db.installation) { db.installation = randomUUID(); save(); }
     return db.installation;
   },
-  /** Serveur OAuth du hub (OAUTH=on) : clients inscrits et sessions, dans le même fichier chiffré ; `persist` après chaque modification. */
-  oauthState: () => (db.oauth ??= { clients: {}, sessions: {} }),
-  persist: () => save(),
+  /** Ancien emplacement des clients et sessions du serveur OAuth (prototype avant la 1.5) : rendus une fois pour être repris dans
+   *  hub.db, puis retirés de users.json. */
+  takeLegacyOauth() {
+    const o = db.oauth; if (!o) return null;
+    delete db.oauth; save();
+    return o;
+  },
   /** Pseudonyme stable du collaborateur pour l'usage et l'audit (db.js) : son identité SSO si elle existe, sinon sa clé. */
   pseudonym(key) {
     const u = store.get(key);

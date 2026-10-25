@@ -385,8 +385,11 @@ Le journal du hub (`dc logs mcp-hub`) n'écrit jamais d'identité ni de jeton ; 
 7. Supprimer `.env.proto` de la machine.
 
 La pile du prototype n'a pas de sauvegarde automatique. Les scripts `ops/backup.sh` et `ops/restore.sh` cherchent le volume
-d'une installation (`mcp-data`) : pour le prototype, passer `VOLUME=clevoa-proto_proto-data`. Une sauvegarde contient, chiffrés,
-les refresh tokens des annuaires : la détruire avec le reste.
+d'une installation (`mcp-data`) : pour le prototype, passer `VOLUME=clevoa-proto_proto-data`. Depuis la 1.5, les inscriptions
+et sessions du serveur OAuth sont dans la base `hub.db` (une ligne écrite à chaque renouvellement, au lieu de réécrire tout
+`users.json`), chiffrées avec `ENCRYPTION_KEY` comme `users.json` ; un `users.json` d'avant la 1.5 est repris une fois puis
+vidé de ces données. Les sauvegardes `users-*.json` et `hub-*.db` contiennent, chiffrés, les refresh tokens des annuaires :
+les détruire avec le reste.
 
 ## 10. Prouvé, à prouver, limites
 
@@ -396,7 +399,8 @@ Chromium) : parcours complet avec le client OAuth du SDK MCP qui se comporte com
 des id_token falsifiés (émetteur, audience, annuaire, nonce, expiration) ; « Choisir un autre compte » après un refus ;
 deux fenêtres « Connect » simultanées ; liaison d'une identité à une seule clé ; rotation, délai de grâce, rejeu et
 révocation des jetons ; scope propre à l'assistant ignoré ; revalidation après la réponse, coupure d'un compte désactivé,
-tolérance d'une panne et d'un secret refusé, avec alerte ; persistance après redémarrage ; clients revérifiés contre la
+tolérance d'une panne et d'un secret refusé, avec alerte ; persistance après redémarrage (dans `hub.db`, chiffrée, et reprise
+d'un `users.json` d'avant la 1.5) ; clients revérifiés contre la
 liste d'adresses de retour ; cloisonnement du port public et chemins exacts ; débit borné ; réglages illisibles refusés ;
 verrous de démarrage. Le fichier Compose est validé par `docker compose config` et son contrôle de santé contre un hub réel.
 

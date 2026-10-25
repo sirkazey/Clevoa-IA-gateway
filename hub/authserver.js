@@ -12,6 +12,7 @@ import { mcpAuthRouter, getOAuthProtectedResourceMetadataUrl } from "@modelconte
 import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
 import { InvalidGrantError, InvalidTokenError, InvalidTargetError, InvalidClientMetadataError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import { store } from "./store.js";
+import * as db from "./db.js";
 import { IS_PROD } from "./version.js";
 
 export const ENABLED = process.env.OAUTH === "on";
@@ -91,7 +92,21 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 const sameResource = (r) => !r || String(r).replace(/#.*$/, "").replace(/\/$/, "") === RESOURCE;
 const LOOP = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?\//;
 export const redirectAllowed = (u) => REDIRECTS.includes(u) || (LOOPBACK && LOOP.test(u));
-const state = () => store.oauthState();
+// Clients inscrits et sessions : en mémoire, chaque modification écrite ligne à ligne dans hub.db (db.js), chiffrée. Repris une
+// fois de users.json (prototype avant la 1.5). Base indisponible : le serveur continue en mémoire, les assistants se reconnectent
+// après un redémarrage.
+let oauth = null;
+function state() {
+  if (oauth) return oauth;
+  oauth = db.oauthLoad() ?? { clients: {}, sessions: {} };
+  const legacy = store.takeLegacyOauth();
+  if (legacy) {
+    for (const [id, c] of Object.entries(legacy.clients ?? {})) { oauth.clients[id] ??= c; db.oauthClient(id, oauth.clients[id]); }
+    for (const [sid, s] of Object.entries(legacy.sessions ?? {})) { oauth.sessions[sid] ??= s; db.oauthSession(sid, oauth.sessions[sid]); }
+    console.log("[oauth-server] clients et sessions repris de users.json dans hub.db");
+  }
+  return oauth;
+}
 
 // ---------- Demandes de connexion : dans un cookie chiffré, rien en mémoire avant le retour de l'annuaire ----------
 // Une demande (assistant, adresse de retour, PKCE, state de l'assistant) puis la connexion à l'annuaire (state, verifier, nonce)
@@ -190,9 +205,8 @@ function issue(sid, s, scopes = s.scopes) {
 /** Ferme une session (et ses jetons d'accès) ; la raison est journalisée, jamais l'identité. */
 function endSession(sid, reason) {
   const s = sessionOf(sid); if (!s) return;
-  delete state().sessions[sid];
+  delete state().sessions[sid]; db.oauthSession(sid, null);
   for (const [k, v] of access) if (v.sid === sid) access.delete(k);
-  store.persist();
   console.log(`[oauth-server] session fermée (annuaire ${s.idp}) : ${reason}`);
 }
 const parseRefresh = (t) => String(t).match(/^cgo_rt_([\w-]{20,64})\.([\w-]{20,64})$/)?.slice(1) ?? [];
@@ -211,7 +225,7 @@ async function revalidate(sid) {
     let t; try { t = await oidc.refreshTokenGrant(await idpConfig(p), s.idpRefresh, { scope: p.scope }); } catch (e) { throw idpError(e); }
     if (!sessionOf(sid)) return;
     if (t.refresh_token) s.idpRefresh = t.refresh_token; // Entra tourne ses refresh tokens ; Google garde le même
-    s.revalidatedAt = Date.now(); store.persist();
+    s.revalidatedAt = Date.now(); db.oauthSession(sid, s);
   } catch (e) {
     if (e.code === "invalid_grant") return endSession(sid, "refusée par l'annuaire (compte désactivé ou session révoquée)");
     if (["invalid_client", "unauthorized_client"].includes(e.code)) console.error(`[oauth-server] ALERTE : l'annuaire ${s.idp} refuse l'application du hub (${e.code}) ; vérifier OIDC_${s.idp.toUpperCase()}_CLIENT_ID et _CLIENT_SECRET (secret expiré ?)`);
@@ -232,12 +246,12 @@ export const provider = {
       if (!client.redirect_uris.length || !client.redirect_uris.every(redirectAllowed)) throw new InvalidClientMetadataError("redirect_uri non autorisée par ce hub");
       if (Object.keys(state().clients).length >= MAX_CLIENTS) { // plafond : on oublie les inscriptions de plus de 24 h sans session ouverte
         const active = new Set(Object.values(state().sessions).map((x) => x.clientId)), old = Date.now() / 1000 - 86_400;
-        for (const [id, c] of Object.entries(state().clients)) if (!active.has(id) && (c.client_id_issued_at ?? 0) < old) delete state().clients[id];
+        for (const [id, c] of Object.entries(state().clients)) if (!active.has(id) && (c.client_id_issued_at ?? 0) < old) { delete state().clients[id]; db.oauthClient(id, null); }
         if (Object.keys(state().clients).length >= MAX_CLIENTS) throw new InvalidClientMetadataError("nombre maximal de clients inscrits atteint");
       }
       // Le SDK n'authentifie au point de terminaison token qu'en client_secret_post : la méthode effective est annoncée au client (RFC 7591 § 3.2.1).
       const c = { ...client, client_name: String(client.client_name || "").slice(0, 80), token_endpoint_auth_method: client.client_secret ? "client_secret_post" : "none" };
-      state().clients[c.client_id] = c; store.persist();
+      state().clients[c.client_id] = c; db.oauthClient(c.client_id, c);
       return c;
     },
   },
@@ -276,9 +290,9 @@ ${buttons(rid)}
     const sid = rand(24), now = Date.now();
     const s = { clientId: c.clientId, idp: c.idp, sub: c.identity.sub, tid: c.identity.tid, scopes: c.scopes, idpRefresh: c.idpRefresh || null, revalidatedAt: now, createdAt: new Date(now).toISOString() };
     if (!full(usedCodes)) usedCodes.set(h, { sid, clientId: c.clientId, exp: now + 10 * 60_000 });
-    for (const [k, v] of Object.entries(state().sessions)) if (v.exp < now) delete state().sessions[k];
+    for (const [k, v] of Object.entries(state().sessions)) if (v.exp < now) { delete state().sessions[k]; db.oauthSession(k, null); }
     const tokens = issue(sid, s);
-    state().sessions[sid] = s; store.persist();
+    state().sessions[sid] = s; db.oauthSession(sid, s);
     console.log(`[oauth-server] session ouverte (annuaire ${c.idp})`); // jamais l'identité
     return tokens;
   },
@@ -297,7 +311,7 @@ ${buttons(rid)}
     const granted = (scopes || []).filter((x) => s.scopes.includes(x));
     s.prevHash = s.refreshHash; s.rotatedAt = now;
     const tokens = issue(sid, s, granted.length ? granted : s.scopes);
-    store.persist();
+    db.oauthSession(sid, s);
     if (now - s.revalidatedAt > REVALIDATE_MIN * 60_000) setImmediate(() => revalidate(sid)); // après la réponse : l'assistant n'attend pas l'annuaire
     return tokens;
   },
