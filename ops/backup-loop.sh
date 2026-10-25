@@ -7,8 +7,10 @@
 # de plus de BACKUP_KEEP_DAYS jours supprimés seulement après une copie réussie du même type, jamais la plus récente.
 # Variables de test : SRC, DB_SRC, DEST (chemins), ONCE=1 (une seule passe ; code de retour 0 = users.json sauvegardé ou inchangé et
 # instantané sauvegardé, inchangé ou pas encore écrit, 1 = l'un des deux refusé).
+umask 077   # sauvegardes lisibles par root seul, quel que soit le mode du fichier source (hub.db d'une version antérieure en 644)
 SRC=${SRC:-/data/users.json}; DB_SRC=${DB_SRC:-/data/hub-instantane.db}; DEST=${DEST:-/backups}; KEEP=${BACKUP_KEEP_DAYS:-30}; MIN_BYTES=64
 log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*"; }
+case "$KEEP" in ''|*[!0-9]*) log "BACKUP_KEEP_DAYS invalide ($KEEP) : 30 jours retenus"; KEEP=30;; esac   # « trente » désactiverait la rétention en silence
 # copy <source> <préfixe> <extension> <en-tête attendu> <libellé>
 copy() {
   src=$1; prefix=$2; ext=$3; magic=$4; what=$5
@@ -21,7 +23,7 @@ copy() {
   stamp=$(date +%Y-%m-%d_%H%M%S); name="$prefix-$stamp.$ext"; n=0
   while [ -e "$DEST/$name" ]; do n=$((n + 1)); name="$prefix-$stamp-$n.$ext"; done   # jamais d'écrasement, même dans la même seconde
   tmp="$DEST/$name.tmp"
-  if ! cp "$src" "$tmp" || ! cmp -s "$src" "$tmp"; then rm -f "$tmp"; log "copie échouée : $name non publié, les précédentes sont conservées"; return 1; fi
+  if ! cp "$src" "$tmp" || ! cmp -s "$src" "$tmp" || ! chmod 600 "$tmp"; then rm -f "$tmp"; log "copie échouée : $name non publié, les précédentes sont conservées"; return 1; fi
   mv "$tmp" "$DEST/$name" || { rm -f "$tmp"; log "publication échouée : $name, les précédentes sont conservées"; return 1; }
   log "sauvegarde $name ($(wc -c < "$DEST/$name") octets)"
   find "$DEST" -name "$prefix-*.$ext" ! -name "$name" -mtime "+$KEEP" -delete 2>/dev/null   # rétention, seulement après une copie réussie
@@ -38,4 +40,6 @@ backup() {
 }
 if [ "${ONCE:-}" = "1" ]; then backup; exit $?; fi
 trap 'exit 0' TERM INT
+# Deuxième passe 10 minutes après le démarrage : le hub écrit son premier instantané une minute après le sien (stack démarrée ensemble).
+backup; sleep 600 & wait $!
 while :; do backup; sleep 86400 & wait $!; done

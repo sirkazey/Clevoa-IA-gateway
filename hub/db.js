@@ -2,15 +2,20 @@
 // mensuels et journal d'audit (AUDIT=on). Les identités et jetons des collaborateurs restent dans users.json (store.js), inchangé.
 // Écritures d'une ligne en journal WAL : jamais de réécriture du fichier entier. Rien d'identifiant en clair : collaborateurs
 // pseudonymisés (HMAC), e-mail de l'audit chiffré (crypto.js). Une panne de cette base ne touche jamais les outils : le hub
-// continue sans historique ni compteurs, et le dit dans son journal. Instantané cohérent chaque heure pour la sauvegarde.
+// continue sans historique ni compteurs, et le dit dans son journal. Instantané cohérent toutes les 6 heures pour la sauvegarde.
 import { DatabaseSync, backup } from "node:sqlite";
-import { renameSync, rmSync } from "node:fs";
+import { renameSync, rmSync, chmodSync } from "node:fs";
 import { encrypt, decrypt } from "./crypto.js";
 
 const DIR = process.env.DATA_DIR || "./data";
 export const FILE = `${DIR}/hub.db`, SNAPSHOT = `${DIR}/hub-instantane.db`;
-export const AUDIT = process.env.AUDIT === "on"; // journal d'audit : désactivé par défaut, activé par le client après avis de son DPO
-export const AUDIT_DAYS = Number(process.env.AUDIT_DAYS || 90);
+// Journal d'audit : désactivé par défaut, activé par le client après avis de son DPO (on, true, 1 ou oui).
+export const AUDIT = /^(on|true|1|oui)$/i.test(process.env.AUDIT || "");
+const days = Number(process.env.AUDIT_DAYS || 90);
+// Audit actif avec une durée illisible (« 30j », « abc », 0) : la purge ne supprimerait plus rien ou effacerait tout, sans un mot.
+// Refus de démarrer, comme pour METRICS_TOKEN. Sans audit, la valeur n'a pas d'effet : le hub démarre.
+if (AUDIT && (!Number.isInteger(days) || days < 1)) { console.error(`[db] AUDIT_DAYS invalide (${process.env.AUDIT_DAYS}) : un nombre entier de jours, 1 au moins (défaut 90)`); process.exit(1); }
+export const AUDIT_DAYS = Number.isInteger(days) && days >= 1 ? days : 90;
 const HISTORY_DAYS = 90, USAGE_MONTHS = 24, SLOT = 10 * 60_000, DAY = 86_400_000;
 const UP = ["ok", "lent"], DOWN = ["erreurs", "injoignable"]; // états mesurés ; « inconnu » (aucun appel, vérification en pause) et « simule » ne comptent pas
 
@@ -23,42 +28,60 @@ export const MIGRATIONS = [
    create index audit_at on audit (at);`,
 ];
 
-let db = null, q = null, warned = false;
-/** Exécute une écriture sans jamais faire échouer l'appelant (un outil MCP, une mesure) : erreur journalisée une fois. */
+let db = null, q = null, failures = 0;
+/** Exécute une écriture sans jamais faire échouer l'appelant (un outil MCP, une mesure) : chaque échec est compté (supervision,
+ *  health()) et journalisé au plus une fois par heure, avec le message de SQLite. */
+let warnedAt = 0;
 function safely(fn) {
   if (!db) return undefined;
-  try { return fn(); } catch (e) { if (!warned) { warned = true; console.error(`[db] écriture impossible dans hub.db : ${e.code ?? e.message}`); } return undefined; }
+  try { return fn(); } catch (e) {
+    failures++;
+    if (Date.now() - warnedAt > 3_600_000) { warnedAt = Date.now(); console.error(`[db] écriture impossible dans hub.db (${failures} depuis le démarrage) : ${e.errstr ?? e.code ?? e.message}`); }
+    return undefined;
+  }
 }
-const month = (at) => new Date(at).toISOString().slice(0, 7);
+/** État de la base pour la supervision : ouverte ou non, écritures en échec depuis le démarrage (un audit promis qui s'arrête se voit). */
+export const health = () => ({ up: !!db, failures });
+/** Mois AAAA-MM en heure locale (TZ du conteneur, comme la coupure du cache et les heures de vérification) : un appel du 1er à 0 h 30 compte pour ce mois. */
+const month = (at) => { const d = new Date(at); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
 
 /** Ouvre (ou crée) la base et applique les migrations. Échec : le hub démarre quand même, sans historique ni compteurs. */
-export function open(file = FILE) {
+export function open(file = FILE, { readOnly = false } = {}) {
   try {
+    if (readOnly) { db = new DatabaseSync(file, { readOnly: true }); prepare(); return true; } // outil d'administration : aucune écriture, aucune migration
     db = new DatabaseSync(file);
-    db.exec("pragma journal_mode = wal; pragma synchronous = normal; pragma busy_timeout = 5000;");
+    try { chmodSync(file, 0o600); } catch { /* volume en lecture seule : sans objet */ } // base créée par une version antérieure en 644
+    // secure_delete : une ligne purgée est effacée du fichier (et donc des instantanés), pas seulement marquée libre.
+    db.exec("pragma journal_mode = wal; pragma synchronous = normal; pragma busy_timeout = 1000; pragma secure_delete = on; pragma journal_size_limit = 8388608;");
+    // Base neuve : les pages libérées par la purge sont rendues au disque (pragma incremental_vacuum), le fichier ne grossit pas sans fin.
+    if (db.prepare("pragma user_version").get().user_version === 0) db.exec("pragma auto_vacuum = incremental");
     if (db.prepare("pragma quick_check").get().quick_check !== "ok") throw Object.assign(new Error("base corrompue (quick_check)"), { code: "SQLITE_CORRUPT" });
     const from = db.prepare("pragma user_version").get().user_version;
+    if (from > MIGRATIONS.length) console.error(`[db] base d'une version plus récente (schéma ${from}, ce hub connaît ${MIGRATIONS.length}) : utilisée telle quelle`);
     for (let i = from; i < MIGRATIONS.length; i++) {
       db.exec("begin");
       try { db.exec(MIGRATIONS[i]); db.exec(`pragma user_version = ${i + 1}`); db.exec("commit"); } catch (e) { db.exec("rollback"); throw e; }
     }
-    q = {
-      sample: db.prepare("insert or replace into availability (system, at, state, p95) values (?, ?, ?, ?)"),
-      availability: db.prepare(`select sum(state in ('${UP.join("','")}')) as up, count(*) as n from availability where system = ? and at >= ? and state in ('${[...UP, ...DOWN].join("','")}')`),
-      count: db.prepare("insert into usage (month, system, calls, errors) values (?, ?, 1, ?) on conflict (month, system) do update set calls = calls + 1, errors = errors + excluded.errors"),
-      user: db.prepare("insert or ignore into usage_users (month, user) values (?, ?)"),
-      usage: db.prepare("select system, calls, errors from usage where month = ? order by system"),
-      active: db.prepare("select count(*) as n from usage_users where month = ?"),
-      audit: db.prepare("insert into audit (at, user, who, system, tool, outcome, ms) values (?, ?, ?, ?, ?, ?, ?)"),
-      auditRows: db.prepare("select at, user, who, system, tool, outcome, ms from audit where at >= ? and at < ? order by at"),
-    };
+    prepare();
     return true;
   } catch (e) {
-    console.error(`[db] base d'exploitation indisponible (${e.code ?? e.message}) : le hub fonctionne sans historique, compteurs ni audit`);
+    console.error(`[db] base d'exploitation indisponible (${e.errstr ?? e.code ?? e.message}) : le hub fonctionne sans historique, compteurs ni audit`);
     try { db?.close(); } catch { /* déjà fermée */ }
     db = null; q = null;
     return false;
   }
+}
+function prepare() {
+  q = {
+    sample: db.prepare("insert or replace into availability (system, at, state, p95) values (?, ?, ?, ?)"),
+    availability: db.prepare(`select sum(state in ('${UP.join("','")}')) as up, count(*) as n from availability where system = ? and at >= ? and state in ('${[...UP, ...DOWN].join("','")}')`),
+    count: db.prepare("insert into usage (month, system, calls, errors) values (?, ?, 1, ?) on conflict (month, system) do update set calls = calls + 1, errors = errors + excluded.errors"),
+    user: db.prepare("insert or ignore into usage_users (month, user) values (?, ?)"),
+    usage: db.prepare("select system, calls, errors from usage where month = ? order by system"),
+    active: db.prepare("select count(*) as n from usage_users where month = ?"),
+    audit: db.prepare("insert into audit (at, user, who, system, tool, outcome, ms) values (?, ?, ?, ?, ?, ?, ?)"),
+    auditRows: db.prepare("select at, user, who, system, tool, outcome, ms from audit where at >= ? and at < ? order by at"),
+  };
 }
 export const ready = () => !!db;
 export function close() { try { db?.close(); } catch { /* déjà fermée */ } db = null; q = null; }
@@ -85,7 +108,11 @@ export function usage(m = month(Date.now())) {
 export const audit = ({ user, who, system, tool, outcome, ms, at = Date.now() }) =>
   AUDIT && safely(() => q.audit.run(at, user, who ? encrypt(who) : null, system, tool, outcome, Math.round(ms)));
 /** Lignes du journal d'audit entre deux dates, e-mails déchiffrés (outil d'administration). */
-export const auditRows = (from, to) => (safely(() => q.auditRows.all(from, to)) ?? []).map((r) => ({ ...r, who: r.who ? decrypt(r.who) : null }));
+export const auditRows = (from, to) => (safely(() => q.auditRows.all(from, to)) ?? []).map((r) => {
+  let who = null;
+  try { who = r.who ? decrypt(r.who) : null; } catch { who = "(indéchiffrable)"; } // autre ENCRYPTION_KEY ou ligne abîmée : l'export continue
+  return { ...r, who };
+});
 
 // ---------- Entretien ----------
 /** Purge des données plus anciennes que leur durée de conservation. */
@@ -96,22 +123,24 @@ export function purge(now = Date.now()) {
     db.prepare("delete from usage where month < ?").run(oldMonth);
     db.prepare("delete from usage_users where month < ?").run(oldMonth);
     db.prepare("delete from audit where at < ?").run(now - AUDIT_DAYS * DAY);
+    db.exec("pragma incremental_vacuum; pragma wal_checkpoint(truncate)"); // pages libres rendues au disque ; le journal WAL ne garde pas de copie des lignes purgées
   });
 }
 /** Instantané cohérent de la base (sauvegarde à chaud de SQLite), publié atomiquement pour le conteneur de sauvegarde. */
 export async function snapshot(target = SNAPSHOT) {
   if (!db) return false;
   const tmp = `${target}.tmp`;
-  try { rmSync(tmp, { force: true }); await backup(db, tmp); renameSync(tmp, target); return true; }
+  try { rmSync(tmp, { force: true }); await backup(db, tmp); chmodSync(tmp, 0o600); renameSync(tmp, target); return true; }
   catch (e) { rmSync(tmp, { force: true }); console.error(`[db] instantané impossible : ${e.code ?? e.message}`); return false; }
 }
 
-/** Mesure l'état de chaque système toutes les 10 minutes ; purge chaque jour ; instantané chaque heure (copié par mcp-backup). */
+/** Mesure l'état de chaque système toutes les 10 minutes ; purge chaque jour ; instantané toutes les 6 heures (copié chaque jour par
+ *  mcp-backup) : la base entière est recopiée, une fréquence plus haute userait le disque pour rien. */
 export function start(connectors, status) {
   if (!open()) return;
   const measure = () => { for (const c of connectors) if (!c.mock) { const s = status(c); sample(c.id, s.state, s.p95); } };
   setTimeout(() => { purge(); snapshot(); }, 60_000).unref(); // premier instantané une minute après le démarrage
   setInterval(purge, DAY).unref();
-  setInterval(snapshot, 3_600_000).unref();
+  setInterval(snapshot, 6 * 3_600_000).unref();
   setInterval(measure, SLOT).unref();
 }

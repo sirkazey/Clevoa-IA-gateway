@@ -97,7 +97,7 @@ const INSTRUCTIONS = [
 /** Compteur d'usage du mois et, avec AUDIT=on, ligne d'audit (qui, quel outil, quand, résultat) ; jamais les arguments ni le résultat. */
 function usage(c, t, key, ms, e) {
   const user = store.pseudonym(key), u = store.get(key);
-  db.count(c.id, user, !!e && telemetry.category(e) !== "user"); // une erreur d'usage (outil non connecté) n'est pas une erreur du système
+  db.count(c.id, user, !!e && health.systemFault(telemetry.category(e), e)); // même définition que la supervision : jeton expiré, refus, plafond du hub ne comptent pas
   db.audit({ user, who: u?.email || u?.sso?.upn || null, system: c.id, tool: t.name, outcome: e ? telemetry.category(e) : "ok", ms });
 }
 
@@ -266,6 +266,9 @@ app.get("/metrics/prtg", metricsLimit, metricsAuthorized, (_req, res) => {
   }
   result.push({ channel: "Hub · sièges", value: store.seats(), unit: "Count" });
   result.push({ channel: "Hub · collaborateurs actifs du mois", value: db.usage().activeUsers, unit: "Count" });
+  const base = db.health(); // historique, compteurs et audit : une base fermée ou des écritures en échec se voient ici
+  result.push({ channel: "Hub · base d'exploitation", value: base.up ? 1 : 0, unit: "Custom", customunit: "", limitmode: 1, limitminerror: 0.5, limiterrormsg: "base d'exploitation indisponible : ni historique ni compteurs ni audit" });
+  result.push({ channel: "Hub · écritures en échec", value: base.failures, unit: "Count", limitmode: 1, limitmaxwarning: 0.5, limitwarningmsg: "écritures en échec dans la base d'exploitation (audit incomplet ?)" });
   result.push({ channel: "Hub · mémoire", value: process.memoryUsage().rss, unit: "BytesMemory" });
   result.push({ channel: "Hub · durée de fonctionnement", value: Math.round(process.uptime()), unit: "TimeSeconds" });
   res.json({ prtg: { result, text: bad.length ? bad.join(" · ") : `Clevoa AI Gateway ${VERSION} : systèmes opérationnels` } });
@@ -301,6 +304,11 @@ app.get("/metrics", metricsLimit, metricsAuthorized, (_req, res) => {
   for (const r of month.systems) m.push(`clevoa_usage_month_calls{system="${promLabel(r.system)}",month="${month.month}"} ${r.calls}`);
   g("clevoa_usage_month_active_users", "Collaborateurs ayant appelé au moins un outil ce mois");
   m.push(`clevoa_usage_month_active_users{month="${month.month}"} ${month.activeUsers}`);
+  const base = db.health();
+  g("clevoa_hub_db_up", "Base d'exploitation (historique, compteurs, audit) ouverte : 1, indisponible : 0");
+  m.push(`clevoa_hub_db_up ${base.up ? 1 : 0}`);
+  g("clevoa_hub_db_write_failures_total", "Écritures en échec dans la base d'exploitation depuis le démarrage", "counter");
+  m.push(`clevoa_hub_db_write_failures_total ${base.failures}`);
   res.type("text/plain; version=0.0.4; charset=utf-8").send(m.join("\n") + "\n");
 });
 
@@ -333,7 +341,7 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 
 db.start(CONNECTORS, (c) => health.status(c)); // avant l'annonce du démarrage : une base illisible est journalisée d'abord (ops/restore.sh)
 app.listen(PORT, () => {
-  console.log(`Hub MCP v${VERSION} · ENV: ${APP_ENV} · ${PUBLIC_URL} (port ${PORT})${sagex3.mock ? " · Sage X3 simulé" : ""}${myreport.mock ? " · MyReport simulé" : ""}${sso.MODE ? ` · SSO ${sso.MODE}` : ""}${process.env.LOG_LEVEL === "debug" ? " · logs détaillés" : ""}`);
+  console.log(`Hub MCP v${VERSION} · ENV: ${APP_ENV} · ${PUBLIC_URL} (port ${PORT})${sagex3.mock ? " · Sage X3 simulé" : ""}${myreport.mock ? " · MyReport simulé" : ""}${sso.MODE ? ` · SSO ${sso.MODE}` : ""}${process.env.LOG_LEVEL === "debug" ? " · logs détaillés" : ""}${db.AUDIT ? ` · journal d'audit ${db.AUDIT_DAYS} j` : ""}`);
   telemetry.start(CONNECTORS, store.seats, store.installationId);
   health.start(CONNECTORS);
 });

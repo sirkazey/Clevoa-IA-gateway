@@ -154,7 +154,8 @@ financière sur un jeu de référence. Liste et état : [état des fonctionnalit
 
 ## 7. Base d'exploitation et journal d'audit (1.5)
 
-Ce que contient `/data/hub.db` (SQLite, dans le volume du hub, droits 700 de l'utilisateur `node`), et ce qu'il n'y a jamais :
+Ce que contient `/data/hub.db` (SQLite, dans le volume du hub : dossier en 700 et fichiers en 600, lisibles par le seul
+utilisateur `node`), et ce qu'il n'y a jamais :
 
 | Donnée | Contenu | Identifie une personne ? | Conservation |
 |---|---|---|---|
@@ -164,8 +165,8 @@ Ce que contient `/data/hub.db` (SQLite, dans le volume du hub, droits 700 de l'u
 | Journal d'audit, si `AUDIT=on` | date, pseudonyme, e-mail **chiffré** (AES-256-GCM, `ENCRYPTION_KEY`), système, nom de l'outil, résultat (`ok` ou catégorie d'erreur), durée | oui | `AUDIT_DAYS` (90 jours par défaut) |
 | **Jamais** | arguments des outils (requêtes, filtres, chemins), données renvoyées, jetons, clés MCP | | |
 
-Le pseudonyme est un HMAC-SHA256 de l'identité du collaborateur (identité Entra, sinon clé MCP) calculé avec
-`ENCRYPTION_KEY` : il ne se lit pas, mais qui détient la clé peut retrouver la personne. Au sens du RGPD, ce sont donc des
+Le pseudonyme est un HMAC-SHA256 de l'identité du collaborateur (identité Entra, sinon clé MCP) calculé avec une sous-clé
+tirée d'`ENCRYPTION_KEY` : il ne se lit pas, mais qui détient la clé peut retrouver la personne. Au sens du RGPD, ce sont donc des
 données **pseudonymisées**, pas anonymes. Il change si la clé MCP d'un collaborateur sans SSO est régénérée.
 
 **Journal d'audit : désactivé par défaut**, parce que c'est un traitement de données personnelles du client, pas de
@@ -184,6 +185,18 @@ accès à Docker et aux variables (dont `ENCRYPTION_KEY`). Le fichier exporté e
 personnelle (remise tracée, suppression après usage). Clevoa n'y a jamais accès : rien de la base n'est envoyé par la
 télémétrie, qui ne transmet que des compteurs agrégés (§ 4).
 
+Conservation réelle : une ligne purgée est effacée du fichier lui-même (`secure_delete`), pas seulement marquée libre, et
+le journal WAL est vidé après la purge. Mais elle survit dans les copies faites avant sa purge : sauvegardes `hub-*.db`
+(`BACKUP_KEEP_DAYS`, 30 jours par défaut, plus la politique du serveur de sauvegarde) et `hub.db.avant-restauration` laissé
+dans le volume par une restauration (à supprimer une fois la restauration validée). Durée effective de l'audit :
+`AUDIT_DAYS` + `BACKUP_KEEP_DAYS`, à indiquer dans l'information des collaborateurs. Une valeur d'`AUDIT_DAYS` illisible
+empêche le hub de démarrer, plutôt qu'une conservation illimitée sans le dire.
+
 Les sauvegardes `hub-*.db` héritent de ces règles : compteurs, noms d'outils et pseudonymes y sont lisibles sans la clé,
-les e-mails d'audit non. Les droits d'accès au dossier des sauvegardes (root) les protègent ; les inclure dans la
-politique de conservation des journaux du client.
+les e-mails d'audit non. Elles sont écrites en 600 (root) dans `BACKUP_DIR` ; les inclure dans la politique de
+conservation des journaux du client.
+
+Un audit promis qui s'arrête (disque plein, base abîmée) ne bloque aucun outil, mais se voit : `clevoa_hub_db_up` et
+`clevoa_hub_db_write_failures_total` dans `/metrics`, canaux « Hub · base d'exploitation » et « Hub · écritures en échec »
+dans PRTG ([exploitation § 11](exploitation.md#11-supervision-du-hub)). L'export CSV neutralise les formules de tableur
+(valeur commençant par `=`, `+`, `-`, `@` préfixée d'une apostrophe).

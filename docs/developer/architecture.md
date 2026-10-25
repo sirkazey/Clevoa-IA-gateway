@@ -33,7 +33,7 @@ Assistant IA (Claude Code, Claude Desktop, ChatGPT, Copilot)
 │ admin.js       lecture de hub.db par l'administrateur (docker exec)  │
 │ connectors/    salesforce · sagex3 · sharepoint · dropbox · myreport │
 │ public/        index.html, le portail                                │
-│ test/          node:test, amont mocké, 136 tests                     │
+│ test/          node:test, amont mocké, 138 tests                     │
 └───┬─────────────┬───────────────┬───────────────┬───────────────┬────┘
     ▼ MCP HTTP    ▼ REST Syracuse ▼ Graph (GET)   ▼ MCP HTTP      ▼ MCP SSE
  Salesforce    Sage X3 24R1    SharePoint      Dropbox (MCP    MyReport Server

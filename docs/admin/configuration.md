@@ -270,8 +270,8 @@ protection des données : [sécurité § 7](securite.md#7-base-dexploitation-et-
 
 | Variable | Rôle |
 |---|---|
-| `AUDIT` | `on` : chaque appel d'outil est journalisé (date, collaborateur, système, outil, résultat, durée ; jamais les arguments ni les données renvoyées) ; vide (défaut) : pas de journal. À activer seulement après avis du DPO et information des collaborateurs |
-| `AUDIT_DAYS` | durée de conservation du journal d'audit en jours ; défaut 90. Les lignes plus anciennes sont supprimées chaque jour |
+| `AUDIT` | `on` (ou `true`, `1`, `oui`) : chaque appel d'outil est journalisé (date, collaborateur, système, outil, résultat, durée ; jamais les arguments ni les données renvoyées) ; vide (défaut) : pas de journal. À activer seulement après avis du DPO et information des collaborateurs |
+| `AUDIT_DAYS` | durée de conservation du journal d'audit en jours, entier ≥ 1 (avec l'audit actif, une autre valeur empêche le hub de démarrer) ; défaut 90. Les lignes plus anciennes sont effacées chaque jour ; les sauvegardes `hub-*.db` les gardent `BACKUP_KEEP_DAYS` jours de plus |
 
-Une base illisible ou un disque plein n'arrêtent jamais les outils : le hub fonctionne alors sans historique ni
+Audit actif : la ligne de démarrage du hub l'indique (`· journal d'audit 90 j`). Une base illisible ou un disque plein n'arrêtent jamais les outils : le hub fonctionne alors sans historique ni
 compteurs ni audit, et l'écrit dans son journal (`[db] base d'exploitation indisponible`).

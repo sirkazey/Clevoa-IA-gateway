@@ -30,4 +30,5 @@ test("Image de base figée par empreinte : Dockerfile du hub, du bouchon et de l
   assert.equal(from("clevoa-mcp-stub/Dockerfile"), from("hub/Dockerfile"), "une seule image de base");
   assert.equal(from("clevoa-console/Dockerfile"), from("hub/Dockerfile"), "console sur la même image de base");
   assert.ok(read("docker-compose.yml").includes(from("hub/Dockerfile").slice(5)), "mcp-backup sur la même image");
+  for (const s of ["ops/backup.sh", "ops/restore.sh"]) assert.ok(read(s).includes(`IMAGE=${from("hub/Dockerfile").slice(5)}`), `${s} sur la même image (lancé en root, volume monté)`);
 });
