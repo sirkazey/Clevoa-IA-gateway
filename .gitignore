@@ -4,3 +4,4 @@ data/
 *.log
 backups/
 certs/
+.env.proto

@@ -10,6 +10,7 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { z } from "zod";
 import { USERS, SF, SAGE, DOCS, MYREPORT } from "./data.js";
 import { authorizePage, approve, tokenEndpoint, bearerUser, sageUser, myreportUser } from "./auth.js";
+import { oidcRouter } from "./oidc.js";
 
 const PORT = process.env.PORT || 4000;
 const FILES = new URL("./files/", import.meta.url);
@@ -25,9 +26,10 @@ const strip = (o) => Object.fromEntries(Object.entries(o).filter(([k]) => !k.sta
 app.get("/", (_req, res) => res.type("html").send(`<!doctype html><meta charset="utf-8"><title>Bouchon d'entreprise Clevoa AI Gateway</title><body style="font:15px system-ui;max-width:720px;margin:40px auto">
 <h1>Bouchon d'entreprise Clevoa AI Gateway</h1><p>Imite Salesforce, Microsoft Graph, Dropbox MCP, Sage X3 Syracuse, MyReport MCP et Clevoa avec un jeu de données canin.</p>
 <h3>Collaborateurs simulés</h3><ul>${Object.entries(USERS).map(([u, p]) => `<li><b>${p.name}</b> (${p.role}) — ${u}<br>Sage X3 : login <code>${p.sageLogin}</code>, clé <code>${p.sageKey}</code> · MyReport : jeton <code>${p.myreportKey}</code> · dossier Confidentiel : ${p.confidentiel ? "oui" : "non"} · achats Sage : ${p.achats ? "oui" : "non"}</li>`).join("")}</ul>
-<h3>Points d'entrée</h3><pre>${["/services/oauth2/{authorize,token,userinfo}  /platform/mcp/v1/d/{org}/platform/sobject-reads   Salesforce (MCP hébergé)", "/ms/{tenant}/oauth2/v2.0/{authorize,token}  /v1.0/...                   Microsoft Graph", "/oauth2/{authorize,token}  /dropbox-mcp                                Dropbox", "/oauth/{authorize,token,userinfo}  /api1/x3/erp/{dossier}/...          Sage X3 Syracuse", "/myreport/sse  /myreport/messages                                     MyReport Server (MCP SSE)", "/api/v1/telemetry                                                    Clevoa"].join("\n")}</pre>
+<h3>Points d'entrée</h3><pre>${["/services/oauth2/{authorize,token,userinfo}  /platform/mcp/v1/d/{org}/platform/sobject-reads   Salesforce (MCP hébergé)", "/ms/{tenant}/oauth2/v2.0/{authorize,token}  /v1.0/...                   Microsoft Graph", "/oauth2/{authorize,token}  /dropbox-mcp                                Dropbox", "/oauth/{authorize,token,userinfo}  /api1/x3/erp/{dossier}/...          Sage X3 Syracuse", "/myreport/sse  /myreport/messages                                     MyReport Server (MCP SSE)", "/api/v1/telemetry                                                    Clevoa", "/oidc/{charlois,oakwood,acquise}/v2.0/...                            annuaires OIDC du prototype « un clic »"].join("\n")}</pre>
 <p>Télémétrie reçue : <a href="/api/v1/telemetry">/api/v1/telemetry</a></p></body>`));
 app.get("/_stub/approve", approve);
+app.use(oidcRouter()); // annuaires du prototype « connexion en un clic » (Entra Charlois, Entra Oakwood, Google)
 
 // ---------------------------------------------------------------- Salesforce
 app.get("/services/oauth2/authorize", authorizePage("sf", "Salesforce"));

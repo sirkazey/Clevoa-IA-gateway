@@ -71,6 +71,9 @@ export const store = {
     if (!db.installation) { db.installation = randomUUID(); save(); }
     return db.installation;
   },
+  /** Serveur OAuth du hub (OAUTH=on) : clients inscrits et sessions, dans le même fichier chiffré ; `persist` après chaque modification. */
+  oauthState: () => (db.oauth ??= { clients: {}, sessions: {} }),
+  persist: () => save(),
   remove(key) { if (store.get(key)) { delete db.users[key]; save(); } },
   /** Oublie les clés anonymes sans identifiant plus vieilles que maxAgeMs (départs SSO abandonnés) ; rien n'est écrit, elles n'ont jamais été persistées. */
   purge(maxAgeMs) {

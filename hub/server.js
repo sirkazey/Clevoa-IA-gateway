@@ -15,6 +15,7 @@ import * as dropbox from "./connectors/dropbox.js";
 import * as myreport from "./connectors/myreport.js";
 import * as telemetry from "./telemetry.js";
 import * as health from "./health.js";
+import * as authserver from "./authserver.js";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { rateLimit } from "express-rate-limit"; // déjà fourni par le SDK MCP (même version) ; utilisé pour les routes de supervision
 import { VERSION, APP_ENV, IS_PROD } from "./version.js";
@@ -35,7 +36,7 @@ const domainOverride = Object.fromEntries((process.env.CONNECTOR_DOMAINS || "").
 const domainOf = (c) => (Object.hasOwn(domainOverride, c.id) ? domainOverride[c.id] : DOMAINS.includes(c.domain) ? c.domain : "autre");
 const byId = Object.assign(Object.create(null), Object.fromEntries(CONNECTORS.map((c) => [c.id, c]))); // sans prototype : « constructor », « __proto__ »… ne désignent aucun système
 // Variables visibles dans le portail : toutes celles des connecteurs et du hub présentes dans l'environnement (jamais la valeur des secrets).
-const ENV = Object.keys(process.env).filter((n) => /^(PUBLIC_URL|APP_ENV|LOG_LEVEL|TRUST_PROXY|ENCRYPTION_KEY|SSO_MODE|MCP_SERVER_NAME|INSTANCE_LABEL|SF_|SAGE_|MS_|SP_|GRAPH_URL|DROPBOX_|MYREPORT_|CLEVOA_|PROBE$|SLOW_MS$|METRICS_TOKEN$|CONNECTOR_DOMAINS$)/.test(n)).sort();
+const ENV = Object.keys(process.env).filter((n) => /^(PUBLIC_URL|APP_ENV|LOG_LEVEL|TRUST_PROXY|ENCRYPTION_KEY|SSO_MODE|MCP_SERVER_NAME|INSTANCE_LABEL|SF_|SAGE_|MS_|SP_|GRAPH_URL|DROPBOX_|MYREPORT_|CLEVOA_|PROBE$|SLOW_MS$|METRICS_TOKEN$|CONNECTOR_DOMAINS$|OAUTH|OIDC_)/.test(n)).sort();
 const masked = (n) => (/SECRET|CLEVOA_KEY|ENCRYPTION_KEY|METRICS_TOKEN/.test(n) ? "••••••••" : process.env[n]); // CLEVOA_KEY est une clé de licence, masquée comme les secrets
 
 // ---------- Limitation de débit (mémoire, par adresse IP) ----------
@@ -296,14 +297,16 @@ app.post("/messages", mcpUser, async (req, res) => {
   await s.transport.handlePostMessage(req, res, req.body);
 });
 
-// Transport Streamable HTTP (sans état) : un serveur jetable par requête.
-app.post("/mcp", mcpUser, async (req, res) => {
+// Transport Streamable HTTP (sans état) : un serveur jetable par requête. Même traitement sur le port public (OAUTH=on), où
+// `req.key` vient du jeton OAuth du hub au lieu de la clé statique.
+async function mcpHandler(req, res) {
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   const server = buildServer(req.key);
   res.on("close", () => { transport.close(); server.close(); });
   await server.connect(transport);
   await transport.handleRequest(req, res, req.body);
-});
+}
+app.post("/mcp", mcpUser, mcpHandler);
 app.all("/mcp", (_req, res) => res.status(405).json({ error: "Utilisez POST (mode sans état)." }));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
@@ -313,3 +316,5 @@ app.listen(PORT, () => {
   telemetry.start(CONNECTORS, store.seats, store.installationId);
   health.start(CONNECTORS);
 });
+// Prototype « connexion en un clic » : port public distinct, seul exposé par le tunnel (autorisation OAuth et /mcp, jetons du hub).
+if (authserver.ENABLED) authserver.publicApp(mcpHandler).listen(authserver.PORT, () => console.log(`Serveur OAuth du hub · ${authserver.PUBLIC} (port ${authserver.PORT}) · annuaires : ${authserver.PROVIDERS.map((p) => p.id).join(", ")}`));

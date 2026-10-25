@@ -2,7 +2,7 @@
 
 Un dossier par public. Chaque procédure a une seule source de vérité ; les autres documents y renvoient.
 Évolutions du produit : [roadmap produit](roadmap-produit.md), seule roadmap active (périmètre fonctionnel gelé à la 1.3.1).
-Étude en cours, avant tout développement : [connexion de l'assistant en un clic](etudes/connexion-un-clic.md) (OAuth, Cloudflare, multi-clients).
+Étude : [connexion de l'assistant en un clic](etudes/connexion-un-clic.md) (OAuth, Cloudflare, multi-clients). Prototype (branche `proto/oauth-tunnel`, non fusionnée) : [guide pas à pas](etudes/prototype-un-clic.md).
 
 | Dossier | Public | Contenu |
 |---|---|---|

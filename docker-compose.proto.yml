@@ -1,0 +1,92 @@
+# PROTOTYPE « CONNEXION EN UN CLIC » — jamais en production ni chez un client. Guide : docs/etudes/prototype-un-clic.md.
+# Le hub (OAUTH=on) ouvre un second port, 8090, qui ne sert que l'autorisation OAuth et /mcp ; le conteneur cloudflared le
+# publie sur https://<PROTO_HOST> par un tunnel SORTANT (aucun port ouvert sur le pare-feu). Le portail reste en local.
+# Par défaut, les trois annuaires sont ceux du bouchon (Entra Charlois, Entra Oakwood, Google de la société acquise, simulés) :
+# toute la chaîne se teste avec Claude avant d'inscrire quoi que ce soit chez Microsoft ou Google. Renseigner OIDC_<ID>_ISSUER,
+# _CLIENT_ID et _CLIENT_SECRET dans .env rebranche un annuaire sur le vrai.
+#   docker compose -f docker-compose.proto.yml --env-file .env.proto up -d --build
+name: clevoa-proto
+
+services:
+  mcp-stub:
+    build: ./clevoa-mcp-stub
+    restart: unless-stopped
+    ports:
+      - "${STUB_PORT:-127.0.0.1:4000}:4000"   # le navigateur doit joindre les mires des annuaires simulés (même machine par défaut)
+    user: "node"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  mcp-hub:
+    extends:
+      file: docker-compose.yml
+      service: mcp-hub
+    environment:
+      APP_ENV: preprod                         # jamais production : annuaires simulés et http autorisés
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}   # portail, en local seulement
+      PROBE: "off"
+      # Applications : Sage X3 et MyReport en simulateur (aucune connexion par application) ; les autres restent non connectées.
+      SAGE_URL: ""
+      MYREPORT_MCP_URL: ""
+      # --- Serveur OAuth du hub ---
+      OAUTH: "on"
+      OAUTH_PORT: "8090"
+      OAUTH_PUBLIC_URL: https://${PROTO_HOST:?nom public du prototype, ex. mcp-proto.socle.si}
+      OAUTH_REVALIDATE_MIN: ${OAUTH_REVALIDATE_MIN:-60}
+      OAUTH_REDIRECT_URIS: ${OAUTH_REDIRECT_URIS:-https://claude.ai/api/mcp/auth_callback,https://claude.com/api/mcp/auth_callback}
+      BROWSER_URL_REWRITE: ${BROWSER_URL_REWRITE:-http://mcp-stub:4000=>http://localhost:4000}
+      # --- Annuaires (page « Se connecter avec… », dans cet ordre) ---
+      OIDC_PROVIDERS: ${OIDC_PROVIDERS:-charlois,oakwood,acquise}
+      OIDC_CHARLOIS_LABEL: ${OIDC_CHARLOIS_LABEL:-Microsoft (Charlois)}
+      OIDC_CHARLOIS_KIND: entra
+      OIDC_CHARLOIS_ISSUER: ${OIDC_CHARLOIS_ISSUER:-http://mcp-stub:4000/oidc/charlois/v2.0}   # réel : https://login.microsoftonline.com/<ID annuaire>/v2.0
+      OIDC_CHARLOIS_CLIENT_ID: ${OIDC_CHARLOIS_CLIENT_ID:-simule}
+      OIDC_CHARLOIS_CLIENT_SECRET: ${OIDC_CHARLOIS_CLIENT_SECRET:-simule}
+      OIDC_CHARLOIS_DOMAINS: ${OIDC_CHARLOIS_DOMAINS:-}
+      OIDC_OAKWOOD_LABEL: ${OIDC_OAKWOOD_LABEL:-Microsoft (Oakwood Cooperage)}
+      OIDC_OAKWOOD_KIND: entra
+      OIDC_OAKWOOD_ISSUER: ${OIDC_OAKWOOD_ISSUER:-http://mcp-stub:4000/oidc/oakwood/v2.0}
+      OIDC_OAKWOOD_CLIENT_ID: ${OIDC_OAKWOOD_CLIENT_ID:-simule}
+      OIDC_OAKWOOD_CLIENT_SECRET: ${OIDC_OAKWOOD_CLIENT_SECRET:-simule}
+      OIDC_OAKWOOD_DOMAINS: ${OIDC_OAKWOOD_DOMAINS:-}
+      OIDC_ACQUISE_LABEL: ${OIDC_ACQUISE_LABEL:-Google (société acquise)}
+      OIDC_ACQUISE_KIND: google
+      OIDC_ACQUISE_ISSUER: ${OIDC_ACQUISE_ISSUER:-http://mcp-stub:4000/oidc/acquise/v2.0}     # réel : https://accounts.google.com
+      OIDC_ACQUISE_CLIENT_ID: ${OIDC_ACQUISE_CLIENT_ID:-simule}
+      OIDC_ACQUISE_CLIENT_SECRET: ${OIDC_ACQUISE_CLIENT_SECRET:-simule}
+      OIDC_ACQUISE_DOMAINS: ${OIDC_ACQUISE_DOMAINS:-acquise.example}  # domaine Google Workspace (revendication hd) autorisé
+    ports:
+      - "127.0.0.1:8090:8090"                  # port public du hub, en local seulement (essais sans tunnel) ; Internet passe par cloudflared
+    volumes:
+      - proto-data:/data                       # store du prototype, distinct de toute pré-production
+    user: "node"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  # Tunnel Cloudflare SORTANT (port 7844 vers Cloudflare) : rien n'est ouvert en entrée. Jeton du tunnel créé dans le tableau de
+  # bord Zero Trust ; le nom d'hôte public y pointe vers http://mcp-hub:8090. Image figée par version et empreinte (amd64 et arm64).
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.0@sha256:9b49eed8f62806d5d45ddf59ecefb5710429598ea6d3fcccd2af938f621b2b07
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?jeton du tunnel Cloudflare (Zero Trust > Networks > Tunnels)}
+    depends_on:
+      - mcp-hub
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  proto-data:
