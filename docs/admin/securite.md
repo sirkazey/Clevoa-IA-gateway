@@ -9,7 +9,8 @@ automatiques (Semgrep, CodeQL, Gitleaks, Trivy, ZAP) sont décrites côté déve
 Aucun compte de service, générique ou global, pour aucun des outils connectés.
 
 * `users.json` ne contient que des jetons **individuels**, obtenus par chaque collaborateur sur le portail et rangés
-  sous sa clé MCP personnelle. Le fichier est **chiffré AES-256-GCM** (clé maîtresse `ENCRYPTION_KEY`, obligatoire,
+  sous sa clé MCP personnelle, avec son identité (e-mail, SSO) et le jour de dernière utilisation par un assistant
+  (affiché sur son portail, ni l'heure ni les outils appelés). Le fichier est **chiffré AES-256-GCM** (clé maîtresse `ENCRYPTION_KEY`, obligatoire,
   `openssl rand -hex 32`), déchiffré en mémoire uniquement, écrit avec les droits 600 dans un volume en 700.
 * Chaque appel MCP est authentifié par la clé de l'appelant. Le hub lit **son** jeton et le transmet tel quel en
   `Authorization: Bearer` à l'outil, qui applique le profil de droits de ce collaborateur.

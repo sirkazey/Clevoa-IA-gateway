@@ -64,7 +64,10 @@ const requireKey = (read) => (req, res, next) => {
   if (user(req.key)) return next(); // une clé valide n'est jamais freinée par les échecs d'autres clients de la même IP
   authFailures(req, res, () => res.status(401).json({ error: "Clé MCP inconnue ou absente : utilisez l'en-tête Authorization: Bearer <clé> obtenue sur le portail." }));
 };
-const mcpUser = requireKey(mcpKey), portalUser = requireKey(cookieKey);
+const portalUser = requireKey(cookieKey);
+// Tout appel MCP authentifié marque l'assistant comme branché ; une écriture impossible (disque plein) ne bloque jamais l'appel.
+const seen = (req, _res, next) => { try { store.assistantSeen(req.key); } catch (e) { console.error(`[store] dernier usage non enregistré : ${e.code ?? e.message}`); } next(); };
+const mcpUser = [requireKey(mcpKey), seen];
 // Les POST du portail changent l'état du collaborateur : un navigateur qui annonce une autre origine (formulaire d'un site frère sous le
 // même domaine, que SameSite=Lax laisse passer) est refusé. Les clients MCP n'appellent pas ces routes.
 const ORIGIN = new URL(PUBLIC_URL).origin;
@@ -165,6 +168,7 @@ app.get("/api/me", limit("me", 60), (req, res) => {
     sso: sso.MODE || undefined,
     email: u.email || null,
     key,
+    assistantAt: u.assistantAt || null, // dernier jour où un assistant a utilisé la clé
     mcpUrl: `${PUBLIC_URL}/mcp`,
     systems: CONNECTORS.map((c) => ({
       id: c.id, label: c.label, domain: domainOf(c), mock: !!c.mock, oauth: !!c.oauth, configured: !!c.oauth?.clientId,
