@@ -125,7 +125,7 @@ n'est pas joignable depuis Internet.
 ### 4.3 Lancer la pile Docker
 
 ```bash
-git clone https://github.com/sirkazey/Charlois-mcp-finance.git && cd Charlois-mcp-finance
+git clone https://github.com/sirkazey/Clevoa-IA-gateway.git && cd Clevoa-IA-gateway
 git checkout proto/oauth-tunnel
 cp .env.proto.example .env.proto        # .env.proto n'est jamais commité (.gitignore)
 openssl rand -hex 32                    # → ENCRYPTION_KEY dans .env.proto
