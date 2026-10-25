@@ -1,0 +1,35 @@
+# Console de suivi Clevoa, pour un poste ou un NAS de Clevoa sur un réseau privé (jamais exposée sur internet).
+# Lancement depuis ce dossier : docker compose up -d --build, puis http://<adresse du NAS>:8090
+# Identifiants AWS : ceux d'un utilisateur IAM dédié, avec la seule politique « clevoa-backend-<stage>-console-lecture »
+# (lecture de la table de télémétrie, aucune écriture). Voir README.md.
+services:
+  console:
+    build:
+      context: ..
+      dockerfile: clevoa-console/Dockerfile
+    container_name: clevoa-console
+    restart: unless-stopped
+    ports:
+      - "${CONSOLE_PORT:-8090}:8090"
+    environment:
+      TELEMETRY_TABLE: ${TELEMETRY_TABLE:-clevoa-backend-prod-installations}
+      AWS_REGION: ${AWS_REGION:-eu-west-3}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?clé d'accès de l'utilisateur IAM en lecture seule}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?secret de l'utilisateur IAM en lecture seule}
+      CONSOLE_PASSWORD: ${CONSOLE_PASSWORD:?mot de passe de la console (identifiant libre à la saisie)}
+      MIN_VERSION: ${MIN_VERSION:-}          # version minimale : les installations en dessous sont marquées « ancienne »
+      SILENCE_HOURS: ${SILENCE_HOURS:-14}    # même seuil que le backend
+    user: "node"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8090/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "3" }

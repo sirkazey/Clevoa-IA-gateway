@@ -7,6 +7,33 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
+## [1.4.0-rc.1] – 2026-10-25
+
+Version candidate (non qualifiée pour la production) : portail refondu en écran de travail, état des systèmes et
+supervision du hub. Aucun changement d'outil MCP, de connecteur ni de route existante. Compte rendu : `docs/validation/portail-v1.4.md`.
+
+### Ajouté
+- État de chaque système sur le portail (colonne « Service ») : appels réels de la dernière heure et vérification de joignabilité par une requête HEAD sans identifiant, toutes les 10 minutes du lundi au vendredi de 7 h à 19 h (`PROBE`, `SLOW_MS`) ; route `/api/status`, sans volume ni identité.
+- Supervision du hub : `GET /metrics` au format Prometheus et `GET /metrics/prtg` pour le capteur PRTG « HTTP Data Advanced » (santé avec seuils, joignabilité, appels et erreurs, temps de réponse, sièges), protégés par un jeton dédié `METRICS_TOKEN` (Bearer ou authentification HTTP), absents sans lui.
+- Classement des applications par domaine (Commerce, Finance, Industrie, Documents…), modifiable par `CONNECTOR_DOMAINS`.
+
+### Modifié
+- Portail : bandeau de situation d'une ligne, une ligne par application avec détails repliables, panneau « Brancher votre assistant » en colonne, « Questions qui fonctionnent » par domaine ; axe-core WCAG 2.1 A et AA sans violation.
+
+## [1.3.2-rc.2] – 2026-10-25
+
+Version candidate (non qualifiée pour la production) : suivi des installations par Clevoa. Aucun changement de route,
+d'outil MCP, de connecteur ni de portail côté client. Les hubs en 1.3.2-rc.1 restent acceptés par le backend (sans statistiques).
+
+### Ajouté
+- Télémétrie : statistiques par connecteur depuis le dernier envoi (appels, erreurs par type, collaborateurs distincts comptés par empreinte salée jamais transmise, latences p50 et p95), sans message d'erreur, nom d'outil ni identité.
+- Backend Clevoa : une ligne par période en plus de la fiche d'installation ; incidents (taux d'erreurs du système, refus d'authentification pour tous, silence) fermés sur preuve seulement (ou quand le connecteur n'est plus configuré ; un simulateur n'en ouvre aucun), avec un e-mail à l'ouverture et à la fermeture, retenté s'il échoue, au plus dix par client et par heure ; débit de l'API plafonné ; 21 tests sans AWS.
+- Console de suivi `clevoa-console/` : page en lecture seule (installations, incidents, graphiques sur 30 jours en temps réel, trous visibles), conteneur Docker pour un NAS du réseau privé de Clevoa, mot de passe obligatoire, politique IAM de lecture créée par le déploiement du backend, mode démonstration, 7 tests et scan Trivy de l'image en CI.
+
+### Modifié
+- Télémétrie toutes les 6 heures (03:00, 09:00, 15:00, 21:00, étalée sur 10 minutes) au lieu d'une fois par jour ; silence signalé après 14 heures sans envoi (50 heures pour un hub antérieur), vérifié chaque heure.
+- Backend : plus aucun e-mail pour une version sous le minimum (visible dans la console) ; versions acceptées limitées à X.Y.Z et X.Y.Z-(alpha|beta|rc).N ; clé de table composée (`pk`, `sk`) et index `etats`, à redéployer.
+
 ## [1.3.2-rc.1] – 2026-10-24
 
 Version candidate (non qualifiée pour la production) : socle de maintenance, sans nouvelle fonction métier (périmètre

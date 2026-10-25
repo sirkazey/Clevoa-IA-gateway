@@ -17,9 +17,13 @@ propre nom de serveur MCP et son libellé (`MCP_SERVER_NAME`, `INSTANCE_LABEL`).
   fichier, transmis tels quels aux outils. Le cache de structure (objets, champs) est lui aussi par utilisateur.
 * **Lecture seule par construction** : serveurs MCP et facettes d'API de lecture uniquement, listes blanches d'outils,
   outils annotés `readOnlyHint`. Aucune donnée métier n'est stockée ni mise en cache.
-* **Portail web** aux couleurs Clevoa : progression en trois étapes, une carte par outil (connexion, test, état),
-  configuration de l'assistant à copier avec clé masquée, exemples de questions, thème clair et sombre, accessible
-  (WCAG 2.1 AA vérifié). SSO Microsoft Entra ID optionnel.
+* **Portail web** aux couleurs Clevoa, pensé comme un outil : une ligne par application classée par domaine (Commerce,
+  Finance, Documents…) avec l'état de votre connexion et celui du service, assistant à brancher sans défilement,
+  questions qui fonctionnent par domaine, thème clair et sombre, accessible (WCAG 2.1 AA vérifié). SSO Microsoft Entra
+  ID optionnel.
+* **Supervision** : état de chaque système mesuré par le hub (appels de la dernière heure et vérification de
+  joignabilité sans identifiant, en semaine aux heures ouvrées), exposé à la supervision : PRTG (`/metrics/prtg`) ou
+  format Prometheus pour Zabbix, Centreon… (`/metrics`), jeton dédié.
 * **Traçabilité** : chaque résultat se termine par `Source : <système>` que l'assistant est instruit de citer.
 * **Exploitation simple** : deux stacks Docker Compose (pré-production, production), sauvegarde quotidienne chiffrée,
   restauration scriptée, reverse proxy nginx fourni, télémétrie de licence réduite à des compteurs.
@@ -69,7 +73,7 @@ Sur le portail : « Se connecter » à chaque outil (mires du bouchon sur `http:
 vérifier les voyants du diagnostic, copier le bloc de configuration dans l'assistant. Sans Docker :
 
 ```bash
-cd hub && npm install && npm test                      # 102 tests, aucun réseau
+cd hub && npm install && npm test                      # 112 tests, aucun réseau
 ```
 
 Suite détaillée : [installation](docs/admin/installation.md).
@@ -86,7 +90,7 @@ Suite détaillée : [installation](docs/admin/installation.md).
 | Historique | [Audits d'octobre 2026](docs/history/audit-2026-10.md) · [Décisions](docs/history/decisions.md) · [Feuille de route d'octobre 2026 (archive)](docs/history/roadmap-2026-10.md) |
 
 Composants annexes : [bouchon d'entreprise](clevoa-mcp-stub/README.md), [backend de télémétrie Clevoa](clevoa-backend/README.md),
-[outils de charge](loadtest/README.md). Index complet : [docs/README.md](docs/README.md).
+[console de suivi Clevoa](clevoa-console/README.md), [outils de charge](loadtest/README.md). Index complet : [docs/README.md](docs/README.md).
 
 ## Sécurité et limites connues
 
@@ -96,8 +100,9 @@ Composants annexes : [bouchon d'entreprise](clevoa-mcp-stub/README.md), [backend
   claude.ai web et mobile ne sont donc pas pris en charge (choix assumé : le hub reste sur le réseau interne).
 * Limitation de débit par adresse IP, plafonds d'appels sortants par connecteur (`MYREPORT_MAX_PER_MIN`,
   `SF_MAX_PER_MIN`), en-têtes de sécurité HTTP, conteneur sans privilèges en lecture seule.
-* Télémétrie vers Clevoa réduite à un identifiant aléatoire d'installation, la version, les connecteurs configurés et
-  des compteurs (appels, sièges) ; aucun e-mail, jeton, requête ni résultat ne quitte le hub ([sécurité § 4](docs/admin/securite.md#4-télémétrie-clevoa)).
+* Télémétrie vers Clevoa toutes les 6 heures, réduite à un identifiant aléatoire d'installation, la version, les
+  connecteurs configurés et des compteurs (appels, sièges, erreurs par type et latences par connecteur) ; aucun e-mail,
+  jeton, requête, message d'erreur ni résultat ne quitte le hub ([sécurité § 4](docs/admin/securite.md#4-télémétrie-clevoa)).
 * Limites actuelles : seul Claude Desktop est vérifié en réel, Claude Code, ChatGPT et Copilot sont testés au niveau du
   protocole MCP seulement ; SharePoint, Dropbox et MyReport non vérifiés sur un vrai compte ; cloisonnement observé sur les
   systèmes réels avec un compte administrateur seulement ; capacité démontrée sur bouchons (50 collaborateurs), pas
@@ -107,5 +112,5 @@ Composants annexes : [bouchon d'entreprise](clevoa-mcp-stub/README.md), [backend
 
 Logiciel propriétaire de Clevoa SASU : [LICENSE.md](LICENSE.md). Les dépendances open source conservent leurs licences
 (MIT, ISC, BSD). Versions : [CHANGELOG.md](CHANGELOG.md) et
-[releases GitHub](https://github.com/sirkazey/Clevoa-IA-gateway/releases) ; version courante **1.3.2-rc.1** (candidate, non qualifiée pour la production)
+[releases GitHub](https://github.com/sirkazey/Clevoa-IA-gateway/releases) ; version courante **1.4.0-rc.1** (candidate, non qualifiée pour la production)
 (`hub/version.js`), affichée sur le portail et dans les journaux de démarrage.

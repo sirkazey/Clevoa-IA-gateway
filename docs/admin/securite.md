@@ -38,7 +38,14 @@ d'outils ; noms d'objets validés (`^\w+$`) ; outils annotés `readOnlyHint`.
 * Le callback OAuth est lié au navigateur qui a lancé le flux (anti login-CSRF) ; les POST du portail refusent une
   autre origine ; PKCE S256 sur tous les flux.
 * Transport SSE : `POST /messages` exige la clé MCP et la session doit avoir été ouverte par cette clé (403 sinon).
-* Limitation de débit en mémoire, par adresse IP et par minute : 20 diagnostics, 30 actions portail, 60 `/api/me`,
+* État des systèmes (1.4.0) : le hub envoie, du lundi au vendredi de 7 h à 19 h, une requête `HEAD` toutes les 10 minutes
+  vers la racine de l'adresse de chaque système réel, **sans aucun identifiant** ni redirection suivie (`PROBE=off` la
+  désactive). Le portail (`/api/status`, réservé à un collaborateur identifié par le SSO ou ayant connecté une
+  application) n'affiche qu'un état et un temps de réponse par système (à partir de 5 appels), jamais un volume, l'heure
+  d'un appel ni une identité. Le jeton de supervision doit compter 24 caractères au moins. La supervision (`/metrics`, `/metrics/prtg`) exige un jeton dédié `METRICS_TOKEN`, distinct des clés des
+  collaborateurs, et n'existe pas sans lui ; elle ne contient ni identité, ni clé, ni adresse, ni donnée métier.
+* Limitation de débit en mémoire, par adresse IP et par minute : 20 diagnostics, 30 actions portail, 60 `/api/me`, 60
+  `/api/status`, 30 `/metrics`,
   60 départs et retours OAuth, 20 échecs d'authentification MCP (une clé valide n'est jamais freinée par les échecs
   d'autres clients). `TRUST_PROXY` indique le nombre de reverse proxys pour lire l'IP réelle. Les routes MCP elles-mêmes
   (`/mcp`, `/sse`, `/messages`) ne sont pas plafonnées.
@@ -61,16 +68,21 @@ formé, un numéro de version minimale qui produit un avertissement dans ses jou
 autre adresse que `CLEVOA_URL` (aucune redirection suivie).
 
 **Fréquence** : un `POST` vers `CLEVOA_URL` (défaut `https://clevoa.fr/api/v1/telemetry`, figé en production) au
-démarrage puis chaque jour à 03:00, avec l'en-tête `X-Clevoa-Key`. Délai de 10 secondes par envoi ; après un échec, trois
-nouveaux essais (1, 5 puis 30 minutes), puis l'horaire quotidien suivant. Une panne de Clevoa n'interrompt jamais le
+démarrage puis toutes les 6 heures (03:00, 09:00, 15:00, 21:00, heure du serveur, plus 0 à 10 minutes tirées au hasard
+pour étaler les envois des installations), avec l'en-tête `X-Clevoa-Key`. Délai de
+10 secondes par envoi ; après un échec, trois nouveaux essais (1, 5 puis 30 minutes), puis le créneau suivant (depuis la
+1.3.2-rc.2 ; un envoi par jour auparavant). Une panne de Clevoa n'interrompt jamais le
 hub : journal `[telemetry] échec`, rien d'autre.
 
-**Données**, et rien d'autre (le backend refuse tout champ supplémentaire et tout payload de plus de 4 Ko) :
+**Données**, et rien d'autre (le backend refuse tout champ supplémentaire, toute statistique mal formée et tout payload
+de plus de 8 Ko) :
 
 ```json
 { "installation": "3f1c2a4e-8b7d-4c1e-9a2b-5d6e7f8a9b0c", "version": "1.3.2", "env": "PRODUCTION", "date": "2026-10-24",
   "connectors": { "salesforce": true, "sagex3": false, "sharepoint": true, "dropbox": true, "myreport": false },
-  "requests": 137, "seats": 9 }
+  "requests": 137, "seats": 9, "since": "2026-10-24T03:00:00.000Z",
+  "stats": { "salesforce": { "calls": 120, "errors": { "auth": 0, "quota": 0, "timeout": 1, "unreachable": 0, "other": 0, "user": 3 },
+                             "users": 6, "authUsers": 0, "p50": 410, "p95": 1180 } } }
 ```
 
 | Champ | Contenu |
@@ -80,6 +92,8 @@ hub : journal `[telemetry] échec`, rien d'autre.
 | `connectors` | vrai = système réel configuré (un simulateur compte `false`) |
 | `requests` | nombre d'appels d'outils depuis le dernier envoi **réussi**, tous collaborateurs confondus |
 | `seats` | collaborateurs ayant connecté au moins un outil (base de la licence par siège), un entier |
+| `since` | début de la période couverte par `stats` (dernier envoi réussi, ou démarrage du hub) |
+| `stats` | par connecteur utilisé pendant la période : nombre d'appels ; erreurs par type (`auth` jeton expiré ou refusé, `quota`, `timeout`, `unreachable` système injoignable, `other`, `user` erreur d'usage : outil hors liste blanche, compte non connecté) ; nombre de collaborateurs distincts ayant appelé l'outil (`users`) et refusés en authentification sans avoir été servis une seule fois sur la période (`authUsers`) ; latences médiane et 95e centile en millisecondes. Les collaborateurs sont comptés par une empreinte salée de leur clé MCP, tenue en mémoire et jamais transmise ; le sel change à chaque démarrage. Aucun nom d'outil appelé, argument, message d'erreur ni identifiant |
 
 Ne quittent jamais le hub : jetons OAuth, clés MCP, mots de passe, données métier, contenu des requêtes, réponses des
 outils, noms et e-mails des collaborateurs, journaux applicatifs, adresses IP des postes. La clé `CLEVOA_KEY` identifie
@@ -88,12 +102,15 @@ pré-production y apporte le même identifiant d'installation ; Clevoa tient une
 environnement, les deux restent distinctes. Parler de télémétrie « réduite à des compteurs », pas
 « totalement anonyme » : Clevoa sait quel client a combien d'installations.
 
-**Destinataire et conservation** : Clevoa SASU, sur AWS région Paris (`eu-west-3`, sous-traitant). Une fiche par
-installation (dernier état, premier et dernier contact) dans une table DynamoDB chiffrée, expirée 400 jours après le
-dernier contact (la suppression effective par AWS intervient en général sous quelques jours) ; la restauration à un
-instant donné de la table conserve une copie 35 jours de plus. Journaux techniques CloudWatch : 90 jours. Alertes
-e-mail (nom du client, identifiant, version) : conservées dans la messagerie de Clevoa, à purger selon sa propre
-politique. Détail : [backend](../../clevoa-backend/README.md).
+**Destinataire et conservation** : Clevoa SASU, sur AWS région Paris (`eu-west-3`, sous-traitant). Dans une table
+DynamoDB chiffrée : une fiche par installation (dernier état, premier et dernier contact, incidents en cours) et une
+ligne par envoi (les compteurs ci-dessus), chacune expirée 400 jours après son écriture (la suppression effective par
+AWS intervient en général sous quelques jours) ; la restauration à un instant donné de la table conserve une copie
+35 jours de plus. Journaux techniques CloudWatch : 90 jours. E-mails d'incident (nom du client, identifiant,
+environnement, connecteur et nature de l'incident), envoyés seulement à l'ouverture et à la fermeture d'un incident, au plus dix par client et par heure :
+conservés dans la messagerie de Clevoa, à purger selon sa propre politique. Ces données sont consultées par Clevoa dans
+une [console de suivi](../../clevoa-console/README.md) installée sur son réseau privé, en lecture seule. Détail :
+[backend](../../clevoa-backend/README.md).
 
 **Désactivation** : `CLEVOA_KEY` vide désactive la télémétrie hors production. En production, la clé est exigée par
 `docker-compose.prod.yml` (suivi de licence et de maintenance) ; son encadrement contractuel est un point ouvert de la
@@ -101,7 +118,9 @@ licence ([§ 11, point 8](../../LICENSE.md#11-points-à-valider-par-un-conseil-j
 comme silencieuse dans le rapport de Clevoa.
 
 **Implications contractuelles et données personnelles** : aucune donnée de collaborateur n'est transmise ; l'adresse IP
-du serveur du client est vue par AWS lors de chaque envoi. La qualification juridique (donnée personnelle ou non,
+du serveur du client est vue par AWS lors de chaque envoi. Sur une petite installation, un compteur par connecteur et par
+période de 6 heures peut se rapprocher d'une personne (« un collaborateur a eu un refus Salesforce ce matin ») : Clevoa
+n'en fait qu'un usage de maintenance, et ce point fait partie de la validation juridique ci-dessous. La qualification juridique (donnée personnelle ou non,
 mention au registre des traitements du client, clause du contrat de licence) est **à faire valider** par le juriste ou
 le DPO de Clevoa et du client avant la première mise en production.
 

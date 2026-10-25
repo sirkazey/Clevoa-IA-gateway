@@ -12,6 +12,8 @@ const MAX_TEXT = 200_000;
 
 export const id = "sharepoint";
 export const label = "SharePoint";
+export const domain = "documents";
+export const probeUrl = GRAPH; // sonde HEAD sans identifiant (health.js)
 export const silent = true; // même application Entra que le SSO : connexion tentée sans interaction (prompt=none) juste après le SSO
 export const oauth = {
   authUrl: `${LOGIN}/${TENANT}/oauth2/v2.0/authorize`,
