@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, readFileSync, readdirSync, utimesSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, readdirSync, utimesSync, rmSync, statSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HUB_DIR } from "./helpers/hub.js";
@@ -13,7 +13,7 @@ const SCRIPT = join(HUB_DIR, "..", "ops", "backup-loop.sh");
 const VALID = "enc1:" + "a".repeat(120); // en-tête et taille plausibles (le vrai fichier est du base64 chiffré)
 let dir, src, dest;
 const fresh = () => { dir = mkdtempSync(join(tmpdir(), "mcp-backup-")); src = join(dir, "users.json"); dest = join(dir, "backups"); spawnSync("mkdir", [dest]); };
-const run = (env = {}) => spawnSync("sh", [SCRIPT], { env: { PATH: process.env.PATH, SRC: src, DEST: dest, ONCE: "1", BACKUP_KEEP_DAYS: "30", ...env }, encoding: "utf8" });
+const run = (env = {}) => spawnSync("sh", [SCRIPT], { env: { PATH: process.env.PATH, SRC: src, DB_SRC: join(dir, "hub-instantane.db"), DEST: dest, ONCE: "1", BACKUP_KEEP_DAYS: "30", ...env }, encoding: "utf8" });
 const files = () => readdirSync(dest).sort();
 const backups = () => files().filter((f) => /^users-.*\.json$/.test(f));
 const ago = (file, days) => { const t = new Date(Date.now() - days * 86_400_000); utimesSync(file, t, t); };
@@ -69,5 +69,24 @@ test("Même seconde : deux contenus différents donnent deux fichiers (suffixe),
   writeFileSync(src, VALID + "3"); assert.equal(run().status, 0);
   assert.equal(backups().length, 3, backups().join());
   assert.equal(new Set(backups().map((f) => readFileSync(join(dest, f), "utf8"))).size, 3);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("Instantané de la base d'exploitation : copié en hub-AAAA-MM-JJ_HHMMSS.db, sans doublon ; absent = pas une erreur ; invalide = refusé sans toucher à users.json", async () => {
+  const { DatabaseSync } = await import("node:sqlite");
+  fresh(); writeFileSync(src, VALID);
+  const snap = join(dir, "hub-instantane.db");
+  let r = run(); assert.equal(r.status, 0, r.stdout); assert.match(r.stdout, /hub-instantane\.db absent/); // avant le premier instantané (ou hub 1.4)
+  const d = new DatabaseSync(snap); d.exec("create table t (x); insert into t values (1);"); d.close();
+  chmodSync(snap, 0o644); // instantané écrit par une version antérieure, lisible par tous
+  r = run(); assert.equal(r.status, 0, r.stdout);
+  const dbs = () => files().filter((f) => /^hub-\d{4}-\d{2}-\d{2}_\d{6}(-\d+)?\.db$/.test(f));
+  assert.equal(dbs().length, 1); assert.deepEqual(readFileSync(join(dest, dbs()[0])), readFileSync(snap));
+  assert.equal(statSync(join(dest, dbs()[0])).mode & 0o777, 0o600, "sauvegarde de la base lisible par son seul propriétaire");
+  r = run(); assert.match(r.stdout, /hub-instantane\.db inchangé/); assert.equal(dbs().length, 1);
+  writeFileSync(snap, "pas une base SQLite, mais assez longue pour passer le contrôle de taille minimale du script de sauvegarde");
+  writeFileSync(src, VALID + "c");
+  r = run(); assert.equal(r.status, 1, "instantané invalide signalé"); assert.match(r.stdout, /hub-instantane\.db invalide/);
+  assert.equal(dbs().length, 1, "la sauvegarde saine de la base est conservée"); assert.equal(backups().length, 2, "users.json sauvegardé malgré tout");
   rmSync(dir, { recursive: true, force: true });
 });

@@ -20,10 +20,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
-          node-version: 22
+          node-version: 24
       - run: npm ci --prefix hub
       - run: npm ci --prefix clevoa-mcp-stub
       - run: npm ci --prefix clevoa-console
@@ -44,17 +44,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
-          node-version: 22
+          node-version: 24
       - run: node ops/check-docs.js
   backup-restore:
     name: Sauvegarde et restauration (scripts d'exploitation, stack pré-prod)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Démarrer la stack pré-prod (hub + bouchon + sauvegarde automatique)
         run: |
           mkdir -p "$PWD/backups"
@@ -75,22 +75,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0        # tags nécessaires : la version précédente est reconstruite depuis son tag
-      - name: Scénario ops/test-rollback.sh
+      - name: Scénario ops/test-rollback.sh (version publiée précédente)
         run: ops/test-rollback.sh
+      - name: Scénario ops/test-rollback.sh (dernière version candidate 1.4, avant la base d'exploitation)
+        run: PREV=v1.4.0-rc.2 PORT=18081 ops/test-rollback.sh
   semgrep:
     name: Semgrep community rules
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Run Semgrep
         run: |
           docker run --rm -v "${{ github.workspace }}:/src" -w /src semgrep/semgrep:1.181.1 \
             semgrep scan --config p/javascript --config p/nodejs --config p/security-audit --error --json --output /src/semgrep.json .
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: semgrep-results
@@ -104,25 +106,33 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v7
-      - uses: github/codeql-action/init@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           languages: javascript-typescript
           queries: security-extended
-      - uses: github/codeql-action/analyze@v4
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          output: codeql-sarif
+      - name: Constats CodeQL lisibles dans le journal (règle, fichier:ligne, message)
+        if: always()
+        run: |
+          for f in codeql-sarif/*.sarif; do
+            jq -r '.runs[].results[] | "\(.ruleId)\t\(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine)\t\(.message.text | gsub("\n"; " "))"' "$f"
+          done
   gitleaks:
     name: Gitleaks history
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: Scan repository history
         run: |
           docker run --rm -v "${{ github.workspace }}:/repo" -w /repo ghcr.io/gitleaks/gitleaks:v8.30.1 \
             git --config /repo/.gitleaks.toml --redact --exit-code 1 --report-format json --report-path /repo/gitleaks.json .
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: gitleaks-results
@@ -133,9 +143,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Scan filesystem
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -145,22 +155,55 @@ jobs:
           exit-code: '1'
           format: json
           output: trivy.json
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: trivy-results
           path: trivy.json
+          if-no-files-found: ignore
+  sbom:
+    name: Inventaire des dépendances (SBOM CycloneDX), vulnérabilités et licences
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 24
+      # Dépendances de production de chaque paquet livré, depuis le fichier de verrouillage (outil intégré à npm, rien à installer).
+      # Le backend Clevoa n'en a aucune (SDK AWS fourni par le runtime Lambda) : voir docs/developer/dependances.md.
+      - name: SBOM CycloneDX (hub, bouchon, console)
+        run: |
+          mkdir -p sbom
+          for p in hub clevoa-mcp-stub clevoa-console; do
+            (cd "$p" && npm sbom --sbom-format cyclonedx --omit dev --package-lock-only) > "sbom/$p.cdx.json"
+          done
+      # Vulnérabilités HIGH/CRITICAL corrigées et licences interdites ou restrictives (AGPL, GPL…) : échec.
+      - name: Trivy sur le SBOM du hub
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with: { scan-type: sbom, scan-ref: sbom/hub.cdx.json, scanners: "vuln,license", severity: "HIGH,CRITICAL", ignore-unfixed: true, exit-code: '1' }
+      - name: Trivy sur le SBOM du bouchon
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with: { scan-type: sbom, scan-ref: sbom/clevoa-mcp-stub.cdx.json, scanners: "vuln,license", severity: "HIGH,CRITICAL", ignore-unfixed: true, exit-code: '1' }
+      - name: Trivy sur le SBOM de la console
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with: { scan-type: sbom, scan-ref: sbom/clevoa-console.cdx.json, scanners: "vuln,license", severity: "HIGH,CRITICAL", ignore-unfixed: true, exit-code: '1' }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: sbom
+          path: sbom/
           if-no-files-found: ignore
   trivy-image:
     name: Trivy images construites du hub et de la console (système Alpine, Node, dépendances)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Construire l'image comme en production
         run: docker build -t clevoa-gateway-hub:ci hub
       - name: Scan de l'image
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
           image-ref: clevoa-gateway-hub:ci
@@ -175,7 +218,7 @@ jobs:
         run: docker build -t clevoa-console:ci -f clevoa-console/Dockerfile .
       - name: Scan de l'image de la console
         if: always()
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
           image-ref: clevoa-console:ci
@@ -185,7 +228,7 @@ jobs:
           exit-code: '1'
           format: json
           output: trivy-image-console.json
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: trivy-image-results

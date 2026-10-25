@@ -47,6 +47,7 @@ start "$IMAGE_CURRENT"; [ "$(version)" = "$CUR" ]
 curl -fsS -c "$WORK/jar" "$URL/api/me" >/dev/null
 curl -fsS -b "$WORK/jar" -X POST -H 'Content-Type: application/json' -d '{"apiKey":"MR-TEST-ROLLBACK"}' "$URL/api/myreport/apikey"
 connected; ID=$(installation); [ -n "$ID" ]; echo "ok : connecté, installation $ID"
+if docker exec "$P-hub" test -f /data/hub.db; then DB=1; echo "ok : base d'exploitation hub.db créée"; else DB=; fi   # 1.5 et plus
 
 say "2. Sauvegarde avant retour arrière (copie du fichier chiffré)"
 # Copie lue en root dans le conteneur (volume en 700), rendue lisible par l'utilisateur qui lance le script (runner CI non root).
@@ -60,5 +61,11 @@ connected; echo "ok : $(version), collaborateur toujours connecté, fichier ré�
 
 say "4. Nouvelle mise à jour vers $CUR : données (y compris écrites par $PREV) et identifiant d'installation conservés"
 start "$IMAGE_CURRENT"; [ "$(version)" = "$CUR" ]; connected; [ "$(installation)" = "$ID" ]; echo "ok : identifiant inchangé"
+# hub.db laissée telle quelle par la version précédente (qui l'ignore) : reprise sans erreur.
+if [ -n "$DB" ]; then
+  docker exec "$P-hub" node admin.js disponibilite >/dev/null
+  if docker logs "$P-hub" 2>&1 | grep -q "base d'exploitation indisponible"; then echo "hub.db non reprise après le retour arrière" >&2; exit 1; fi
+  echo "ok : hub.db reprise"
+fi
 
 say "Retour arrière $CUR → $PREV → $CUR réussi."

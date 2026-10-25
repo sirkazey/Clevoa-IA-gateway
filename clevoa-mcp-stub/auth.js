@@ -1,7 +1,7 @@
 // Mires d'authentification du bouchon : OAuth2 "authorization code" avec refresh (Salesforce, Microsoft, Dropbox, IdP de Sage),
 // clés d'API / Basic (Sage X3 Syracuse), jeton ou X-Api-Key (MyReport). Les jetons d'accès expirent (TOKEN_TTL_MIN) pour
 // exercer le renouvellement automatique du hub ; les refresh tokens n'expirent pas.
-import { randomBytes, createHash } from "node:crypto";
+import { randomBytes, createHash, generateKeyPairSync, createSign } from "node:crypto";
 import { USERS } from "./data.js";
 
 const TTL = Number(process.env.TOKEN_TTL_MIN ?? 10) * 60_000;
@@ -9,9 +9,19 @@ const codes = new Map(); // code -> { sys, user, exp }
 
 const enc = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
 const dec = (t) => { try { return JSON.parse(Buffer.from(t, "base64url").toString()); } catch { return null; } };
-// id_token Entra simulé (non signé : le hub ne revérifie pas la signature d'un jeton reçu en direct du point de terminaison token).
-const idToken = (user, base, { tenant, clientId }) => [enc({ alg: "none", typ: "JWT" }), enc({ iss: `${base}/ms/${tenant}/v2.0`, aud: clientId, tid: tenant, oid: `oid-${user.split("@")[0]}`,
-  preferred_username: user, email: user, name: USERS[user].name, iat: Math.floor(Date.now() / 1000), exp: Math.floor((Date.now() + TTL) / 1000) }), ""].join(".");
+// Clé de signature des id_token simulés (RS256), publiée comme celle d'Entra : le hub vérifie la signature (openid-client).
+const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+export const jwks = { keys: [{ ...publicKey.export({ format: "jwk" }), kid: "bouchon", alg: "RS256", use: "sig" }] };
+export function signJwt(claims) {
+  const head = enc({ alg: "RS256", typ: "JWT", kid: "bouchon" }), body = enc(claims);
+  return `${head}.${body}.${createSign("RSA-SHA256").update(`${head}.${body}`).sign(privateKey).toString("base64url")}`;
+}
+/** Métadonnées OIDC d'un annuaire simulé (émetteur `issuer`, clés publiées à `keys`). */
+export const discovery = (issuer, authorize, token, keys) => ({ issuer, authorization_endpoint: authorize, token_endpoint: token, jwks_uri: keys,
+  response_types_supported: ["code"], subject_types_supported: ["pairwise"], id_token_signing_alg_values_supported: ["RS256"] });
+// id_token Entra simulé, signé.
+const idToken = (user, base, { tenant, clientId }) => signJwt({ iss: `${base}/ms/${tenant}/v2.0`, sub: `pairwise-${user.split("@")[0]}`, aud: clientId, tid: tenant, oid: `oid-${user.split("@")[0]}`,
+  preferred_username: user, email: user, name: USERS[user].name, iat: Math.floor(Date.now() / 1000), exp: Math.floor((Date.now() + TTL) / 1000) });
 
 /** Émet un couple de jetons pour un système et un utilisateur (`ctx` : locataire et client_id, pour l'id_token Entra). */
 export function issue(sys, user, base, ctx) {

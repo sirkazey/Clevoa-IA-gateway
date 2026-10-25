@@ -32,7 +32,9 @@ export const probeable = (c) => !c.mock && !!c.probeUrl && !!(c.apiKey || c.oaut
 
 /** Erreur imputable au système (et non au collaborateur) : ni erreur d'usage, ni refus d'authentification, ni requête refusée (4xx
  *  hors 429), ni plafond d'appels du hub lui-même (l'appel n'a pas atteint le système). */
-const systemFault = (type, e) => !!type && type !== "user" && type !== "auth" && !(type === "other" && e?.status >= 400 && e?.status < 500)
+/** Erreur imputable au système (ni au collaborateur, ni à son jeton, ni au plafond du hub) : même définition pour le portail, la
+ *  supervision et les compteurs d'usage (db.js). */
+export const systemFault = (type, e) => !!type && type !== "user" && type !== "auth" && !(type === "other" && e?.status >= 400 && e?.status < 500)
   && !(type === "quota" && /plafond de \d+ appels/.test(String(e?.message)));
 
 /** Enregistre un appel d'outil : durée, type d'erreur (jamais le message), empreinte locale de l'appelant (jamais exposée). */

@@ -98,7 +98,10 @@ ces composants pris isolément.
 | `@modelcontextprotocol/sdk` et ses dépendances | protocole MCP | MIT et dépendances MIT, ISC, BSD-2-Clause, BSD-3-Clause |
 | `express` et ses dépendances | serveur HTTP | MIT et dépendances MIT, ISC, BSD |
 | `zod` | validation des schémas | MIT |
-| Node.js (image `node:22-alpine`) | exécution | licence Node.js (type MIT) et licences des composants Alpine Linux |
+| `express-rate-limit` | limites de débit | MIT |
+| `openid-client` et ses dépendances (`jose`, `oauth4webapi`) | SSO Entra et SharePoint (OpenID Connect) | MIT |
+| Node.js (image `node:24-alpine`) | exécution | licence Node.js (type MIT) et licences des composants Alpine Linux |
+| SQLite (intégré à Node.js, module `node:sqlite`) | base d'exploitation `hub.db` | domaine public |
 | nginx (image `nginx:1.28-alpine`) | reverse proxy optionnel | BSD-2-Clause |
 | Police Outfit (`hub/public/fonts/`, réduite au jeu latin) | typographie du portail | SIL Open Font License 1.1, texte joint (`hub/public/fonts/OFL.txt`) |
 | `mcp-remote` (exécuté sur le poste du collaborateur via `npx`, non distribué dans le dépôt) | pont pour Claude Desktop | à vérifier sur le registre npm |

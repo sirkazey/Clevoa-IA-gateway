@@ -21,6 +21,9 @@ export const oauth = {
   clientId: process.env.MS_CLIENT_ID,
   clientSecret: process.env.MS_CLIENT_SECRET,
   scope: "openid offline_access User.Read Files.Read.All Sites.Read.All", // permissions déléguées, lecture seule
+  // Annuaire précis (ID ou bouchon) : id_token vérifié par openid-client (il sert à lier SharePoint au compte du SSO). Avec common ou
+  // organizations, l'émetteur varie selon le compte et l'id_token n'est pas utilisé : OAuth2 simple.
+  issuer: /^(common|organizations|consumers)$/i.test(TENANT) ? undefined : `${LOGIN}/${TENANT}/v2.0`.toLowerCase(),
 };
 
 // Hôtes de téléchargement pré-authentifié renvoyés par Graph (SharePoint, OneDrive, stockage Azure). Toute autre destination est refusée :
