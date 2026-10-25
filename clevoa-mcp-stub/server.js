@@ -9,7 +9,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { z } from "zod";
 import { USERS, SF, SAGE, DOCS, MYREPORT } from "./data.js";
-import { authorizePage, approve, tokenEndpoint, bearerUser, sageUser, myreportUser } from "./auth.js";
+import { authorizePage, approve, tokenEndpoint, bearerUser, sageUser, myreportUser, jwks, discovery } from "./auth.js";
 
 const PORT = process.env.PORT || 4000;
 const FILES = new URL("./files/", import.meta.url);
@@ -83,6 +83,8 @@ app.post("/platform/mcp/v1/d/:org/platform/sobject-reads", async (req, res) => {
 app.all("/platform/mcp/v1/d/:org/platform/:server", (req, res) => deny(res, req.method === "POST" ? 403 : 405, { errors: [{ message: `serveur MCP ${req.params.server} inactif sur cette org simulée` }] }));
 
 // ---------------------------------------------------------------- Microsoft Entra + Graph
+app.get("/ms/:tenant/v2.0/.well-known/openid-configuration", (req, res) => { const m = `${base(req)}/ms/${req.params.tenant}`; res.json(discovery(`${m}/v2.0`, `${m}/oauth2/v2.0/authorize`, `${m}/oauth2/v2.0/token`, `${m}/discovery/v2.0/keys`)); });
+app.get("/ms/:tenant/discovery/v2.0/keys", (_req, res) => res.json(jwks));
 app.get("/ms/:tenant/oauth2/v2.0/authorize", authorizePage("ms", "Microsoft Entra ID"));
 app.post("/ms/:tenant/oauth2/v2.0/token", tokenEndpoint("ms"));
 app.get("/ms/:tenant/oauth2/v2.0/logout", (req, res) => { // fin de session Microsoft simulée : retour à l'adresse demandée si elle est http(s)
