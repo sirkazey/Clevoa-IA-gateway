@@ -53,7 +53,8 @@ d'outils ; noms d'objets validés (`^\w+$`) ; outils annotés `readOnlyHint`.
   `/api/status`, 30 `/metrics`,
   60 départs et retours OAuth, 20 échecs d'authentification MCP (une clé valide n'est jamais freinée par les échecs
   d'autres clients). `TRUST_PROXY` indique le nombre de reverse proxys pour lire l'IP réelle. Les routes MCP elles-mêmes
-  (`/mcp`, `/sse`, `/messages`) ne sont pas plafonnées.
+  (`/mcp`, `/sse`, `/messages`) sont plafonnées par clé, et non par IP (tout un bureau sort par la même adresse) :
+  300 requêtes par minute (1.5), très au-dessus d'un usage normal, contre une clé fuitée ou un assistant qui boucle.
 * Plafond d'appels sortants par connecteur, tous utilisateurs confondus : `MYREPORT_MAX_PER_MIN` (défaut 20),
   `SF_MAX_PER_MIN` (défaut illimité). Au-delà, erreur claire sans rien envoyer au système.
 * En-têtes de sécurité HTTP sur toutes les réponses (CSP sans ressource externe, nosniff, anti-clickjacking,

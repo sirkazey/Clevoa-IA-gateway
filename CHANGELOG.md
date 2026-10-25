@@ -19,6 +19,7 @@ possible sur le même volume.
 - Sauvegarde de la base : instantané toutes les 6 h, copié chaque jour en `hub-AAAA-MM-JJ_HHMMSS.db` par `mcp-backup` (et par `ops/backup.sh`), restauré par `ops/restore.sh` ; supervision de la base (`clevoa_hub_db_up`, écritures en échec) ; scénarios CI de sauvegarde, restauration, base abîmée et retour arrière vers 1.3.1 et 1.4.0-rc.2.
 
 ### Sécurité
+- Routes MCP plafonnées par clé : 300 requêtes par minute (alerte CodeQL `js/missing-rate-limiting`), contre une clé fuitée ou un assistant qui boucle ; une autre clé de la même adresse n'est pas freinée.
 - SSO Entra et SharePoint : échange de code, refresh et vérification de l'id_token par openid-client 6.8.8 (certifié OpenID), **signature comprise** ; un id_token falsifié ou non signé est refusé.
 - `ops/restore.sh` : noms de fichiers passés en arguments, jamais interprétés par le shell ; copie vérifiée avant toute mise de côté de l'ancien fichier (un nom de fichier avec espace ou parenthèse, ou un disque plein, laisse le volume intact) ; image figée comme le hub.
 
