@@ -1,7 +1,8 @@
 # Contribuer
 
 Règles de code et de documentation. Le fil conducteur du produit : rester une petite machine qu'un développeur Node lit
-en une heure. Pas de framework, pas de base de données, pas de service en plus ; chaque ajout se juge à cette aune.
+en une heure. Pas de framework, pas de serveur de base de données (SQLite intégré à Node seulement), pas de service en
+plus ; chaque ajout se juge à cette aune.
 
 ## 1. Code
 

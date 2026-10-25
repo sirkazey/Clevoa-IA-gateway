@@ -259,3 +259,19 @@ envoyé, et comment le vérifier : [sécurité § 4](securite.md#4-télémétrie
 La vérification part du serveur du hub vers les adresses déjà configurées (`SAGE_URL`, `SF_MCP_URL`, `GRAPH_URL`,
 `DROPBOX_MCP_URL`, `MYREPORT_MCP_URL`) : prévenir l'équipe réseau, un pare-feu ou un WAF peut journaliser ces requêtes
 `HEAD` régulières. Un simulateur n'est jamais vérifié.
+
+## 8. Base d'exploitation et journal d'audit (1.5)
+
+Depuis la 1.5, le hub tient une petite base SQLite dans son volume, `/data/hub.db` (SQLite intégré à Node, aucune
+dépendance ni service en plus) : historique de disponibilité de chaque système (une mesure toutes les 10 minutes, 90 jours),
+appels et collaborateurs actifs par mois (24 mois), et journal d'audit s'il est activé. Les connexions des collaborateurs
+restent dans `users.json`, inchangé. Exploitation : [§ 12](exploitation.md#12-disponibilité-usage-et-journal-daudit) ;
+protection des données : [sécurité § 7](securite.md#7-base-dexploitation-et-journal-daudit-15).
+
+| Variable | Rôle |
+|---|---|
+| `AUDIT` | `on` : chaque appel d'outil est journalisé (date, collaborateur, système, outil, résultat, durée ; jamais les arguments ni les données renvoyées) ; vide (défaut) : pas de journal. À activer seulement après avis du DPO et information des collaborateurs |
+| `AUDIT_DAYS` | durée de conservation du journal d'audit en jours ; défaut 90. Les lignes plus anciennes sont supprimées chaque jour |
+
+Une base illisible ou un disque plein n'arrêtent jamais les outils : le hub fonctionne alors sans historique ni
+compteurs ni audit, et l'écrit dans son journal (`[db] base d'exploitation indisponible`).

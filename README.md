@@ -11,7 +11,8 @@ propre nom de serveur MCP et son libellé (`MCP_SERVER_NAME`, `INSTANCE_LABEL`).
 
 ## Ce que fait la passerelle
 
-* **Un seul conteneur Node 22**, sans framework ni base de données : `@modelcontextprotocol/sdk`, `express`, `zod`,
+* **Un seul conteneur Node 24**, sans framework ni serveur de base de données (SQLite intégré à Node pour l'historique
+  et les compteurs) : `@modelcontextprotocol/sdk`, `express`, `zod`,
   environ 1 060 lignes. Chaque connecteur est un module d'environ 50 à 190 lignes.
 * **Droits de chaque collaborateur** : jetons OAuth ou identifiants individuels, chiffrés (AES-256-GCM) dans un seul
   fichier, transmis tels quels aux outils. Le cache de structure (objets, champs) est lui aussi par utilisateur.
@@ -112,5 +113,5 @@ Composants annexes : [bouchon d'entreprise](clevoa-mcp-stub/README.md), [backend
 
 Logiciel propriétaire de Clevoa SASU : [LICENSE.md](LICENSE.md). Les dépendances open source conservent leurs licences
 (MIT, ISC, BSD). Versions : [CHANGELOG.md](CHANGELOG.md) et
-[releases GitHub](https://github.com/sirkazey/Clevoa-IA-gateway/releases) ; version courante **1.4.0-rc.2** (candidate, non qualifiée pour la production)
+[releases GitHub](https://github.com/sirkazey/Clevoa-IA-gateway/releases) ; version courante **1.5.0-rc.1** (candidate, non qualifiée pour la production)
 (`hub/version.js`), affichée sur le portail et dans les journaux de démarrage.

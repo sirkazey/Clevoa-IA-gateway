@@ -63,6 +63,9 @@ services:
       SLOW_MS: ${SLOW_MS}                    # temps de réponse p95 (ms) au-delà duquel le portail affiche « Lent » ; défaut 10000
       METRICS_TOKEN: ${METRICS_TOKEN}        # jeton de la supervision (GET /metrics, format Prometheus) ; vide = route désactivée
       CONNECTOR_DOMAINS: ${CONNECTOR_DOMAINS} # classement sur le portail, ex. sagex3=industrie (commerce, finance, industrie, documents, rh, autre)
+      # Journal d'audit (1.5) — docs/admin/securite.md § 7 : à activer seulement après avis du DPO et information des collaborateurs
+      AUDIT: ${AUDIT}                        # on = chaque appel d'outil journalisé (collaborateur, système, outil, résultat, durée ; jamais les arguments ni les données)
+      AUDIT_DAYS: ${AUDIT_DAYS}              # durée de conservation du journal d'audit en jours ; défaut 90
     volumes:
       - mcp-data:/data   # users.json : jetons OAuth par utilisateur
     # État « healthy / unhealthy » visible dans Portainer et `docker ps` : le hub répond-il sur /health ? (aucun réseau sortant)

@@ -144,9 +144,46 @@ l'administrateur ([mise à jour](exploitation.md#10-mise-à-jour-et-retour-arri�
 | Permissions Graph `Files.Read.All` et `Sites.Read.All` justifiées | revue M365 / DPO : ces permissions déléguées donnent aux assistants l'accès aux documents que le collaborateur voit |
 | Départ d'un collaborateur, clé compromise | [exploitation § 8](exploitation.md#8-départ-dun-collaborateur-clé-compromise) |
 | Pas de secret dans le dépôt ni dans les issues | Gitleaks en CI ; modèles d'issue rappelant « sans jeton ni donnée métier » |
+| Journal d'audit (`AUDIT=on`) seulement après avis du DPO et information des collaborateurs | § 7 |
 
 ## 6. Ce qui reste à prouver
 
 Tests humains prioritaires sur tout scanner : compte restreint sur Sage X3 et Salesforce, révocation OAuth réelle,
 injection de prompts et contenus non fiables dans les données (CRM, documents) relayées aux assistants, exactitude
 financière sur un jeu de référence. Liste et état : [état des fonctionnalités](../validation/etat-des-fonctionnalites.md).
+
+## 7. Base d'exploitation et journal d'audit (1.5)
+
+Ce que contient `/data/hub.db` (SQLite, dans le volume du hub, droits 700 de l'utilisateur `node`), et ce qu'il n'y a jamais :
+
+| Donnée | Contenu | Identifie une personne ? | Conservation |
+|---|---|---|---|
+| Disponibilité | système, créneau de 10 minutes, état, temps de réponse p95 | non | 90 jours |
+| Usage mensuel | mois, système, nombre d'appels et d'erreurs | non | 24 mois |
+| Collaborateurs actifs | mois, **pseudonyme** du collaborateur | pseudonyme (voir ci-dessous) | 24 mois |
+| Journal d'audit, si `AUDIT=on` | date, pseudonyme, e-mail **chiffré** (AES-256-GCM, `ENCRYPTION_KEY`), système, nom de l'outil, résultat (`ok` ou catégorie d'erreur), durée | oui | `AUDIT_DAYS` (90 jours par défaut) |
+| **Jamais** | arguments des outils (requêtes, filtres, chemins), données renvoyées, jetons, clés MCP | | |
+
+Le pseudonyme est un HMAC-SHA256 de l'identité du collaborateur (identité Entra, sinon clé MCP) calculé avec
+`ENCRYPTION_KEY` : il ne se lit pas, mais qui détient la clé peut retrouver la personne. Au sens du RGPD, ce sont donc des
+données **pseudonymisées**, pas anonymes. Il change si la clé MCP d'un collaborateur sans SSO est régénérée.
+
+**Journal d'audit : désactivé par défaut**, parce que c'est un traitement de données personnelles du client, pas de
+Clevoa. Avant de poser `AUDIT=on`, le client doit au minimum (à valider par son DPO ; ceci n'est pas un avis juridique) :
+
+1. fixer la **finalité** (par exemple : sécurité et traçabilité des accès aux données métier par les assistants IA)
+   et sa base légale (en général l'intérêt légitime de l'employeur) ;
+2. l'inscrire au **registre des traitements** ;
+3. **informer les collaborateurs** (charte informatique ou note d'information) : ce qui est journalisé, pourquoi,
+   combien de temps, qui y accède ;
+4. fixer la **durée de conservation** (`AUDIT_DAYS`) et la **liste des personnes** autorisées à exporter le journal.
+
+Accès : aucune route HTTP, aucun écran. L'export passe par `docker exec … node admin.js audit` sur le serveur
+([exploitation § 12](exploitation.md#12-disponibilité-usage-et-journal-daudit)), donc par un administrateur qui a déjà
+accès à Docker et aux variables (dont `ENCRYPTION_KEY`). Le fichier exporté est en clair : le traiter comme une donnée
+personnelle (remise tracée, suppression après usage). Clevoa n'y a jamais accès : rien de la base n'est envoyé par la
+télémétrie, qui ne transmet que des compteurs agrégés (§ 4).
+
+Les sauvegardes `hub-*.db` héritent de ces règles : compteurs, noms d'outils et pseudonymes y sont lisibles sans la clé,
+les e-mails d'audit non. Les droits d'accès au dossier des sauvegardes (root) les protègent ; les inclure dans la
+politique de conservation des journaux du client.
