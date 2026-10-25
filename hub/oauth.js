@@ -43,25 +43,33 @@ function oidcConfig(o) {
   }
   return configs.get(id);
 }
-/** Erreurs d'openid-client ramenées à la forme du hub : refus de l'annuaire (statut + code court), id_token invalide (400), réseau (sans statut). */
-function oidcError(e) {
+// Codes d'openid-client (oauth4webapi) signifiant un id_token ou une réponse jeton invalides (signature, émetteur, audience, dates…).
+const ID_TOKEN_ERRORS = new Set(["OAUTH_JWT_CLAIM_COMPARISON_FAILED", "OAUTH_JWT_TIMESTAMP_CHECK_FAILED", "OAUTH_INVALID_RESPONSE", "OAUTH_PARSE_ERROR",
+  "OAUTH_KEY_SELECTION_FAILED", "OAUTH_JSON_ATTRIBUTE_COMPARISON_FAILED"]);
+/** Erreurs d'openid-client ramenées à la forme du hub. Seul un refus explicite de l'annuaire (400/401 avec code OAuth) porte un statut
+ *  400/401, que withToken traite comme un refresh token révoqué (jetons effacés). Panne de l'annuaire (5xx, réponse non JSON, délai
+ *  dépassé, réseau) : aucun statut, les jetons sont conservés et le collaborateur réessaie. id_token invalide : 400 au retour du
+ *  navigateur (aucune clé posée), mais sans statut au refresh (on ne détruit pas une connexion sur une réponse douteuse). */
+function oidcError(e, during) {
   if (e instanceof oidc.ResponseBodyError) return Object.assign(new Error(`Échange de jeton OAuth refusé (${e.status} ${/^[\w.-]{1,40}$/.test(e.error) ? e.error : "erreur"})`), { status: e.status, code: e.error });
-  if (e instanceof oidc.ClientError) return Object.assign(new Error(`SSO : id_token refusé (${e.code ?? "invalide"})`), { status: 400, sso: true });
-  return e;
+  if (e instanceof oidc.ClientError && ID_TOKEN_ERRORS.has(e.code)) return Object.assign(new Error(`SSO : id_token refusé (${e.code})`), during === "code" ? { status: 400, sso: true } : {});
+  if (e instanceof oidc.ClientError) return new Error(`Annuaire indisponible (${e.cause?.status ?? (e.code === "OAUTH_TIMEOUT" ? "délai dépassé" : "réseau")})`);
+  return e; // réseau (sans statut) ou défi WWW-Authenticate (statut 401 de l'annuaire)
 }
 /** Échange du code reçu au retour du navigateur. */
 async function codeGrant(c, query, verifier) {
   if (!c.oauth.issuer) return postToken(c.oauth, { grant_type: "authorization_code", code: query.code, redirect_uri: redirectUri(c.id), code_verifier: verifier });
   const current = new URL(redirectUri(c.id));
-  current.search = new URLSearchParams({ code: String(query.code ?? ""), state: String(query.state ?? "") }); // l'adresse enregistrée chez l'annuaire, pas celle vue derrière un proxy
+  // L'adresse enregistrée chez l'annuaire (pas celle vue derrière un proxy), avec le code, le state et l'iss (RFC 9207) s'il est renvoyé.
+  current.search = new URLSearchParams({ code: String(query.code ?? ""), state: String(query.state ?? ""), ...(query.iss ? { iss: String(query.iss) } : {}) });
   try { return { ...(await oidc.authorizationCodeGrant(await oidcConfig(c.oauth), current, { pkceCodeVerifier: verifier, expectedState: String(query.state) })) }; }
-  catch (e) { throw oidcError(e); }
+  catch (e) { throw oidcError(e, "code"); }
 }
 /** Renouvellement d'un jeton. */
 async function refreshGrant(o, refreshToken) {
   if (!o.issuer) return postToken(o, { grant_type: "refresh_token", refresh_token: refreshToken });
   try { return { ...(await oidc.refreshTokenGrant(await oidcConfig(o), refreshToken)) }; }
-  catch (e) { throw oidcError(e); }
+  catch (e) { throw oidcError(e, "refresh"); }
 }
 
 const refreshing = new Map(); // "clé:système" -> promesse de refresh en cours, partagée entre appels concurrents
@@ -84,7 +92,7 @@ export async function withToken(connector, key, fn) {
     if (current?.access_token && current.access_token !== tokens.access_token) return fn(current); // déjà rafraîchi par un appel concurrent
     const id = `${key}:${connector.id}`;
     const refresh = refreshing.get(id) ?? refreshGrant(connector.oauth, tokens.refresh_token)
-      .then((fresh) => { store.setTokens(key, connector.id, fresh); return fresh; })
+      .then(({ id_token: _unused, ...fresh }) => { store.setTokens(key, connector.id, fresh); return fresh; }) // l'id_token n'est jamais conservé
       .catch((re) => {
         if (re.status !== 400 && re.status !== 401) throw re;
         store.clearTokens(key, connector.id); // refresh_token révoqué : l'entrée disparaît, le portail repasse à « non connecté »

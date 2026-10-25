@@ -64,6 +64,9 @@ export async function startUpstream() {
     rotate: false, rotations: 0, // jetons Salesforce rafraîchis uniques quand rotate = true
     expired: new Set(), // jetons d'accès déclarés expirés : 401 systématique, quel que soit l'ordre des requêtes
     codes: new Map(),   // codes d'autorisation Entra émis par la page d'autorisation simulée : { who, challenge }
+    // Réponse d'Entra au refresh : "plain" (sans id_token), "idtoken" (id_token signé), "forged" (signature falsifiée),
+    // "503json", "503html" (panne derrière un proxy), "hang" (aucune réponse avant 15 s), "invalid_grant" (refresh token révoqué).
+    msRefresh: "plain",
   };
   let base = "";
 
@@ -113,7 +116,16 @@ export async function startUpstream() {
     const ms = path.match(/^\/ms\/([^/]+)\/oauth2\/v2\.0\/token$/);
     if (ms && req.method === "POST") {
       const p = new URLSearchParams(rawBody);
-      if (p.get("grant_type") === "refresh_token") return json(res, 200, { access_token: "ms-token-refreshed", token_type: "Bearer" });
+      if (p.get("grant_type") === "refresh_token") {
+        const mode = state.msRefresh, now = Math.floor(Date.now() / 1000);
+        if (mode === "503json") return json(res, 503, { error: "temporarily_unavailable" });
+        if (mode === "503html") { res.writeHead(503, { "Content-Type": "text/html" }); return res.end("<html>Service Unavailable</html>"); }
+        if (mode === "hang") { setTimeout(() => json(res, 200, { access_token: "ms-token-trop-tard", token_type: "Bearer" }), 15_000).unref(); return; }
+        if (mode === "invalid_grant") return json(res, 400, { error: "invalid_grant", error_description: "AADSTS70008" });
+        const claims = { sub: "pairwise-sp", iss: `${base}/ms/${ms[1]}/v2.0`, aud: p.get("client_id"), tid: ms[1], oid: "oid-sp", preferred_username: "sp@charlois.example", iat: now, exp: now + 600 };
+        return json(res, 200, { access_token: "ms-token-refreshed", refresh_token: "ms-refresh-tourne", token_type: "Bearer",
+          ...(mode === "idtoken" || mode === "forged" ? { id_token: sign(claims, { tamper: mode === "forged" }) } : {}) });
+      }
       let code = p.get("code");
       const issued = state.codes.get(code);
       if (issued) {

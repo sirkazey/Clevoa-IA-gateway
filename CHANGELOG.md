@@ -13,7 +13,8 @@ Une section par version, trois lignes au plus par rubrique. La version est celle
 - SSO Entra et SharePoint : échange de code, refresh et vérification de l'id_token par openid-client 6.8.8 (certifié OpenID), **signature comprise** ; un id_token falsifié ou non signé est refusé.
 
 ### Modifié
-- Toutes les limites de débit du hub passent par express-rate-limit (limiteur maison retiré) ; mêmes seuils et mêmes réponses.
+- Toutes les limites de débit du hub passent par express-rate-limit (limiteur maison retiré) : mêmes seuils et mêmes réponses ; en plus, en-têtes `RateLimit` et adresses IPv6 comptées par préfixe /56.
+- Panne d'Entra au renouvellement d'un jeton SharePoint : la connexion du collaborateur est conservée ; seul un refus explicite (`invalid_grant`) l'efface. Actions de la CI figées par empreinte de commit.
 - Suivi des dépendances : SBOM CycloneDX et contrôle des licences en CI, Dependabot hebdomadaire vers `dev`, registre `docs/developer/dependances.md`.
 
 ## [1.4.0-rc.1] – 2026-10-25
