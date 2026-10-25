@@ -25,7 +25,7 @@ fi
 DIR=$(cd "$(dirname "$FILE")" && pwd); NAME=$(basename "$FILE")
 if [ -n "$CONT" ]; then docker stop "$CONT" >/dev/null; echo "Hub arrêté."; trap '[ -n "$CONT" ] && docker start "$CONT" >/dev/null 2>&1; echo "Hub relancé après interruption." >&2' EXIT; else echo "Aucun conteneur mcp-hub trouvé : restauration du volume seul."; fi
 # L'ancien fichier est conservé dans le volume sous users.json.avant-restauration (un seul niveau, écrasé à la restauration suivante).
-docker run --rm -v "$VOL:/data" -v "$DIR:/b:ro" node:22-alpine \
+docker run --rm -v "$VOL:/data" -v "$DIR:/b:ro" node:24-alpine \
   sh -c "[ -f /data/users.json ] && cp /data/users.json /data/users.json.avant-restauration; cp /b/$NAME /data/users.json && chown node:node /data/users.json /data/users.json.avant-restauration 2>/dev/null; chmod 600 /data/users.json"
 echo "Fichier restauré dans le volume $VOL."
 [ -n "$CONT" ] || exit 0

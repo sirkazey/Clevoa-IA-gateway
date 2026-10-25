@@ -26,10 +26,10 @@ say "D. second collaborateur puis sidecar relancé : deuxième sauvegarde horoda
 newuser "$WORK/jar2" MR-PAUL-2026; sidecar; [ "$(count)" -eq 2 ]; [ -f "$f1" ]; f2=$(ls -t "$BACKUP_DIR"/users-*.json | head -n 1); [ "$f2" != "$f1" ]; echo "ok : $f2"
 say "E. users.json corrompu dans le volume : la sauvegarde est refusée, les deux précédentes intactes"
 sum_before=$(sudo cat "$f1" "$f2" | md5sum)
-docker run --rm -v "$(vol):/data" node:22-alpine sh -c 'printf "{\"users\":{}}" > /data/users.json'
+docker run --rm -v "$(vol):/data" node:24-alpine sh -c 'printf "{\"users\":{}}" > /data/users.json'
 sidecar | grep -q "invalide"; [ "$(count)" -eq 2 ]; [ "$(sudo cat "$f1" "$f2" | md5sum)" = "$sum_before" ]; ls "$BACKUP_DIR" | grep -q '\.tmp$' && { echo "fichier temporaire resté"; exit 1; }; echo "ok"
 say "F. users.json perdu : rien n'est écrit, rien n'est supprimé"
-docker run --rm -v "$(vol):/data" node:22-alpine rm -f /data/users.json
+docker run --rm -v "$(vol):/data" node:24-alpine rm -f /data/users.json
 sidecar | grep -q "absent"; [ "$(count)" -eq 2 ]; echo "ok"
 say "G. le hub redémarre sans données : perte confirmée"
 $COMPOSE restart mcp-hub >/dev/null 2>&1; health

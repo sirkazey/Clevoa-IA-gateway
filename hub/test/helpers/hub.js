@@ -47,11 +47,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * @param {object} [o.users]      contenu de users.json ({ [key]: user }) ; vide par défaut
  * @param {object} [o.env]        variables d'environnement supplémentaires / surchargées
  * @param {string} [o.store]      contenu brut de users.json (ex. fichier chiffré d'un hub précédent), à la place de users
+ * @param {(dir: string) => void} [o.prepare] préparation du dossier de données avant le démarrage (ex. base hub.db pré-remplie)
  */
-export async function startHub({ upstreamUrl, users = {}, env = {}, store }) {
+export async function startHub({ upstreamUrl, users = {}, env = {}, store, prepare }) {
   const port = await freePort();
   const dataDir = mkdtempSync(join(tmpdir(), "mcp-hub-test-"));
   writeFileSync(join(dataDir, "users.json"), store ?? JSON.stringify({ users }, null, 2));
+  prepare?.(dataDir);
   const url = `http://127.0.0.1:${port}`;
 
   const childEnv = {

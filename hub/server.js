@@ -15,6 +15,7 @@ import * as dropbox from "./connectors/dropbox.js";
 import * as myreport from "./connectors/myreport.js";
 import * as telemetry from "./telemetry.js";
 import * as health from "./health.js";
+import * as db from "./db.js";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { rateLimit, MemoryStore } from "express-rate-limit"; // déjà fourni par le SDK MCP (même version) : toutes les limites de débit du hub
 import { VERSION, APP_ENV, IS_PROD } from "./version.js";
@@ -90,6 +91,13 @@ const INSTRUCTIONS = [
   "Documents : sharepoint_search / sharepoint_read, dropbox_tools puis dropbox_call. Analyses MyReport : myreport_tools puis myreport_call.",
 ].join(" ");
 
+/** Compteur d'usage du mois et, avec AUDIT=on, ligne d'audit (qui, quel outil, quand, résultat) ; jamais les arguments ni le résultat. */
+function usage(c, t, key, ms, e) {
+  const user = store.pseudonym(key), u = store.get(key);
+  db.count(c.id, user, !!e && telemetry.category(e) !== "user"); // une erreur d'usage (outil non connecté) n'est pas une erreur du système
+  db.audit({ user, who: u?.email || u?.sso?.upn || null, system: c.id, tool: t.name, outcome: e ? telemetry.category(e) : "ok", ms });
+}
+
 function buildServer(key) {
   const server = new McpServer(
     { name: SERVER_NAME, version: VERSION },
@@ -103,12 +111,14 @@ function buildServer(key) {
         const out = await call(c, key, (tok, schema) => t.run(tok, args, schema));
         telemetry.record(c.id, key, Date.now() - t0); // nombres seulement : appel, durée, empreinte locale de l'appelant
         health.record(c.id, Date.now() - t0, undefined, key);
+        usage(c, t, key, Date.now() - t0);
         debug(`${t.name} ok ${Date.now() - t0} ms`); // jamais les arguments ni les résultats
         const body = out?.$content ? out.$content : [{ type: "text", text: typeof out === "string" ? out : JSON.stringify(out) }]; // $content : contenu MCP relayé tel quel (image, resource)
         return { content: [...body, { type: "text", text: provenance(c) }] }; // traçabilité : d'où vient chaque donnée
       } catch (e) {
         telemetry.record(c.id, key, Date.now() - t0, e); // type d'erreur seulement, jamais le message
         health.record(c.id, Date.now() - t0, e, key);
+        usage(c, t, key, Date.now() - t0, e);
         debug(`${t.name} erreur ${Date.now() - t0} ms : ${e.status ?? "erreur"}`); // jamais le message (il peut citer une clé demandée)
         return { isError: true, content: [{ type: "text", text: e.message }] };
       }
@@ -207,7 +217,7 @@ app.get("/api/status", limit("status", 60), portalUser, (req, res) => {
   if (!sso.MODE && !CONNECTORS.some((c) => hasCredential(u[c.id]))) return res.status(403).json({ error: "Connectez d'abord une application." });
   const mode = health.probeMode(), probing = mode !== "off" && CONNECTORS.some(health.probeable);
   res.json({ probeHours: health.probeHours(), paused: probing && mode !== "always" && !health.inProbeHours(), probe: probing,
-    systems: CONNECTORS.map((c) => ({ id: c.id, ...health.status(c) })) });
+    systems: CONNECTORS.map((c) => ({ id: c.id, ...health.status(c), availability: c.mock ? undefined : db.availability(c.id) })) });
 });
 
 // Supervision : /metrics au format texte Prometheus (Zabbix, Centreon, Prometheus, Grafana…) et /metrics/prtg au format JSON du
@@ -247,8 +257,11 @@ app.get("/metrics/prtg", metricsLimit, metricsAuthorized, (_req, res) => {
     if (s.p95 != null) result.push({ channel: `${c.label} · p95`, value: s.p95, unit: "TimeResponse" });
     result.push({ channel: `${c.label} · appels`, value: n.calls, unit: "Count", mode: "Difference" });
     result.push({ channel: `${c.label} · erreurs système`, value: n.sys, unit: "Count", mode: "Difference" });
+    const a = db.availability(c.id);
+    if (a.samples >= 6) result.push({ channel: `${c.label} · disponibilité 30 j`, value: a.pct, unit: "Percent", float: 1 }); // au moins une heure de mesures
   }
   result.push({ channel: "Hub · sièges", value: store.seats(), unit: "Count" });
+  result.push({ channel: "Hub · collaborateurs actifs du mois", value: db.usage().activeUsers, unit: "Count" });
   result.push({ channel: "Hub · mémoire", value: process.memoryUsage().rss, unit: "BytesMemory" });
   result.push({ channel: "Hub · durée de fonctionnement", value: Math.round(process.uptime()), unit: "TimeSeconds" });
   res.json({ prtg: { result, text: bad.length ? bad.join(" · ") : `Clevoa AI Gateway ${VERSION} : systèmes opérationnels` } });
@@ -277,6 +290,13 @@ app.get("/metrics", metricsLimit, metricsAuthorized, (_req, res) => {
   for (const { c, n } of rows) for (const t of telemetry.ERROR_TYPES) m.push(`clevoa_system_errors_total{system="${promLabel(c.id)}",type="${t}"} ${n.errors[t] ?? 0}`);
   g("clevoa_system_latency_p95_seconds", "Temps de réponse p95 des appels réussis de la dernière heure");
   for (const { c, s } of rows) if (s.p95 != null) m.push(`clevoa_system_latency_p95_seconds{system="${promLabel(c.id)}"} ${(s.p95 / 1000).toFixed(3)}`);
+  g("clevoa_system_availability_30d_ratio", "Part des mesures « opérationnel » ou « lent » sur 30 jours (au moins une heure de mesures)");
+  for (const { c } of rows) { const a = db.availability(c.id); if (a.samples >= 6) m.push(`clevoa_system_availability_30d_ratio{system="${promLabel(c.id)}"} ${(a.pct / 100).toFixed(3)}`); }
+  const month = db.usage();
+  g("clevoa_usage_month_calls", "Appels d'outils du mois en cours (persistés)");
+  for (const r of month.systems) m.push(`clevoa_usage_month_calls{system="${promLabel(r.system)}",month="${month.month}"} ${r.calls}`);
+  g("clevoa_usage_month_active_users", "Collaborateurs ayant appelé au moins un outil ce mois");
+  m.push(`clevoa_usage_month_active_users{month="${month.month}"} ${month.activeUsers}`);
   res.type("text/plain; version=0.0.4; charset=utf-8").send(m.join("\n") + "\n");
 });
 
@@ -311,4 +331,5 @@ app.listen(PORT, () => {
   console.log(`Hub MCP v${VERSION} · ENV: ${APP_ENV} · ${PUBLIC_URL} (port ${PORT})${sagex3.mock ? " · Sage X3 simulé" : ""}${myreport.mock ? " · MyReport simulé" : ""}${sso.MODE ? ` · SSO ${sso.MODE}` : ""}${process.env.LOG_LEVEL === "debug" ? " · logs détaillés" : ""}`);
   telemetry.start(CONNECTORS, store.seats, store.installationId);
   health.start(CONNECTORS);
+  db.start(CONNECTORS, (c) => health.status(c));
 });

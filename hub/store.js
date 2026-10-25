@@ -2,26 +2,13 @@
 // users[key] = { email, sso: { sub, tid, upn, name, at }, salesforce: {tokens}, sagex3: {tokens}, sharepoint, dropbox, myreport }
 // La "key" est le secret que l'utilisateur met dans son client MCP. La clé maîtresse vient de ENCRYPTION_KEY.
 import { readFileSync, writeFileSync, mkdirSync, renameSync } from "node:fs";
-import { randomBytes, randomUUID, createHash, createCipheriv, createDecipheriv } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
+import { keyOk, encrypt, decrypt, pseudonym } from "./crypto.js";
 
 const DIR = process.env.DATA_DIR || "./data";
 const FILE = `${DIR}/users.json`;
-const SECRET = process.env.ENCRYPTION_KEY || "";
-if (SECRET.length < 32) { console.error("[store] ENCRYPTION_KEY absente ou trop courte (32 caractères minimum, ex. openssl rand -hex 32)"); process.exit(1); }
-const MASTER = createHash("sha256").update(SECRET).digest(); // 32 octets = AES-256
+if (!keyOk) { console.error("[store] ENCRYPTION_KEY absente ou trop courte (32 caractères minimum, ex. openssl rand -hex 32)"); process.exit(1); }
 mkdirSync(DIR, { recursive: true });
-
-/** Chiffre un texte : "enc1:<iv>:<tag>:<données>" en base64. IV aléatoire à chaque écriture. */
-function encrypt(text) {
-  const iv = randomBytes(12), c = createCipheriv("aes-256-gcm", MASTER, iv, { authTagLength: 16 });
-  const data = Buffer.concat([c.update(text, "utf8"), c.final()]);
-  return ["enc1", iv, c.getAuthTag(), data].map((p, i) => (i ? p.toString("base64") : p)).join(":");
-}
-function decrypt(blob) {
-  const [, iv, tag, data] = blob.split(":").map((p, i) => (i ? Buffer.from(p, "base64") : p));
-  const d = createDecipheriv("aes-256-gcm", MASTER, iv, { authTagLength: 16 }); d.setAuthTag(tag); // tag de 16 octets exigé : un tag tronqué est refusé
-  return Buffer.concat([d.update(data), d.final()]).toString("utf8");
-}
 
 let db = { users: {} };
 try {
@@ -70,6 +57,11 @@ export const store = {
   installationId() {
     if (!db.installation) { db.installation = randomUUID(); save(); }
     return db.installation;
+  },
+  /** Pseudonyme stable du collaborateur pour l'usage et l'audit (db.js) : son identité SSO si elle existe, sinon sa clé. */
+  pseudonym(key) {
+    const u = store.get(key);
+    return pseudonym(u?.sso ? `sso:${u.sso.tid}:${u.sso.sub}` : `cle:${key}`);
   },
   remove(key) { if (store.get(key)) { delete db.users[key]; save(); } },
   /** Oublie les clés anonymes sans identifiant plus vieilles que maxAgeMs (départs SSO abandonnés) ; rien n'est écrit, elles n'ont jamais été persistées. */

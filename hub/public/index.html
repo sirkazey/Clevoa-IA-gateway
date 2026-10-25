@@ -167,7 +167,8 @@
   .howto li::marker { color:var(--accent); font-weight:600 }
   .howto code, .note code { font-size:.8em; padding:1px 5px; border-radius:6px; background:var(--surface-2); color:var(--ink); word-break:break-all }
   .code { border-radius:var(--r); background:var(--code-bg); color:var(--code-ink) }
-  .code pre { margin:0; padding:var(--s3) var(--s4); overflow:auto; font-size:.74rem; line-height:1.55 }
+  .code pre { margin:0; padding:var(--s3) var(--s4); overflow:auto; font-size:.74rem; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere }
+  .avail { color:var(--muted); font-size:.82rem; margin:0 } .avail:empty { display:none } .avail b { color:var(--ink); font-weight:600 }
   .code-bar { display:flex; justify-content:space-between; align-items:center; gap:var(--s2); padding:6px 6px 6px var(--s4); border-bottom:1px solid rgb(255 255 255 / 12%); font-size:.74rem; color:#B5B4B9 }
   .code-bar .btn { color:#FFFFFF; border-color:rgb(255 255 255 / 25%); background:transparent; min-height:30px; padding:4px 10px; font-size:.78rem }
   .code-bar .btn:hover { background:rgb(255 255 255 / 10%); border-color:rgb(255 255 255 / 45%) }
@@ -474,6 +475,12 @@ function service(id) {
     STATUS.probe && `Vérification ${STATUS.probeHours}`].filter(Boolean).join(" · ");
   return `<div class="svc ${esc(x.state)}" title="${esc(title)}"><span class="dot" aria-hidden="true"></span><span><span class="sr-only">Service : </span><b>${esc(SERVICE[x.state] || x.state)}</b>${parts.length ? ` · ${esc(parts.join(" · "))}` : ""}</span></div>`;
 }
+/** Disponibilité mesurée sur 30 jours (une mesure toutes les 10 minutes), affichée dans le détail d'une application. */
+function availability(id) {
+  const a = STATUS && STATUS.systems.find((y) => y.id === id)?.availability;
+  if (!a) return "";
+  return a.samples >= 6 ? `Disponibilité sur ${a.days} jours : <b>${String(a.pct).replace(".", ",")} %</b> (${a.samples} mesures)` : `Disponibilité sur ${a.days} jours : pas encore assez de mesures`;
+}
 function appRow(s) {
   const t = TOOLS[s.id] || { icon: "plug", desc: "Application connectée" }, [cls, tag, why] = stateOf(s), id = esc(s.id);
   const oauthBtn = s.oauth && !s.mock && s.configured && !s.connected ? `<a class="btn primary" href="/auth/${esc(s.id)}">Se connecter</a>` : "";
@@ -501,6 +508,7 @@ function appRow(s) {
       </div>
       <div class="drawer" id="drawer-${id}" ${open.has(s.id) ? "" : "hidden"}>
         <p class="why">${why}</p>
+        <p class="avail" id="av-${id}">${availability(s.id)}</p>
         ${form}
         <div class="result" id="res-${id}" role="status" aria-live="polite"></div>
         ${links ? `<div class="drawer-links">${links}</div>` : ""}
@@ -524,7 +532,10 @@ function paintSystems() {
 }
 function paintStatus() {
   if (!ME) return;
-  for (const s of ME.systems) { const el = $(`#svc-${s.id}`); if (el) el.innerHTML = service(s.id); }
+  for (const s of ME.systems) {
+    const el = $(`#svc-${s.id}`); if (el) el.innerHTML = service(s.id);
+    const av = $(`#av-${s.id}`); if (av) av.innerHTML = availability(s.id);
+  }
   $("#legend").textContent = "Service : état mesuré par la passerelle, d'après les appels de la dernière heure"
     + (STATUS?.probe ? ` et une vérification de joignabilité toutes les 10 minutes, ${STATUS.probeHours}.` : ".");
   paintSummary();
