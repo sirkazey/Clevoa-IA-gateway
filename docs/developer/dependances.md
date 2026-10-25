@@ -27,6 +27,7 @@ Avant d'ajouter une dépendance, vérifier :
 | `zod` | ^4.0.0 | validation des arguments des outils | MIT | requis par le SDK MCP |
 | `express-rate-limit` | 8.7.1 | toutes les limites de débit du hub (portail, échecs d'authentification, supervision, plafond par système) | MIT | remplace le limiteur maison (2026-10-25) ; déjà fourni par le SDK MCP. Effets : en-têtes `RateLimit` sur les réponses, adresses IPv6 regroupées par préfixe /56 |
 | `openid-client` | 6.8.8 | SSO Entra et SharePoint : échange de code, refresh, vérification de l'id_token **signature comprise** | MIT | bibliothèque certifiée OpenID ; remplace la vérification maison sans signature (2026-10-25). Exige une horloge juste (± 30 s) : NTP sur l'hôte |
+| `node:sqlite` (module intégré à Node 24, pas un paquet npm) | — | base d'exploitation `hub.db` : disponibilité, usage, audit (1.5) | domaine public (SQLite) | moteur SQLite embarqué par Node ; aucune dépendance native à compiler. Stabilité « release candidate » dans Node 24 : l'API peut encore évoluer, d'où un seul module (`db.js`) qui l'utilise et des tests sur chaque mise à jour de Node |
 
 Dépendances transitives notables : `jose` et `oauth4webapi` (même auteur qu'openid-client, aucune dépendance propre).
 Inventaire complet : le SBOM produit par la CI (§ 3), 97 composants en production au 25 octobre 2026, tous sous licence
@@ -44,7 +45,7 @@ MIT, ISC ou BSD.
 
 | Élément | Version | Suivi |
 |---|---|---|
-| `node:22-alpine` (hub, bouchon, sauvegarde, console) | figée par empreinte | Dependabot (docker, docker-compose), Trivy image |
+| `node:24-alpine` (hub, bouchon, sauvegarde, console ; Node 24.22.1 au 25 octobre 2026) | figée par empreinte | Dependabot (docker, docker-compose), Trivy image |
 | `nginx:1.28-alpine` (profil `proxy`) | tag | Dependabot (docker-compose) |
 | `cloudflare/cloudflared` (prototype « un clic », branche `proto/oauth-tunnel`) | 2026.10.0, figée par empreinte | Dependabot (docker-compose) une fois fusionné |
 | Actions GitHub de la CI | figées par empreinte de commit (version en commentaire) | Dependabot (github-actions) met à jour l'empreinte et le commentaire |

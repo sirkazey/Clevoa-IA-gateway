@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
-          node-version: 22
+          node-version: 24
       - run: npm ci --prefix hub
       - run: npm ci --prefix clevoa-mcp-stub
       - run: npm ci --prefix clevoa-console
@@ -47,7 +47,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
-          node-version: 22
+          node-version: 24
       - run: node ops/check-docs.js
   backup-restore:
     name: Sauvegarde et restauration (scripts d'exploitation, stack pré-prod)
@@ -159,7 +159,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
-          node-version: 22
+          node-version: 24
       # Dépendances de production de chaque paquet livré, depuis le fichier de verrouillage (outil intégré à npm, rien à installer).
       # Le backend Clevoa n'en a aucune (SDK AWS fourni par le runtime Lambda) : voir docs/developer/dependances.md.
       - name: SBOM CycloneDX (hub, bouchon, console)

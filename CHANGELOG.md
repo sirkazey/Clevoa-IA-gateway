@@ -7,7 +7,16 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
-## [Non publié]
+## [1.5.0-rc.1] – 2026-10-25
+
+Version candidate : Node 24, base d'exploitation SQLite (historique de disponibilité, usage, journal d'audit facultatif) et
+composants éprouvés à la place du code maison (OpenID Connect, limites de débit). `users.json` inchangé ; retour à la 1.4
+possible sur le même volume.
+
+### Ajouté
+- Base d'exploitation `/data/hub.db` (SQLite intégré à Node 24) : disponibilité de chaque système (mesure toutes les 10 minutes, 90 jours), affichée sur 30 jours dans le détail des applications du portail et exposée à la supervision ; appels, erreurs et collaborateurs actifs (pseudonymes) par mois, 24 mois.
+- Journal d'audit facultatif (`AUDIT=on`, `AUDIT_DAYS`) : collaborateur, système, outil, résultat, durée, jamais les arguments ni les données ; outil d'administration `docker exec … node admin.js disponibilite | usage | audit` (CSV).
+- Sauvegarde de la base : instantané horaire copié en `hub-AAAA-MM-JJ_HHMMSS.db` par `mcp-backup` et `ops/backup.sh`, restauration par `ops/restore.sh` ; scénarios CI de sauvegarde, restauration, base abîmée et retour arrière.
 
 ### Sécurité
 - SSO Entra et SharePoint : échange de code, refresh et vérification de l'id_token par openid-client 6.8.8 (certifié OpenID), **signature comprise** ; un id_token falsifié ou non signé est refusé.
@@ -16,6 +25,19 @@ Une section par version, trois lignes au plus par rubrique. La version est celle
 - Toutes les limites de débit du hub passent par express-rate-limit (limiteur maison retiré) : mêmes seuils et mêmes réponses ; en plus, en-têtes `RateLimit` et adresses IPv6 comptées par préfixe /56.
 - Panne d'Entra au renouvellement d'un jeton SharePoint : la connexion du collaborateur est conservée ; seul un refus explicite (`invalid_grant`) l'efface. Actions de la CI figées par empreinte de commit.
 - Suivi des dépendances : SBOM CycloneDX et contrôle des licences en CI, Dependabot hebdomadaire vers `dev`, registre `docs/developer/dependances.md`.
+- Node 24 (image `node:24-alpine` figée par empreinte) pour le hub, le bouchon, la console et la sauvegarde ; `engines` du hub `>=24`.
+
+## [1.4.0-rc.2] – 2026-10-25
+
+Version candidate corrective de la 1.4.0-rc.1, issue des tests sur la pré-production : comptages Salesforce faux au-delà
+de 200, listes Sage X3 coupées sans le dire, état « Assistant » du portail. Aucun outil ni route ajouté ou retiré.
+
+### Modifié
+- Portail : « Assistant : branché (dernier usage …) » d'après les appels MCP réellement reçus avec la clé du collaborateur (jour seulement, conservé dans `users.json`, une écriture par jour au plus), et non plus d'après le seul clic sur « Copier » dans ce navigateur ; effacé à la régénération de la clé.
+
+### Corrigé
+- Salesforce : un comptage (`SELECT COUNT() FROM Account`) renvoyait 200 au lieu du total réel (16 610 sur l'org Charlois), car le hub ajoutait `LIMIT 200` à toute SOQL sans limite. Plus aucun `LIMIT` ajouté aux agrégats (`COUNT()`, `COUNT(…)`, `SUM`, `AVG`, `MIN`, `MAX`, `GROUP BY`) ; une liste coupée à 200 lignes par le hub est signalée au modèle (`avertissement`) avec la consigne de compter par `SELECT COUNT()`. Analyse de la requête en un seul parcours (temps linéaire) ; une SOQL de plus de 100 000 caractères, longueur maximale chez Salesforce, est refusée avant tout envoi.
+- Sage X3 : une liste `sagex3_query` coupée par `count` (100 par défaut, 500 au plus) est signalée au modèle (`avertissement`, lignes sous `lignes`) quand Syracuse annonce une page suivante ; elle n'est plus présentable comme un total.
 
 ## [1.4.0-rc.1] – 2026-10-25
 

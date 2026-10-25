@@ -52,6 +52,10 @@ function sobjectReadsMcp() {
   srv.registerTool("soqlQuery", { description: "Runs a SOQL SELECT query", inputSchema: { q: z.string() } }, async ({ q }) => {
     if (!/^\s*select\s/i.test(q)) return { isError: true, content: [{ type: "text", text: `MALFORMED_QUERY: only SELECT is supported (${q.slice(0, 30)})` }] };
     if (/FROM\s+Opportunity/i.test(q)) return text({ totalSize: 3, done: true, records: [{ Id: "006A" }, { Id: "006B" }, { Id: "006C" }] });
+    // 16 610 comptes, comme l'org réelle : LIMIT plafonne COUNT() (comportement Salesforce) et toute liste.
+    const limit = Number(q.match(/\bLIMIT\s+(\d+)/i)?.[1] || 50_000);
+    if (/^\s*SELECT\s+COUNT\(\s*\)\s+FROM\s+Contact\b/i.test(q)) return text({ totalSize: Math.min(16_610, limit), done: true, records: [] });
+    if (/FROM\s+Contact\b/i.test(q)) return text({ totalSize: Math.min(16_610, limit), done: true, records: Array.from({ length: Math.min(16_610, limit) }, (_, i) => ({ Id: `003${i}` })) });
     return text({ totalSize: 2, done: true, records: [{ Id: "001A", Name: "ACME" }, { Id: "001B", Name: "Globex" }] });
   });
   return srv;
@@ -254,10 +258,11 @@ export async function startUpstream() {
       m = rest.match(/^(\w+)$/);
       if (m) {
         if (query.representation !== `${m[1]}.$query`) return json(res, 400, { $diagnoses: [{ $message: "representation attendue" }] });
-        return json(res, 200, { $resources: [
+        const rows = [
           { $uuid: "r-1", $url: `${base}${path}('C0001')`, BPRNUM: "C0001", BPRNAM: "ACME" },
           { $uuid: "r-2", $url: `${base}${path}('C0002')`, BPRNUM: "C0002", BPRNAM: "Globex" },
-        ] });
+        ], n = Number(query.count || 20); // page suivante annoncée par $links.$next quand il reste des lignes (format Syracuse 24R1)
+        return json(res, 200, { $resources: rows.slice(0, n), ...(rows.length > n && { $links: { $next: { $url: `${base}${path}?startIndex=${n}` } } }) });
       }
       return json(res, 404, { $diagnoses: [{ $message: `mock: ${path}` }] });
     }

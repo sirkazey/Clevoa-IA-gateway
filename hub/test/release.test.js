@@ -24,7 +24,7 @@ test("CHANGELOG : une section pour la version courante (tag vX.Y.Z et Release Gi
 });
 
 test("Image de base figée par empreinte : Dockerfile du hub, du bouchon et de la console, conteneur de sauvegarde", () => {
-  const pinned = /node:22-alpine@sha256:[0-9a-f]{64}/;
+  const pinned = /node:24-alpine@sha256:[0-9a-f]{64}/;
   const from = (p) => read(p).split("\n").find((l) => l.startsWith("FROM "));
   assert.match(from("hub/Dockerfile"), pinned);
   assert.equal(from("clevoa-mcp-stub/Dockerfile"), from("hub/Dockerfile"), "une seule image de base");

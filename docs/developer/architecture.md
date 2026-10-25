@@ -1,8 +1,9 @@
 # Architecture
 
-Pour le développeur qui reprend le code. Un seul conteneur Node 22, cinq dépendances directes (`@modelcontextprotocol/sdk`,
+Pour le développeur qui reprend le code. Un seul conteneur Node 24, cinq dépendances directes (`@modelcontextprotocol/sdk`,
 `express`, `zod`, `express-rate-limit` pour toutes les limites de débit, `openid-client` pour le SSO et SharePoint ; registre et
-politique : [dépendances](dependances.md)), un seul fichier d'état chiffré, aucune abstraction. Les connecteurs sont des
+politique : [dépendances](dependances.md)), un fichier d'état chiffré (`users.json`) et, depuis la 1.5, une base
+d'exploitation SQLite intégrée à Node (`hub.db`, sans dépendance ni service), aucune abstraction. Les connecteurs sont des
 modules, pas des services.
 
 ## 1. Vue d'ensemble
@@ -11,7 +12,7 @@ modules, pas des services.
 Assistant IA (Claude Code, Claude Desktop, ChatGPT, Copilot)
         │  MCP : SSE (/sse + /messages) ou Streamable HTTP (/mcp) + Authorization: Bearer <clé perso>
         ▼
-┌─────────────────── mcp-hub (1 conteneur, Node 22) ───────────────────┐
+┌─────────────────── mcp-hub (1 conteneur, Node 24) ───────────────────┐
 │ server.js      identité (clé), outils MCP, portail, diagnostic, API  │
 │ oauth.js       flux OAuth2 code + PKCE + refresh, tous connecteurs   │
 │ sso.js         SSO Entra ID (pseudo-connecteur OIDC, modes mock/entra)│
@@ -26,9 +27,13 @@ Assistant IA (Claude Code, Claude Desktop, ChatGPT, Copilot)
 │                vérification HEAD sans identifiant (lun-ven 7-19 h)   │
 │ diagnostic.js  rapport de support lancé par l'administrateur, sans   │
 │                secret ni donnée métier (docker exec, lecture seule)  │
+│ crypto.js      AES-256-GCM (enc1:) et pseudonymes HMAC, ENCRYPTION_KEY│
+│ db.js          hub.db (node:sqlite, WAL) : disponibilité, usage,     │
+│                audit ; purge, instantané horaire, migrations         │
+│ admin.js       lecture de hub.db par l'administrateur (docker exec)  │
 │ connectors/    salesforce · sagex3 · sharepoint · dropbox · myreport │
 │ public/        index.html, le portail                                │
-│ test/          node:test, amont mocké, 112 tests                     │
+│ test/          node:test, amont mocké, 136 tests                     │
 └───┬─────────────┬───────────────┬───────────────┬───────────────┬────┘
     ▼ MCP HTTP    ▼ REST Syracuse ▼ Graph (GET)   ▼ MCP HTTP      ▼ MCP SSE
  Salesforce    Sage X3 24R1    SharePoint      Dropbox (MCP    MyReport Server
@@ -57,6 +62,14 @@ systèmes, Entra ID et le backend Clevoa ; 11 tests de bout en bout branchent le
   `oid`, émetteur, audience, expiration), `bindIdentity` (clé fraîche à la première liaison), `assertSame` (jetons SharePoint
   du même compte), enchaînement silencieux vers SharePoint (`prompt=none`), déconnexion Microsoft.
 * **`cache.js`** : `Map` « clé:système » → structure, invalidée à la coupure de 03:00 (`TZ`).
+* **`db.js`** (1.5) : `/data/hub.db`, SQLite intégré à Node (`node:sqlite`, journal WAL, `synchronous=normal`). Données
+  d'exploitation seulement, jamais une connexion : `availability` (une mesure par système et par créneau de 10 minutes,
+  90 jours), `usage` et `usage_users` (appels, erreurs et pseudonymes actifs par mois, 24 mois), `audit` (si `AUDIT=on`,
+  e-mail chiffré par `crypto.js`, `AUDIT_DAYS`). Schéma versionné par `pragma user_version` : une migration s'ajoute en
+  fin de `MIGRATIONS`, jamais modifiée une fois publiée. Ouverte et vérifiée (`quick_check`) avant l'annonce du démarrage ;
+  toute erreur la désactive sans toucher aux outils (`safely`). Instantané `hub-instantane.db` chaque heure
+  (`backup()` puis renommage), copié par `mcp-backup`. Lu par `admin.js` (`docker exec`), `/api/status`, `/metrics`.
+  `users.json` reste la seule source des identités et des jetons : un retour à la 1.4 ignore simplement `hub.db`.
 * Autres états en mémoire : flux OAuth en cours, compteurs de débit par IP, sessions SSE (`sessionId` → transport +
   clé), compteur de télémétrie. Sur disque, `users.json` porte aussi l'identifiant aléatoire d'installation (télémétrie).
 
@@ -85,7 +98,8 @@ pré-production les pointe par défaut vers le bouchon `mcp-stub`.
 `hub/public/index.html`, une page sans dépendance externe (CSP stricte). Depuis la 1.4.0, un écran de travail : bandeau
 de situation, une ligne par application groupée par domaine (`domain` du connecteur ou `CONNECTOR_DOMAINS`), colonne
 « Service », assistant à brancher en colonne de droite, exemples de questions par domaine. `GET /api/me` (version,
-environnement, instance et nom du serveur, SSO, e-mail, clé, systèmes avec leur état et leur domaine) alimente les
+environnement, instance et nom du serveur, SSO, e-mail, clé, `assistantAt` = jour du dernier appel MCP avec la clé, écrit au
+plus une fois par jour et effacé à la régénération de la clé, systèmes avec leur état et leur domaine) alimente les
 lignes ; `GET /api/status` (`health.js`, rafraîchi chaque minute) donne l'état de chaque système, sans volume ni
 identité ; `GET /metrics` (jeton `METRICS_TOKEN`) l'expose à la supervision ; `GET /api/test/:system` exécute le diagnostic ;
 `POST /api/:system/apikey`, `POST /api/disconnect/:system`, `POST /api/key/rotate`, `POST /api/logout` changent l'état
@@ -128,6 +142,6 @@ Scripts d'exploitation dans `ops/` (`backup-loop.sh` dans le conteneur de sauveg
 
 ## 8. Règles de simplicité
 
-Pas de framework, pas de base de données, pas de service supplémentaire, pas d'abstraction entre connecteurs tant qu'un
-quatrième proxy n'existe pas. Factorisation refusée quand le gain est nul. Toute correction est localisée et vient avec
+Pas de framework, pas de serveur de base de données (la base d'exploitation est le SQLite intégré à Node, un fichier dans
+le volume), pas de service supplémentaire, pas d'abstraction entre connecteurs tant qu'un quatrième proxy n'existe pas. Factorisation refusée quand le gain est nul. Toute correction est localisée et vient avec
 un test. Les décisions prises et leurs raisons sont consignées dans [l'historique](../history/decisions.md).

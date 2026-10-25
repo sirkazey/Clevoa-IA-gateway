@@ -7,7 +7,7 @@ import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { startUpstream } from "./helpers/upstream.js";
 import { startHub, connectedUser, KEY, readStore } from "./helpers/hub.js";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const TOOLS = ["salesforce_tools", "salesforce_call", "sagex3_representations", "sagex3_describe", "sagex3_query", "sagex3_get",
@@ -15,6 +15,7 @@ const TOOLS = ["salesforce_tools", "salesforce_call", "sagex3_representations", 
 const KEY_NO_REFRESH = "test-key-bob-no-refresh-token";
 const KEY_CAROL = "test-key-carol-0123456789";
 const KEY_DAN = "test-key-dan-apikey-0123456789";
+const KEY_ERIN = "cle-erin-assistant-0123456789abcdef";
 
 let up, hub;
 
@@ -26,6 +27,7 @@ before(async () => {
       [KEY]: connectedUser(up.url),
       [KEY_NO_REFRESH]: { createdAt: "2026-01-01T00:00:00.000Z", sagex3: { access_token: "sage-token-bob" } },
       [KEY_DAN]: { createdAt: "2026-01-01T00:00:00.000Z", sagex3: { apiKey: "syr-key-dan" } },
+      [KEY_ERIN]: { createdAt: "2026-01-01T00:00:00.000Z", sagex3: { apiKey: "syr-key-erin" } }, // réservée au test « Assistant : branché »
       [KEY_CAROL]: { createdAt: "2026-01-01T00:00:00.000Z", email: "carol@example.com",
         salesforce: { access_token: "sf-token-carol", instance_url: up.url }, sagex3: { access_token: "sage-token-carol" } },
     },
@@ -98,6 +100,52 @@ test("SSE : sagex3_query et sagex3_get transmettent le Bearer Sage et les param�
     assert.ok(g, "le mock doit recevoir SINVOICE('FAC-2025-000123')");
     assert.equal(g.query.representation, "SINVOICE.$details");
     assert.equal(g.headers.authorization, "Bearer sage-token-alice");
+  } finally { await c.close(); }
+});
+
+test("Comptages exacts : aucun LIMIT ajouté aux agrégats SOQL (COUNT() renvoyait 200 au lieu de 16 610) ; liste coupée signalée (Salesforce et Sage X3)", async () => {
+  up.reset();
+  const c = await sseClient();
+  try {
+    const n = text(await sfQuery(c, "SELECT COUNT() FROM Contact"));
+    assert.equal(n.totalSize, 16_610, "le total réel, pas la borne de 200");
+    for (const q of ["SELECT COUNT() FROM Contact WHERE Name = 'x'", "SELECT COUNT(Id) FROM Contact", "SELECT AccountId, COUNT(Id) n FROM Contact GROUP BY AccountId",
+      "select sum(Amount), max(CloseDate) from Opportunity", "SELECT LeadSource FROM Lead GROUP BY LeadSource HAVING COUNT(Id) > 1"]) await sfQuery(c, q);
+    const sent = sfCalls("tools/call").map((r) => JSON.parse(r.body).params.arguments.q);
+    assert.ok(sent.slice(-6).every((q) => !/LIMIT/i.test(q)), `aucun LIMIT ajouté aux agrégats : ${sent.slice(-6).join(" | ")}`);
+    const list = text(await sfQuery(c, "SELECT Id FROM Contact"));
+    assert.match(list.avertissement, /coupée à 200 lignes.*SELECT COUNT\(\)/s, "liste bornée par le hub : jamais présentée comme un total");
+    assert.equal(list.resultat.records.length, 200);
+    assert.equal(text(await sfQuery(c, "SELECT Id FROM Account")).avertissement, undefined, "liste complète (2 lignes) : réponse inchangée");
+    assert.equal(text(await sfQuery(c, "SELECT Id FROM Contact LIMIT 300")).avertissement, undefined, "LIMIT choisi par le modèle : réponse inchangée");
+    const cut = text(await c.callTool({ name: "sagex3_query", arguments: { representation: "BPCUSTOMER", count: 1 } }));
+    assert.match(cut.avertissement, /coupée à 1 lignes.*pas un total/s); assert.deepEqual(cut.lignes, [{ BPRNUM: "C0001", BPRNAM: "ACME" }]);
+    assert.ok(Array.isArray(text(await c.callTool({ name: "sagex3_query", arguments: { representation: "BPCUSTOMER", count: 5 } }))), "liste complète : tableau inchangé");
+  } finally { await c.close(); }
+});
+
+test("Agrégats SOQL : détection sur le SELECT principal, littéraux et sous-requêtes neutralisés", async () => {
+  const { aggregate } = await import(`../connectors/salesforce.js?${Date.now()}`);
+  for (const q of ["SELECT COUNT() FROM Account", "SELECT count( ) FROM Account", "SELECT COUNT(Id) FROM Account", "SELECT COUNT_DISTINCT(Name) FROM Account",
+    "SELECT Industry, COUNT(Id) FROM Account GROUP BY Industry", "SELECT Industry FROM Account GROUP BY ROLLUP(Industry)", "SELECT AVG(Amount) FROM Opportunity WHERE (StageName = 'x')"])
+    assert.equal(aggregate(q), true, q);
+  for (const q of ["SELECT Id FROM Account", "SELECT Id, (SELECT COUNT() FROM Contacts) FROM Account", "SELECT Id FROM Account WHERE Name = 'COUNT(x) GROUP BY y'",
+    "SELECT Id FROM Account WHERE Id IN (SELECT AccountId FROM Contact GROUP BY AccountId)", "SELECT Count__c, Max_Amount__c FROM Account", "SELECT Id FROM Account WHERE Name = 'l\\'ami (MAX'"])
+    assert.equal(aggregate(q), false, q);
+  assert.equal(aggregate("SELECT COUNT()FROM Account"), true, "sans espace avant FROM");
+  for (const q of ["SELECT a" + " ".repeat(100_000), "SELECT " + "(".repeat(50_000) + ")".repeat(50_000) + " FROM A", "SELECT '" + "\\'".repeat(50_000)]) {
+    const t = performance.now(); aggregate(q);
+    assert.ok(performance.now() - t < 500, `analyse linéaire : ${q.length} caractères en ${Math.round(performance.now() - t)} ms`); // l'ancienne version prenait 5 à 13 s
+  }
+});
+
+test("SOQL de plus de 100 000 caractères refusée avant toute analyse ni appel amont", async () => {
+  up.reset();
+  const c = await sseClient();
+  try {
+    const r = await sfQuery(c, "SELECT Id FROM Account WHERE Name = '" + "x".repeat(100_000) + "'");
+    assert.equal(r.isError, true); assert.match(r.content[0].text, /100000 caractères/);
+    assert.equal(sfCalls("tools/call").length, 0, "rien n'est envoyé à Salesforce");
   } finally { await c.close(); }
 });
 
@@ -418,4 +466,21 @@ test("Session SSE liée à sa clé : une autre clé valide ne peut pas poster da
     }
     assert.equal(sfCalls("tools/call").length, 0, "aucun appel d'écriture ne part vers le serveur Salesforce");
   } finally { await c.close(); }
+});
+
+test("Portail « Assistant : branché » d'après les appels MCP réels : jour du dernier appel (une écriture par jour), effacé à la régénération de la clé", async () => {
+  const me = (key) => fetch(`${hub.url}/api/me`, { headers: { cookie: `mcp_key=${key}` } }).then((r) => r.json());
+  const today = new Date().toISOString().slice(0, 10);
+  const erin = KEY_ERIN;
+  assert.equal((await me(erin)).assistantAt, null, "jamais appelé par un assistant : à brancher");
+  const c = await sseClient(erin);
+  try { await c.listTools(); } finally { await c.close(); }
+  assert.equal((await me(erin)).assistantAt, today, "connexion MCP constatée par le hub, quel que soit le navigateur");
+  assert.equal(hub.readUsers()[erin].assistantAt, today, "conservé dans users.json (jour seulement, pas l'heure)");
+  const written = statSync(join(hub.dataDir, "users.json")).mtimeMs;
+  const again = await sseClient(erin);
+  try { await again.listTools(); } finally { await again.close(); }
+  assert.equal(statSync(join(hub.dataDir, "users.json")).mtimeMs, written, "même jour : users.json n'est pas réécrit");
+  const rot = await fetch(`${hub.url}/api/key/rotate`, { method: "POST", headers: { cookie: `mcp_key=${erin}` } }).then((r) => r.json());
+  assert.equal((await me(rot.key)).assistantAt, null, "nouvelle clé : aucun assistant ne la connaît encore");
 });

@@ -47,6 +47,7 @@ function sobjectReadsMcp(u) {
     let rows = obj.records.slice();
     for (const [, f, v] of q.matchAll(/\b(?:WHERE|AND)\s+(\w+)\s*=\s*'([^']*)'/gi)) rows = rows.filter((r) => String(r[f]) === v);
     const limit = Number(q.match(/\bLIMIT\s+(\d+)/i)?.[1] || 2000);
+    if (/^\s*SELECT\s+COUNT\(\s*\)\s+FROM/i.test(q)) return text({ totalSize: Math.min(rows.length, limit), done: true, records: [] }); // comme Salesforce : LIMIT plafonne COUNT()
     const sel = q.match(/^\s*SELECT\s+(.+?)\s+FROM/i)?.[1].split(",").map((x) => x.trim()), known = sel && sel.every((f) => obj.fields.some((x) => x.name === f));
     return text({ totalSize: rows.length, done: true, records: rows.slice(0, limit).map((r) => (known ? Object.fromEntries(sel.map((f) => [f, r[f]])) : r)) });
   };
@@ -204,7 +205,8 @@ app.use("/api1/x3/erp/:folder", (req, res) => {
     let rows = lines(m[1]);
     for (const [, f, op, v] of String(q.where || "").matchAll(/\(?\s*(\w+)\s+(eq|ne|ge|le|gt|lt|like)\s+'([^']*)'\s*\)?/g)) rows = rows.filter((r) => { const x = String(r[f] ?? ""); return { eq: x === v, ne: x !== v, ge: x >= v, le: x <= v, gt: x > v, lt: x < v, like: x.toLowerCase().includes(v.toLowerCase()) }[op]; });
     const [ob, dir] = String(q.orderBy || "").split(/\s+/); if (ob) rows.sort((a, b) => (a[ob] > b[ob] ? 1 : -1) * (dir === "desc" ? -1 : 1));
-    return res.json({ $url: `${base(req)}${req.originalUrl}`, $resources: rows.slice(0, Number(q.count || 20)) });
+    const n = Number(q.count || 20); // page suivante annoncée par $links.$next quand il reste des lignes (format Syracuse 24R1)
+    return res.json({ $url: `${base(req)}${req.originalUrl}`, $resources: rows.slice(0, n), ...(rows.length > n && { $links: { $next: { $url: `${base(req)}${req.originalUrl}&startIndex=${n}` } } }) });
   }
   deny(res, 404, { $diagnoses: [{ $message: `bouchon : ${p}` }] });
 });
