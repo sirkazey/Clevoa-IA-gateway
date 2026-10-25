@@ -112,6 +112,14 @@ jobs:
           languages: javascript-typescript
           queries: security-extended
       - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          output: codeql-sarif
+      - name: Constats CodeQL lisibles dans le journal (règle, fichier:ligne, message)
+        if: always()
+        run: |
+          for f in codeql-sarif/*.sarif; do
+            jq -r '.runs[].results[] | "\(.ruleId)\t\(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine)\t\(.message.text | gsub("\n"; " "))"' "$f"
+          done
   gitleaks:
     name: Gitleaks history
     runs-on: ubuntu-latest
