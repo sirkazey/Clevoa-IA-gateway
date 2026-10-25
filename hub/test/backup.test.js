@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, readFileSync, readdirSync, utimesSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, readdirSync, utimesSync, rmSync, statSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HUB_DIR } from "./helpers/hub.js";
@@ -78,9 +78,11 @@ test("Instantané de la base d'exploitation : copié en hub-AAAA-MM-JJ_HHMMSS.db
   const snap = join(dir, "hub-instantane.db");
   let r = run(); assert.equal(r.status, 0, r.stdout); assert.match(r.stdout, /hub-instantane\.db absent/); // avant le premier instantané (ou hub 1.4)
   const d = new DatabaseSync(snap); d.exec("create table t (x); insert into t values (1);"); d.close();
+  chmodSync(snap, 0o644); // instantané écrit par une version antérieure, lisible par tous
   r = run(); assert.equal(r.status, 0, r.stdout);
   const dbs = () => files().filter((f) => /^hub-\d{4}-\d{2}-\d{2}_\d{6}(-\d+)?\.db$/.test(f));
   assert.equal(dbs().length, 1); assert.deepEqual(readFileSync(join(dest, dbs()[0])), readFileSync(snap));
+  assert.equal(statSync(join(dest, dbs()[0])).mode & 0o777, 0o600, "sauvegarde de la base lisible par son seul propriétaire");
   r = run(); assert.match(r.stdout, /hub-instantane\.db inchangé/); assert.equal(dbs().length, 1);
   writeFileSync(snap, "pas une base SQLite, mais assez longue pour passer le contrôle de taille minimale du script de sauvegarde");
   writeFileSync(src, VALID + "c");

@@ -78,8 +78,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0        # tags nécessaires : la version précédente est reconstruite depuis son tag
-      - name: Scénario ops/test-rollback.sh
+      - name: Scénario ops/test-rollback.sh (version publiée précédente)
         run: ops/test-rollback.sh
+      - name: Scénario ops/test-rollback.sh (dernière version candidate 1.4, avant la base d'exploitation)
+        run: PREV=v1.4.0-rc.2 PORT=18081 ops/test-rollback.sh
   semgrep:
     name: Semgrep community rules
     runs-on: ubuntu-latest

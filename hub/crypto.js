@@ -1,6 +1,6 @@
 // Chiffrement au repos et pseudonymes, partagés par users.json (store.js), la base d'exploitation (db.js) et l'outil
 // d'administration (admin.js). AES-256-GCM avec une clé maîtresse dérivée d'ENCRYPTION_KEY ; aucun effet de bord à l'import.
-import { randomBytes, createHash, createHmac, createCipheriv, createDecipheriv } from "node:crypto";
+import { randomBytes, createHash, createHmac, createCipheriv, createDecipheriv, hkdfSync } from "node:crypto";
 
 const SECRET = process.env.ENCRYPTION_KEY || "";
 /** Vrai si ENCRYPTION_KEY est utilisable (32 caractères au moins, ex. openssl rand -hex 32). */
@@ -19,5 +19,8 @@ export function decrypt(blob) {
   return Buffer.concat([d.update(data), d.final()]).toString("utf8");
 }
 
-/** Pseudonyme stable et non réversible (HMAC avec la clé maîtresse) : compter ou relier des appels sans exposer une identité. */
-export const pseudonym = (text) => createHmac("sha256", MASTER).update(`pseudonyme:${text}`).digest("base64url").slice(0, 22);
+// Sous-clé propre aux pseudonymes (HKDF) : la clé de chiffrement ne sert jamais telle quelle à autre chose.
+const PSEUDO_KEY = Buffer.from(hkdfSync("sha256", MASTER, Buffer.alloc(0), "clevoa-pseudonyme", 32));
+/** Pseudonyme stable et non réversible (HMAC) : compter ou relier des appels sans exposer une identité. Hexadécimal (96 bits) : jamais
+ *  un « - » ou un « = » en tête, qu'un tableur prendrait pour une formule. */
+export const pseudonym = (text) => createHmac("sha256", PSEUDO_KEY).update(text).digest("hex").slice(0, 24);
