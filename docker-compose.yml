@@ -103,7 +103,7 @@ services:
   # Reverse proxy TLS optionnel, inactif sans le profil « proxy » (COMPOSE_PROFILES=proxy). Certificats fullchain.pem et privkey.pem
   # dans CERTS_DIR ; HUB_PORT=127.0.0.1:8080 pour que le hub ne soit joignable que par nginx. Une seule stack par machine peut le porter (80/443).
   nginx:
-    image: nginx:1.28-alpine
+    image: nginx:1.29-alpine
     profiles: ["proxy"]
     restart: unless-stopped
     depends_on:
