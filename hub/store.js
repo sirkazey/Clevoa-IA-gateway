@@ -1,5 +1,5 @@
 // Persistance minimale : un fichier chiffré AES-256-GCM dans le volume /data, déchiffré en mémoire seulement.
-// users[key] = { email, sso: { sub, tid, upn, name, at }, salesforce: {tokens}, sagex3: {tokens}, sharepoint, dropbox, myreport }
+// users[key] = { email, sso: { sub, tid, upn, name, at }, assistantAt, salesforce: {tokens}, sagex3: {tokens}, sharepoint, dropbox, myreport }
 // La "key" est le secret que l'utilisateur met dans son client MCP. La clé maîtresse vient de ENCRYPTION_KEY.
 import { readFileSync, writeFileSync, mkdirSync, renameSync } from "node:fs";
 import { randomBytes, randomUUID, createHash, createCipheriv, createDecipheriv } from "node:crypto";
@@ -77,10 +77,18 @@ export const store = {
     const limit = Date.now() - maxAgeMs;
     for (const [k, u] of Object.entries(db.users)) if (!worthKeeping(u) && Date.parse(u.createdAt) < limit) delete db.users[k];
   },
+  /** Jour (AAAA-MM-JJ, pas l'heure) du dernier appel d'un assistant avec cette clé : le portail affiche « Assistant : branché » d'après
+   *  ce fait, plus d'après le seul clic sur « Copier ». Écrit au plus une fois par jour et par collaborateur ; une clé anonyme reste en mémoire. */
+  assistantSeen(key, day = new Date().toISOString().slice(0, 10)) {
+    const u = store.get(key); if (!u || u.assistantAt === day) return;
+    u.assistantAt = day;
+    if (worthKeeping(u)) save();
+  },
   /** Nouvelle clé pour le même collaborateur : l'ancienne est révoquée sur-le-champ (clients MCP et portail), identité et jetons suivent. */
   rotate(key) {
     const u = store.get(key); if (!u) return null;
     const fresh = randomBytes(24).toString("base64url");
+    delete u.assistantAt; // aucun assistant ne connaît encore la nouvelle clé
     db.users[fresh] = u; delete db.users[key]; save();
     return fresh;
   },
