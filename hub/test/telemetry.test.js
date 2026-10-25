@@ -217,6 +217,8 @@ test("Hub → Clevoa : POST au démarrage avec la clé et un payload sans aucune
   assert.deepEqual(body.connectors, { salesforce: true, sagex3: true, sharepoint: true, dropbox: true, myreport: true });
   assert.equal(body.requests, 0);
   assert.ok(!t[0].body.includes("alice") && !t[0].body.includes("token"), "ni email ni jeton");
+  // La ligne de journal suit la réponse du bouchon : on l'attend au lieu de la lire à l'instant où la requête arrive.
+  for (const end = Date.now() + 3000; !/\[telemetry\] 200 active/.test(hub.logs()) && Date.now() < end;) await new Promise((r) => setTimeout(r, 50));
   assert.match(hub.logs(), /\[telemetry\] 200 active/);
 
   const html = await fetch(`${hub.url}/`).then((r) => r.text());
