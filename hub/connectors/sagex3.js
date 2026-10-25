@@ -180,7 +180,7 @@ export const tools = [
       if (orderBy) params.orderBy = orderBy;
       const page = await get(tok, representation, params), rows = (page.$resources || []).map(strip);
       // Page suivante annoncée par Syracuse ($links.$next, constaté sur 24R1) : la liste est partielle, le dire au modèle.
-      return page.$links?.$next ? { avertissement: `Liste coupée à ${count} lignes : il y en a d'autres. Ce n'est pas un total ; ne jamais répondre à « combien » en comptant ces lignes.`, lignes: rows } : rows;
+      return page.$links?.$next ? { avertissement: `Liste coupée à ${rows.length} lignes : Sage X3 en annonce d'autres. Ce n'est pas un total ; ne jamais répondre à « combien » en comptant ces lignes.`, lignes: rows } : rows;
     },
   },
   {

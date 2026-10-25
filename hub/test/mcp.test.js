@@ -7,7 +7,7 @@ import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { startUpstream } from "./helpers/upstream.js";
 import { startHub, connectedUser, KEY, readStore } from "./helpers/hub.js";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const TOOLS = ["salesforce_tools", "salesforce_call", "sagex3_representations", "sagex3_describe", "sagex3_query", "sagex3_get",
@@ -132,6 +132,21 @@ test("Agrégats SOQL : détection sur le SELECT principal, littéraux et sous-re
   for (const q of ["SELECT Id FROM Account", "SELECT Id, (SELECT COUNT() FROM Contacts) FROM Account", "SELECT Id FROM Account WHERE Name = 'COUNT(x) GROUP BY y'",
     "SELECT Id FROM Account WHERE Id IN (SELECT AccountId FROM Contact GROUP BY AccountId)", "SELECT Count__c, Max_Amount__c FROM Account", "SELECT Id FROM Account WHERE Name = 'l\\'ami (MAX'"])
     assert.equal(aggregate(q), false, q);
+  assert.equal(aggregate("SELECT COUNT()FROM Account"), true, "sans espace avant FROM");
+  for (const q of ["SELECT a" + " ".repeat(100_000), "SELECT " + "(".repeat(50_000) + ")".repeat(50_000) + " FROM A", "SELECT '" + "\\'".repeat(50_000)]) {
+    const t = performance.now(); aggregate(q);
+    assert.ok(performance.now() - t < 500, `analyse linéaire : ${q.length} caractères en ${Math.round(performance.now() - t)} ms`); // l'ancienne version prenait 5 à 13 s
+  }
+});
+
+test("SOQL de plus de 100 000 caractères refusée avant toute analyse ni appel amont", async () => {
+  up.reset();
+  const c = await sseClient();
+  try {
+    const r = await sfQuery(c, "SELECT Id FROM Account WHERE Name = '" + "x".repeat(100_000) + "'");
+    assert.equal(r.isError, true); assert.match(r.content[0].text, /100000 caractères/);
+    assert.equal(sfCalls("tools/call").length, 0, "rien n'est envoyé à Salesforce");
+  } finally { await c.close(); }
 });
 
 test("Streamable HTTP (/mcp, Authorization: Bearer) : listTools et callTool", async () => {
@@ -456,12 +471,16 @@ test("Session SSE liée à sa clé : une autre clé valide ne peut pas poster da
 test("Portail « Assistant : branché » d'après les appels MCP réels : jour du dernier appel (une écriture par jour), effacé à la régénération de la clé", async () => {
   const me = (key) => fetch(`${hub.url}/api/me`, { headers: { cookie: `mcp_key=${key}` } }).then((r) => r.json());
   const today = new Date().toISOString().slice(0, 10);
-  const bob = KEY_ERIN;
-  assert.equal((await me(bob)).assistantAt, null, "jamais appelé par un assistant : à brancher");
-  const c = await sseClient(bob);
+  const erin = KEY_ERIN;
+  assert.equal((await me(erin)).assistantAt, null, "jamais appelé par un assistant : à brancher");
+  const c = await sseClient(erin);
   try { await c.listTools(); } finally { await c.close(); }
-  assert.equal((await me(bob)).assistantAt, today, "connexion MCP constatée par le hub, quel que soit le navigateur");
-  assert.equal(hub.readUsers()[bob].assistantAt, today, "conservé dans users.json (jour seulement, pas l'heure)");
-  const rot = await fetch(`${hub.url}/api/key/rotate`, { method: "POST", headers: { cookie: `mcp_key=${bob}` } }).then((r) => r.json());
+  assert.equal((await me(erin)).assistantAt, today, "connexion MCP constatée par le hub, quel que soit le navigateur");
+  assert.equal(hub.readUsers()[erin].assistantAt, today, "conservé dans users.json (jour seulement, pas l'heure)");
+  const written = statSync(join(hub.dataDir, "users.json")).mtimeMs;
+  const again = await sseClient(erin);
+  try { await again.listTools(); } finally { await again.close(); }
+  assert.equal(statSync(join(hub.dataDir, "users.json")).mtimeMs, written, "même jour : users.json n'est pas réécrit");
+  const rot = await fetch(`${hub.url}/api/key/rotate`, { method: "POST", headers: { cookie: `mcp_key=${erin}` } }).then((r) => r.json());
   assert.equal((await me(rot.key)).assistantAt, null, "nouvelle clé : aucun assistant ne la connaît encore");
 });

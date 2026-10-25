@@ -17,6 +17,8 @@ sur le système réel), **testé sur bouchon** (tests automatisés et simulateur
 | SSO Microsoft Entra ID (`entra`) | testé sur bouchon | `hub/test/sso.test.js`, bouchon | activation sur un vrai locataire |
 | Portail, diagnostic, blocs de configuration, exemples de questions | disponible | usage quotidien en préproduction ; refonte v1.3.1 validée sur bouchon ([compte rendu](portail-v1.3.1.md)) | revue sur le portail de préproduction réel |
 | Portail 1.4.0 : une ligne par application par domaine, colonne « Service », assistant en colonne, questions par domaine | testé sur bouchon | tests du portail, captures et axe-core sur bouchon ([compte rendu](portail-v1.4.md)) | revue par des collaborateurs sur la préproduction réelle |
+| Comptages exacts : aucun `LIMIT` ajouté aux agrégats SOQL ; listes coupées signalées au modèle (Salesforce, Sage X3) | testé sur bouchon | `mcp.test.js` | « combien de comptes » sur la sandbox (16 610 attendus) ; format réel de la réponse SObject Reads pour l'avertissement ; `$links.$next` de Syracuse sur une longue liste |
+| Portail « Assistant : branché » d'après les appels MCP réels | testé sur bouchon | `mcp.test.js` | un assistant réel branché sur la pré-production |
 | État des systèmes (appels de la dernière heure, vérification HEAD sans identifiant en semaine de 7 h à 19 h) | testé sur bouchon | `health.test.js` | vérification vers Sage X3 et MyReport sur le réseau de Charlois, accord de l'équipe réseau |
 | Supervision du hub (`/metrics` Prometheus, `/metrics/prtg` PRTG, jeton dédié) | testé sur bouchon | `health.test.js` | capteur HTTP Data Advanced sur le PRTG de Charlois |
 | Claude Desktop via `mcp-remote` | disponible | vérifié le 23/10/2026 sur Windows | |

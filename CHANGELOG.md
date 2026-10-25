@@ -16,7 +16,7 @@ de 200, listes Sage X3 coupées sans le dire, état « Assistant » du portail. 
 - Portail : « Assistant : branché (dernier usage …) » d'après les appels MCP réellement reçus avec la clé du collaborateur (jour seulement, conservé dans `users.json`, une écriture par jour au plus), et non plus d'après le seul clic sur « Copier » dans ce navigateur ; effacé à la régénération de la clé.
 
 ### Corrigé
-- Salesforce : un comptage (`SELECT COUNT() FROM Account`) renvoyait 200 au lieu du total réel (16 610 sur l'org Charlois), car le hub ajoutait `LIMIT 200` à toute SOQL sans limite. Plus aucun `LIMIT` ajouté aux agrégats (`COUNT()`, `COUNT(…)`, `SUM`, `AVG`, `MIN`, `MAX`, `GROUP BY`) ; une liste coupée à 200 lignes par le hub est signalée au modèle (`avertissement`) avec la consigne de compter par `SELECT COUNT()`.
+- Salesforce : un comptage (`SELECT COUNT() FROM Account`) renvoyait 200 au lieu du total réel (16 610 sur l'org Charlois), car le hub ajoutait `LIMIT 200` à toute SOQL sans limite. Plus aucun `LIMIT` ajouté aux agrégats (`COUNT()`, `COUNT(…)`, `SUM`, `AVG`, `MIN`, `MAX`, `GROUP BY`) ; une liste coupée à 200 lignes par le hub est signalée au modèle (`avertissement`) avec la consigne de compter par `SELECT COUNT()`. Analyse de la requête en un seul parcours (temps linéaire) ; une SOQL de plus de 100 000 caractères, longueur maximale chez Salesforce, est refusée avant tout envoi.
 - Sage X3 : une liste `sagex3_query` coupée par `count` (100 par défaut, 500 au plus) est signalée au modèle (`avertissement`, lignes sous `lignes`) quand Syracuse annonce une page suivante ; elle n'est plus présentable comme un total.
 
 ## [1.4.0-rc.1] – 2026-10-25
