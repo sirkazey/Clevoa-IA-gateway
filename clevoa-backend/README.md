@@ -23,14 +23,18 @@ conservation : [sécurité § 4](../docs/admin/securite.md#4-télémétrie-clevo
 
 Un incident d'erreurs ne se ferme que sur preuve : au moins `ERROR_MIN_CALLS` appels avec un taux normal, ou un
 collaborateur authentifié. Une période creuse (nuit, week-end, redémarrage du hub) le laisse ouvert ; « silence » se
-ferme au premier contact. Un hub antérieur à la 1.3.2-rc.2 n'envoie pas de statistiques : seul l'incident « silence »
+ferme au premier contact. Un connecteur que le hub ne déclare pas configuré (retiré, ou simulateur) n'ouvre aucun
+incident et ferme le sien. Un hub antérieur à la 1.3.2-rc.2 n'envoie pas de statistiques : seul l'incident « silence »
 le concerne.
 
 Un e-mail part à l'ouverture d'un incident (« Clevoa AI Gateway : incident chez <client> », avec la cause en clair) et
 un autre à sa fermeture (« rétabli chez <client> ») ; rien tant que l'incident dure, rien pour une version ancienne.
 La fiche retient ce qui a été annoncé : un e-mail en échec (SNS indisponible) est retenté au contact suivant ou au
-passage horaire, un e-mail parti n'est jamais renvoyé. Au plus `ALERT_MAX_PER_HOUR` (10) e-mails par client et par
-heure : le dernier est suivi d'un avertissement « trop d'alertes », les suivants restent dans CloudWatch et la console.
+passage horaire. Un e-mail parti n'est pas renvoyé, sauf si l'enregistrement de la fiche échoue juste après l'envoi
+(le hub renvoie alors sa période et l'e-mail repart : un double, jamais un oubli). Au plus `ALERT_MAX_PER_HOUR` (10)
+e-mails par client et par heure : le dernier est suivi d'un avertissement « trop d'alertes », les suivants sont
+reportés à l'heure suivante. L'état est écrit à condition de ne pas avoir changé depuis sa lecture : un contact du hub
+et un passage horaire simultanés n'effacent ni un incident ni un « rétabli ».
 
 Aucune dépendance à installer : le SDK AWS (DynamoDB, SNS) est fourni par le runtime Lambda Node 22. Sans
 `TELEMETRY_TABLE` (tests, poste local), les fiches sont gardées en mémoire. `CLEVOA_KEYS` liste des entrées
@@ -92,13 +96,12 @@ Limites connues, à reprendre au premier déploiement : les deux fonctions parta
 plafonné à 2 requêtes par seconde (rafale de 10) par une extension de l'étape `HttpApiStage` dont la prise en compte est
 à vérifier dans la console API Gateway après le premier déploiement ; une clé divulguée permet encore de créer des
 fiches dans ce débit (à révoquer en la retirant de `CLEVOA_KEYS`) ; `reservedConcurrency: 5` exige un compte AWS dont
-le quota dépasse 10 exécutions simultanées. Un contact du hub qui arrive à la milliseconde où le passage horaire ouvre
-un « silence » peut effacer cet incident sans e-mail « rétabli » (cas jugé négligeable).
+le quota dépasse 10 exécutions simultanées (les hubs étalent leurs envois sur 10 minutes après chaque créneau).
 
 Retirer la pile : `serverless remove --stage <stage>` supprime aussi la table et l'historique des contacts.
 
 ## Tester sans AWS
 
 ```bash
-cd clevoa-backend && npm test     # 19 tests : clés, validation, fiche et historique, incidents, e-mails, silence, passages concurrents, plafond, adaptateur DynamoDB
+cd clevoa-backend && npm test     # 21 tests : clés, validation, fiche et historique, incidents, e-mails, silence, passages concurrents, plafond, adaptateur DynamoDB
 ```

@@ -106,9 +106,11 @@ export function errorIncidents(stats = {}) {
 
 /** Incidents d'erreurs après une période. Un incident s'ouvre selon errorIncidents ; un incident ouvert ne se ferme que sur
  *  preuve (assez d'appels avec un taux normal, ou un collaborateur sans refus d'authentification). Une période creuse (nuit,
- *  week-end, redémarrage) ou un hub sans statistiques le laisse ouvert : pas d'e-mails qui alternent. « silence » se ferme au contact. */
-export function nextIncidents(before = [], stats) {
-  const open = before.filter((c) => c !== "silence");
+ *  week-end, redémarrage) ou un hub sans statistiques le laisse ouvert : pas d'e-mails qui alternent. « silence » se ferme au contact ;
+ *  un connecteur que le hub ne déclare pas configuré (retiré, ou simulateur) n'ouvre aucun incident et ferme le sien. */
+export function nextIncidents(before = [], stats, connectors = {}) {
+  const gone = (code) => connectors[code.split(":")[1]] !== true; // connecteur retiré ou passé sur simulateur : plus rien à surveiller
+  const open = before.filter((c) => c !== "silence" && !gone(c));
   if (!stats) return open;
   const rate = num("ERROR_RATE", "0.2"), minCalls = num("ERROR_MIN_CALLS", "10");
   const healed = (code) => {
@@ -116,7 +118,7 @@ export function nextIncidents(before = [], stats) {
     if (!s) return false;
     return kind === "auth" ? s.users > s.authUsers : s.calls >= minCalls && systemErrors(s) / s.calls <= rate;
   };
-  return [...new Set([...errorIncidents(stats), ...open.filter((c) => !healed(c))])].sort();
+  return [...new Set([...errorIncidents(stats).filter((c) => !gone(c)), ...open.filter((c) => !healed(c))])].sort();
 }
 
 /** Délai de silence d'une installation : SILENCE_HOURS (14 h) pour un hub qui envoie toutes les 6 heures, SILENCE_HOURS_LEGACY
@@ -136,7 +138,7 @@ export function describe(code, item = {}) {
 }
 
 /** Plafond d'e-mails par client et par heure : une clé divulguée ne peut pas inonder la messagerie de Clevoa. Le dernier e-mail
- *  autorisé est suivi d'un avertissement ; au-delà, les alertes restent dans CloudWatch et dans la console. */
+ *  autorisé est suivi d'un avertissement ; au-delà, l'annonce est reportée (retentée au contact ou au passage suivant). */
 async function budget(db, client, now) {
   const max = num("ALERT_MAX_PER_HOUR", "10");
   try {
@@ -151,21 +153,23 @@ async function notify(item, opened, closed, { publish, db, now = new Date() } = 
   if (!opened.length && !closed.length) return true;
   const where = `${item.client} · ${item.env ?? "?"} · ${item.version} · installation ${item.installation}`;
   const subject = opened.length ? `Clevoa AI Gateway : incident chez ${item.client}` : `Clevoa AI Gateway : rétabli chez ${item.client}`;
-  const back = (c) => (c === "silence" ? "le hub a repris contact" : `${label(c.split(":")[1])} fonctionne de nouveau normalement`);
+  const back = (c) => (c === "silence" ? "le hub a repris contact"
+    : item.connectors?.[c.split(":")[1]] === true ? `${label(c.split(":")[1])} fonctionne de nouveau normalement`
+    : `${label(c.split(":")[1])} n'est plus déclaré configuré (connecteur retiré ou simulateur), plus surveillé`);
   const lines = [where, "", ...opened.map((c) => `Nouvel incident : ${describe(c, item)}`), ...closed.map((c) => `Rétabli : ${back(c)}`)];
   console.log("[clevoa] ALERTE", JSON.stringify({ pk: item.pk, opened, closed }));
   if (!process.env.ALERT_TOPIC_ARN && !publish) return true;
   const quota = await budget(db, item.client, now);
-  if (quota === "over") { console.warn("[clevoa] e-mail non envoyé : plafond horaire atteint", JSON.stringify({ pk: item.pk })); return true; }
+  if (quota === "over") { console.warn("[clevoa] e-mail reporté : plafond horaire atteint", JSON.stringify({ pk: item.pk })); return false; }
   const send = publish ?? (async (subj, message) => {
     const sns = await import("@aws-sdk/client-sns"); // fourni par le runtime Lambda Node 22
     await new sns.SNSClient({}).send(new sns.PublishCommand({ TopicArn: process.env.ALERT_TOPIC_ARN, Subject: subj, Message: message }));
   });
-  try {
-    await send(subject, lines.join("\n"));
-    if (quota === "last") await send(`Clevoa AI Gateway : trop d'alertes chez ${item.client}`, `${num("ALERT_MAX_PER_HOUR", "10")} e-mails d'incident en une heure pour ${item.client} : les suivants sont retenus jusqu'à l'heure suivante (journaux CloudWatch et console). Volume anormal : retirer la clé du client de CLEVOA_KEYS.`);
-    return true;
-  } catch (e) { console.error("[clevoa] échec de l'alerte SNS", e.name); return false; }
+  try { await send(subject, lines.join("\n")); }
+  catch (e) { console.error("[clevoa] échec de l'alerte SNS", e.name); return false; }
+  if (quota === "last") await send(`Clevoa AI Gateway : trop d'alertes chez ${item.client}`, `${num("ALERT_MAX_PER_HOUR", "10")} e-mails d'incident en une heure pour ${item.client} : les suivants sont reportés à l'heure suivante (journaux CloudWatch et console). Volume anormal : retirer la clé du client de CLEVOA_KEYS.`)
+    .catch((e) => console.error("[clevoa] échec de l'avertissement SNS", e.name)); // l'incident, lui, est bien annoncé
+  return true;
 }
 
 // ---------- Persistance ----------
@@ -176,6 +180,11 @@ export function memoryStore() {
     async get(pk) { return items.get(k(pk, STATE)) ?? null; },
     async put(item) { const prev = items.get(k(item.pk, item.sk)); items.set(k(item.pk, item.sk), item.sk === STATE ? { ...item, firstSeen: prev?.firstSeen ?? item.firstSeen ?? item.lastSeen } : item); },
     async list() { return [...items.values()].filter((i) => i.sk === STATE); },
+    async putState(item, expect, force) {
+      const it = items.get(k(item.pk, STATE));
+      if (!force && (expect ? !it || it.lastSeen !== expect.lastSeen || it.notified !== expect.notified : !!it)) return false;
+      await this.put(item); return true;
+    },
     async count(pk, sk) { const it = items.get(k(pk, sk)) ?? { pk, sk, n: 0 }; it.n++; items.set(k(pk, sk), it); return it.n; },
     /** Mise à jour conditionnelle de l'état : seulement si ni un contact ni un autre passage ne l'a changé depuis la lecture. */
     async claim(pk, expect, fields) {
@@ -201,9 +210,10 @@ export function dynamoStore(table, { client, UpdateItemCommand, QueryCommand, Ge
   const queryAll = async (input) => { const out = []; let ExclusiveStartKey;
     do { const r = await client.send(new QueryCommand({ ...input, ExclusiveStartKey })); for (const it of r.Items || []) out.push(fromItem(it)); ExclusiveStartKey = r.LastEvaluatedKey; } while (ExclusiveStartKey);
     return out; };
-  return {
+  const store = {
     async get(pk) { const r = await client.send(new GetItemCommand({ TableName: table, Key: { pk: { S: pk }, sk: { S: STATE } } })); return r.Item ? fromItem(r.Item) : null; },
-    async put(item) {
+    /** Écrit une ligne. `condition` (ligne d'état) : expression et valeurs exigées sur la ligne existante. */
+    async put(item, condition) {
       const { pk, sk, firstSeen, ...fields } = item; // firstSeen n'est jamais réécrit : il est posé une fois par if_not_exists
       const names = Object.keys(fields);
       const keepFirst = sk === STATE ? ", #first = if_not_exists(#first, :now)" : "";
@@ -212,8 +222,17 @@ export function dynamoStore(table, { client, UpdateItemCommand, QueryCommand, Ge
         Key: { pk: { S: pk }, sk: { S: sk } },
         UpdateExpression: `SET ${names.map((n, i) => `#f${i} = :v${i}`).join(", ")}${keepFirst}`,
         ExpressionAttributeNames: { ...Object.fromEntries(names.map((n, i) => [`#f${i}`, n])), ...(keepFirst ? { "#first": "firstSeen" } : {}) },
-        ExpressionAttributeValues: { ...Object.fromEntries(names.map((n, i) => [`:v${i}`, toAttr(fields[n])])), ...(keepFirst ? { ":now": { S: firstSeen ?? item.lastSeen } } : {}) },
+        ExpressionAttributeValues: { ...Object.fromEntries(names.map((n, i) => [`:v${i}`, toAttr(fields[n])])), ...(keepFirst ? { ":now": { S: firstSeen ?? item.lastSeen } } : {}), ...(condition?.values ?? {}) },
+        ...(condition ? { ConditionExpression: condition.expression } : {}),
       }));
+    },
+    async putState(item, expect, force) {
+      if (force) { await store.put(item); return true; }
+      const told = expect?.notified === undefined ? "attribute_not_exists(notified)" : "notified = :told";
+      const condition = expect ? { expression: `lastSeen = :seen AND ${told}`, values: { ":seen": { S: expect.lastSeen }, ...(expect.notified === undefined ? {} : { ":told": { S: expect.notified } }) } }
+        : { expression: "attribute_not_exists(pk)", values: {} };
+      try { await store.put(item, condition); return true; }
+      catch (e) { if (e.name === "ConditionalCheckFailedException") return false; throw e; }
     },
     list: () => queryAll({ TableName: table, IndexName: "etats", KeyConditionExpression: "etat = :e", ExpressionAttributeValues: { ":e": { S: STATE } } }),
     history: (pk, from = "") => queryAll({ TableName: table, KeyConditionExpression: "pk = :p AND sk BETWEEN :a AND :b",
@@ -238,6 +257,7 @@ export function dynamoStore(table, { client, UpdateItemCommand, QueryCommand, Ge
       } catch (e) { if (e.name === "ConditionalCheckFailedException") return false; throw e; }
     },
   };
+  return store;
 }
 
 let current = null;
@@ -272,25 +292,37 @@ export async function telemetry(event, { publish } = {}) {
   // restaurée depuis une sauvegarde de production (même identifiant) garde sa propre partition.
   const installation = p.installation ?? "ancienne"; // hubs antérieurs à 1.3.2 : une partition par client et environnement
   const pk = `${client}#${installation}#${p.env ?? "inconnu"}`;
-  let db, prev;
-  try { db = await store(); prev = await db.get(pk); }
-  catch (e) { console.error("[clevoa] échec de lecture", e.name); return reply(500, { status: "error", error: "enregistrement impossible" }); }
-  const before = prev?.incidents ?? [];
-  const told = prev ? prev.notified ?? before.join(",") : ""; // incidents déjà annoncés par e-mail
-  const incidents = nextIncidents(before, p.stats);
-  const item = {
-    pk, sk: STATE, etat: STATE, client, installation, version: p.version, env: p.env ?? null, connectors: p.connectors, requests: p.requests,
-    seats: p.seats ?? null, reportedDate: p.date ?? null, lastSeen: seen, expiresAt, incidents, lastStats: p.stats ?? null,
-    cadence: p.stats ? 6 : 24, // hub antérieur à 1.3.2-rc.2 : un envoi par jour
-  };
+  let db;
   try {
+    db = await store();
     // Clé de période = début de période : un envoi répété (réponse perdue, le hub renvoie la même période) réécrit la même ligne.
     await db.put({ pk, sk: `P#${p.since ?? seen}`, at: seen, since: p.since ?? null, version: p.version, requests: p.requests, seats: p.seats ?? null, stats: p.stats ?? null, expiresAt });
   } catch (e) { console.error("[clevoa] échec d'enregistrement", e.name); return reply(500, { status: "error", error: "enregistrement impossible" }); }
-  const announced = await notify(item, incidents.filter((c) => !codes(told).includes(c)), codes(told).filter((c) => !incidents.includes(c)), { publish, db, now });
-  item.notified = announced ? incidents.join(",") : told; // e-mail en échec : retenté au prochain contact ou au passage horaire
-  try { await db.put(item); }
-  catch (e) { console.error("[clevoa] échec d'enregistrement", e.name); return reply(500, { status: "error", error: "enregistrement impossible" }); }
+  // État écrit à condition qu'il n'ait pas changé depuis sa lecture (passage horaire simultané) ; sinon relu et recalculé une fois,
+  // sans annoncer de nouveau ce qui vient de l'être.
+  const sent = new Set();
+  let incidents = [], item;
+  for (let attempt = 0; ; attempt++) {
+    let prev;
+    try { prev = await db.get(pk); }
+    catch (e) { console.error("[clevoa] échec de lecture", e.name); return reply(500, { status: "error", error: "enregistrement impossible" }); }
+    const before = prev?.incidents ?? [];
+    const told = prev ? prev.notified ?? before.join(",") : ""; // incidents déjà annoncés par e-mail
+    incidents = nextIncidents(before, p.stats, p.connectors);
+    item = {
+      pk, sk: STATE, etat: STATE, client, installation, version: p.version, env: p.env ?? null, connectors: p.connectors, requests: p.requests,
+      seats: p.seats ?? null, reportedDate: p.date ?? null, lastSeen: seen, expiresAt, incidents, lastStats: p.stats ?? null,
+      cadence: p.stats ? 6 : 24, // hub antérieur à 1.3.2-rc.2 : un envoi par jour
+    };
+    const opened = incidents.filter((c) => !codes(told).includes(c) && !sent.has(`+${c}`)), closed = codes(told).filter((c) => !incidents.includes(c) && !sent.has(`-${c}`));
+    const announced = await notify(item, opened, closed, { publish, db, now });
+    if (announced) { for (const c of opened) sent.add(`+${c}`); for (const c of closed) sent.add(`-${c}`); }
+    item.notified = announced ? incidents.join(",") : told; // e-mail en échec : retenté au prochain contact ou au passage horaire
+    let written;
+    try { written = await db.putState(item, prev ? { lastSeen: prev.lastSeen, notified: prev.notified } : null, attempt > 0); }
+    catch (e) { console.error("[clevoa] échec d'enregistrement", e.name); return reply(500, { status: "error", error: "enregistrement impossible" }); }
+    if (written) break;
+  }
   console.log("[clevoa] contact", JSON.stringify({ pk, version: item.version, env: item.env, requests: item.requests, seats: item.seats, incidents }));
 
   const body = { status: "active", recorded: seen };

@@ -9,7 +9,7 @@ const ID_B = "9b8a7f6e-5d4c-4b3a-8a1b-0c9d8e7f6a5b";
 const PK_A = `charlois#${ID_A}#PRODUCTION`;
 const zero = { auth: 0, quota: 0, timeout: 0, unreachable: 0, other: 0, user: 0 };
 const st = (calls, errors = {}, extra = {}) => ({ calls, errors: { ...zero, ...errors }, users: 3, authUsers: 0, p50: 120, p95: 900, ...extra });
-const ok = { installation: ID_A, version: "1.3.2", env: "PRODUCTION", date: "2026-10-24", connectors: { salesforce: true, sagex3: false }, requests: 42, seats: 3 };
+const ok = { installation: ID_A, version: "1.3.2", env: "PRODUCTION", date: "2026-10-24", connectors: { salesforce: true, sagex3: true, myreport: false }, requests: 42, seats: 3 };
 const rc2 = { ...ok, since: "2026-10-24T03:00:00.000Z", stats: {} }; // hub 1.3.2-rc.2 : envoi toutes les 6 h, même sans appel
 const ev = (body, key = "cle-charlois") => ({ headers: key ? { "X-Clevoa-Key": key, "content-type": "application/json" } : {}, body: typeof body === "string" ? body : JSON.stringify(body) });
 const parse = (r) => ({ status: r.statusCode, body: JSON.parse(r.body) });
@@ -192,7 +192,7 @@ test("Adaptateur DynamoDB : clé pk + sk, premier contact jamais réécrit, pér
   const s = dynamoStore("table-test", { client, UpdateItemCommand, QueryCommand, GetItemCommand });
   setStore(s);
   await send({ ...ok, stats: { salesforce: st(10) } });
-  const [get, putPeriod, putState] = sent;
+  const [putPeriod, get, putState] = sent;
   assert.deepEqual(get.input.Key, { pk: { S: PK_A }, sk: { S: STATE } });
   assert.deepEqual(putState.input.Key, { pk: { S: PK_A }, sk: { S: STATE } });
   assert.match(putState.input.UpdateExpression, /#first = if_not_exists\(#first, :now\)$/);
@@ -201,6 +201,7 @@ test("Adaptateur DynamoDB : clé pk + sk, premier contact jamais réécrit, pér
   assert.match(putPeriod.input.Key.sk.S, /^P#\d{4}-\d{2}-\d{2}T/); assert.ok(!putPeriod.input.UpdateExpression.includes("if_not_exists"));
   assert.ok(!JSON.stringify(sent).includes("cle-charlois"));
   assert.ok(Object.values(putState.input.ExpressionAttributeNames).includes("etat"), "ligne d'état indexée");
+  assert.match(putState.input.ConditionExpression, /^lastSeen = :seen AND attribute_not_exists\(notified\)$/, "état écrit seulement s'il n'a pas changé depuis sa lecture");
   assert.ok(!Object.values(putPeriod.input.ExpressionAttributeNames).includes("etat"), "historique hors de l'index");
   sent.length = 0;
   const all = await s.list();
@@ -231,9 +232,12 @@ test("Fermeture sur preuve seulement : une période creuse, trop courte ou sans 
   assert.equal(mails.length, 1, "une seule panne : un seul e-mail d'ouverture");
   await send({ ...ok, stats: { sagex3: st(40, { unreachable: 2 }) } });
   assert.equal(mails.length, 2); assert.match(mails[1].subject, /rétabli/);
-  assert.deepEqual(nextIncidents(["auth:salesforce"], { salesforce: st(5, { auth: 1 }, { users: 2, authUsers: 1 }) }), [], "un collaborateur authentifié : fermé");
-  assert.deepEqual(nextIncidents(["auth:salesforce"], { salesforce: st(5, { auth: 5 }, { users: 1, authUsers: 1 }) }), ["auth:salesforce"], "toujours refusé : ouvert");
-  assert.deepEqual(nextIncidents(["silence", "erreurs:sagex3"], undefined), ["erreurs:sagex3"], "hub sans statistiques : silence fermé, le reste gardé");
+  const conf = { salesforce: true, sagex3: true };
+  assert.deepEqual(nextIncidents(["auth:salesforce"], { salesforce: st(5, { auth: 1 }, { users: 2, authUsers: 1 }) }, conf), [], "un collaborateur authentifié : fermé");
+  assert.deepEqual(nextIncidents(["auth:salesforce"], { salesforce: st(5, { auth: 5 }, { users: 1, authUsers: 1 }) }, conf), ["auth:salesforce"], "toujours refusé : ouvert");
+  assert.deepEqual(nextIncidents(["silence", "erreurs:sagex3"], undefined, conf), ["erreurs:sagex3"], "hub sans statistiques : silence fermé, le reste gardé");
+  assert.deepEqual(nextIncidents(["erreurs:sagex3"], {}, { sagex3: false }), [], "connecteur retiré ou passé sur simulateur : incident fermé");
+  assert.deepEqual(nextIncidents([], { myreport: st(40, { other: 40 }) }, { myreport: false }), [], "simulateur : aucun incident");
 });
 
 test("Hub antérieur à 1.3.2-rc.2 (un envoi par jour) : silence après 50 h, pas après 14 h ; console et backend même règle", async () => {
@@ -271,6 +275,10 @@ test("Plafond d'e-mails : au plus ALERT_MAX_PER_HOUR par client et par heure, le
   assert.deepEqual(mails.map((m) => m.subject.replace(/ chez charlois/, "")), ["Clevoa AI Gateway : incident", "Clevoa AI Gateway : rétabli", "Clevoa AI Gateway : incident", "Clevoa AI Gateway : trop d'alertes"]);
   assert.equal((await send({ ...ok, stats: { sagex3: st(40, { unreachable: 20 }) } }, "cle-autre")).statusCode, 200);
   assert.equal(mails.length, 5, "plafond par client : les autres clients ne sont pas concernés");
+  const pending = await db.get(PK_A);
+  assert.deepEqual([pending.incidents, pending.notified], [[], "erreurs:sagex3"], "fermeture au-delà du plafond : reportée, pas perdue");
+  await report({}, { now: Date.now() + 3600_000, publish });
+  assert.match(mails.at(-1).subject, /rétabli chez charlois/, "annoncée l'heure suivante");
   delete process.env.ALERT_MAX_PER_HOUR; setStore((db = memoryStore())); mails.length = 0;
   let down = true;
   const flaky = async (subject, message) => { if (down) throw Object.assign(new Error("x"), { name: "Throttled" }); mails.push({ subject, message }); };
@@ -290,4 +298,24 @@ test("Même période renvoyée (réponse perdue) : la ligne d'historique est ré
   await send({ ...ok, since, stats: { salesforce: st(12) } });
   const h = await db.history(PK_A);
   assert.equal(h.length, 1); assert.equal(h[0].sk, `P#${since}`); assert.equal(h[0].stats.salesforce.calls, 12); assert.ok(h[0].at > since);
+});
+
+test("Contact du hub pendant que le passage horaire ouvre un silence : l'état est recalculé, le « rétabli » part", async () => {
+  await send(rc2);
+  const t0 = Date.parse((await db.get(PK_A)).lastSeen);
+  const get = db.get.bind(db);
+  let once = true;
+  db.get = async (pk) => { const prev = await get(pk); if (once) { once = false; await report({}, { now: t0 + 15 * 3600_000, publish }); } return prev; };
+  await send(rc2);
+  db.get = get;
+  assert.deepEqual(mails.map((m) => m.subject.replace(/ chez charlois/, "")), ["Clevoa AI Gateway : incident", "Clevoa AI Gateway : rétabli"]);
+  const it = await db.get(PK_A);
+  assert.deepEqual([it.incidents, it.notified], [[], ""]);
+});
+
+test("Connecteur retiré pendant un incident : fermé avec un e-mail qui le dit", async () => {
+  await send({ ...ok, stats: { sagex3: st(40, { unreachable: 20 }) } });
+  await send({ ...ok, connectors: { ...ok.connectors, sagex3: false }, stats: {} });
+  assert.equal(mails.length, 2); assert.match(mails[1].message, /Sage X3 n'est plus déclaré configuré/);
+  assert.deepEqual((await db.get(PK_A)).incidents, []);
 });

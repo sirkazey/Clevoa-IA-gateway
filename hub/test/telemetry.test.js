@@ -32,7 +32,7 @@ test("Module : payload réduit à des compteurs, envoi au démarrage puis à cha
     assert.ok(!Number.isNaN(Date.parse(since)), "début de la période");
     assert.equal(tm.payload(CONNECTORS, 0, INSTALL).installation, INSTALL);
 
-    tm.start(CONNECTORS, () => 0, () => INSTALL);
+    tm.start(CONNECTORS, () => 0, () => INSTALL, () => 0);
     await new Promise((r) => setImmediate(r));
     assert.equal(calls.length, 1, "envoi immédiat au démarrage");
     assert.equal(calls[0].url, "https://clevoa.test/api/v1/telemetry");
@@ -63,7 +63,7 @@ test("Module : Clevoa injoignable au démarrage → nouvel essai à 1 min, 5 min
   let fail = 3; const calls = [];
   const fetchMock = mock.method(globalThis, "fetch", async () => { calls.push(Date.now()); if (fail-- > 0) throw new TypeError("fetch failed"); return new Response(JSON.stringify({ status: "active" }), { status: 200 }); });
   try {
-    tm.start(CONNECTORS);
+    tm.start(CONNECTORS, undefined, undefined, () => 0);
     const settle = () => new Promise((r) => setImmediate(r));
     await settle(); assert.equal(calls.length, 1, "essai immédiat (échec)");
     t.mock.timers.tick(60_000); await settle(); assert.equal(calls.length, 2, "nouvel essai après 1 min");
@@ -83,7 +83,7 @@ test("Module : après trois nouveaux essais en échec, retour aux créneaux de 6
   const calls = [];
   const fetchMock = mock.method(globalThis, "fetch", async () => { calls.push(Date.now()); throw new TypeError("fetch failed"); });
   try {
-    tm.start(CONNECTORS);
+    tm.start(CONNECTORS, undefined, undefined, () => 0);
     const settle = () => new Promise((r) => setImmediate(r));
     await settle();
     for (const ms of [60_000, 300_000, 1_800_000]) { t.mock.timers.tick(ms); await settle(); }

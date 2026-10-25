@@ -61,7 +61,8 @@ formé, un numéro de version minimale qui produit un avertissement dans ses jou
 autre adresse que `CLEVOA_URL` (aucune redirection suivie).
 
 **Fréquence** : un `POST` vers `CLEVOA_URL` (défaut `https://clevoa.fr/api/v1/telemetry`, figé en production) au
-démarrage puis toutes les 6 heures (03:00, 09:00, 15:00, 21:00, heure du serveur), avec l'en-tête `X-Clevoa-Key`. Délai de
+démarrage puis toutes les 6 heures (03:00, 09:00, 15:00, 21:00, heure du serveur, plus 0 à 10 minutes tirées au hasard
+pour étaler les envois des installations), avec l'en-tête `X-Clevoa-Key`. Délai de
 10 secondes par envoi ; après un échec, trois nouveaux essais (1, 5 puis 30 minutes), puis le créneau suivant (depuis la
 1.3.2-rc.2 ; un envoi par jour auparavant). Une panne de Clevoa n'interrompt jamais le
 hub : journal `[telemetry] échec`, rien d'autre.

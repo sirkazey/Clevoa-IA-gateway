@@ -127,13 +127,14 @@ export function nextSlot(now = Date.now()) {
 }
 
 /** Démarre : envoi immédiat, puis à chaque créneau de 6 heures. Un envoi en échec (Clevoa injoignable) est retenté à 1, 5
- *  puis 30 minutes avant de retomber sur les créneaux. */
-export function start(connectors, seats = () => 0, installation = () => undefined) {
+ *  puis 30 minutes avant de retomber sur les créneaux. Chaque attente est allongée de 0 à 10 minutes au hasard : les hubs
+ *  de tous les clients n'arrivent pas à la même seconde sur le backend (débit et exécutions simultanées plafonnés). */
+export function start(connectors, seats = () => 0, installation = () => undefined, spread = () => Math.floor(Math.random() * 600_000)) {
   if (!KEY) return console.log("[telemetry] désactivée (CLEVOA_KEY vide)");
   let failures = 0;
   const tick = async () => {
     failures = (await send(connectors, seats, installation)) ? 0 : failures + 1;
-    setTimeout(tick, failures && failures <= RETRY.length ? RETRY[failures - 1] : nextSlot()).unref();
+    setTimeout(tick, (failures && failures <= RETRY.length ? RETRY[failures - 1] : nextSlot()) + spread()).unref();
   };
   tick();
 }

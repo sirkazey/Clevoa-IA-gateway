@@ -14,11 +14,11 @@ d'outil MCP, de connecteur ni de portail côté client. Les hubs en 1.3.2-rc.1 r
 
 ### Ajouté
 - Télémétrie : statistiques par connecteur depuis le dernier envoi (appels, erreurs par type, collaborateurs distincts comptés par empreinte salée jamais transmise, latences p50 et p95), sans message d'erreur, nom d'outil ni identité.
-- Backend Clevoa : une ligne par période en plus de la fiche d'installation ; incidents (taux d'erreurs du système, refus d'authentification pour tous, silence) fermés sur preuve seulement, avec un e-mail à l'ouverture et à la fermeture, retenté s'il échoue, au plus dix par client et par heure ; débit de l'API plafonné ; 19 tests sans AWS.
+- Backend Clevoa : une ligne par période en plus de la fiche d'installation ; incidents (taux d'erreurs du système, refus d'authentification pour tous, silence) fermés sur preuve seulement (ou quand le connecteur n'est plus configuré ; un simulateur n'en ouvre aucun), avec un e-mail à l'ouverture et à la fermeture, retenté s'il échoue, au plus dix par client et par heure ; débit de l'API plafonné ; 21 tests sans AWS.
 - Console de suivi `clevoa-console/` : page en lecture seule (installations, incidents, graphiques sur 30 jours en temps réel, trous visibles), conteneur Docker pour un NAS du réseau privé de Clevoa, mot de passe obligatoire, politique IAM de lecture créée par le déploiement du backend, mode démonstration, 7 tests et scan Trivy de l'image en CI.
 
 ### Modifié
-- Télémétrie toutes les 6 heures (03:00, 09:00, 15:00, 21:00) au lieu d'une fois par jour ; silence signalé après 14 heures sans envoi (50 heures pour un hub antérieur), vérifié chaque heure.
+- Télémétrie toutes les 6 heures (03:00, 09:00, 15:00, 21:00, étalée sur 10 minutes) au lieu d'une fois par jour ; silence signalé après 14 heures sans envoi (50 heures pour un hub antérieur), vérifié chaque heure.
 - Backend : plus aucun e-mail pour une version sous le minimum (visible dans la console) ; versions acceptées limitées à X.Y.Z et X.Y.Z-(alpha|beta|rc).N ; clé de table composée (`pk`, `sk`) et index `etats`, à redéployer.
 
 ## [1.3.2-rc.1] – 2026-10-24
