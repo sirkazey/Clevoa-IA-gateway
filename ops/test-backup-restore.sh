@@ -53,7 +53,9 @@ $COMPOSE up -d mcp-hub >/dev/null 2>&1
 if sudo ops/restore.sh "$m" 2>"$WORK/err"; then echo "l'erreur de clé aurait dû être signalée"; exit 1; fi
 grep -q "ENCRYPTION_KEY différente" "$WORK/err"; cp "$WORK/env.bak" .env; echo "ok : erreur de clé signalée"
 say "M. base d'exploitation : l'instantané du hub (une minute après le démarrage) est sauvegardé en hub-*.db"
-for i in $(seq 1 90); do docker run --rm -v "$(vol):/data:ro" node:24-alpine test -f /data/hub-instantane.db && break; sleep 1; done
+$COMPOSE up -d mcp-hub >/dev/null 2>&1; health; connected "$WORK/jar1"   # hub relancé avec la bonne clé après L
+snap=; for i in $(seq 1 90); do docker run --rm -v "$(vol):/data:ro" node:24-alpine test -f /data/hub-instantane.db && { snap=1; break; }; sleep 1; done
+[ -n "$snap" ] || { echo "aucun instantané hub-instantane.db après 90 s" >&2; $COMPOSE logs --no-log-prefix --tail 20 mcp-hub >&2; exit 1; }
 sidecar >/dev/null; db=$(ls -t "$BACKUP_DIR"/hub-*.db | head -n 1); [ "$(sudo head -c 15 "$db")" = "SQLite format 3" ]; echo "ok : $db"
 say "N. restauration de la base d'exploitation seule : l'ancienne conservée, les collaborateurs intacts"
 sudo ops/restore.sh "$db"; health; connected "$WORK/jar1"
