@@ -327,9 +327,9 @@ app.all("/mcp", (_req, res) => res.status(405).json({ error: "Utilisez POST (mod
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
+db.start(CONNECTORS, (c) => health.status(c)); // avant l'annonce du démarrage : une base illisible est journalisée d'abord (ops/restore.sh)
 app.listen(PORT, () => {
   console.log(`Hub MCP v${VERSION} · ENV: ${APP_ENV} · ${PUBLIC_URL} (port ${PORT})${sagex3.mock ? " · Sage X3 simulé" : ""}${myreport.mock ? " · MyReport simulé" : ""}${sso.MODE ? ` · SSO ${sso.MODE}` : ""}${process.env.LOG_LEVEL === "debug" ? " · logs détaillés" : ""}`);
   telemetry.start(CONNECTORS, store.seats, store.installationId);
   health.start(CONNECTORS);
-  db.start(CONNECTORS, (c) => health.status(c));
 });

@@ -2,7 +2,7 @@
 // mensuels et journal d'audit (AUDIT=on). Les identités et jetons des collaborateurs restent dans users.json (store.js), inchangé.
 // Écritures d'une ligne en journal WAL : jamais de réécriture du fichier entier. Rien d'identifiant en clair : collaborateurs
 // pseudonymisés (HMAC), e-mail de l'audit chiffré (crypto.js). Une panne de cette base ne touche jamais les outils : le hub
-// continue sans historique ni compteurs, et le dit dans son journal. Instantané quotidien cohérent pour la sauvegarde.
+// continue sans historique ni compteurs, et le dit dans son journal. Instantané cohérent chaque heure pour la sauvegarde.
 import { DatabaseSync, backup } from "node:sqlite";
 import { renameSync, rmSync } from "node:fs";
 import { encrypt, decrypt } from "./crypto.js";
@@ -36,6 +36,7 @@ export function open(file = FILE) {
   try {
     db = new DatabaseSync(file);
     db.exec("pragma journal_mode = wal; pragma synchronous = normal; pragma busy_timeout = 5000;");
+    if (db.prepare("pragma quick_check").get().quick_check !== "ok") throw Object.assign(new Error("base corrompue (quick_check)"), { code: "SQLITE_CORRUPT" });
     const from = db.prepare("pragma user_version").get().user_version;
     for (let i = from; i < MIGRATIONS.length; i++) {
       db.exec("begin");
@@ -105,12 +106,12 @@ export async function snapshot(target = SNAPSHOT) {
   catch (e) { rmSync(tmp, { force: true }); console.error(`[db] instantané impossible : ${e.code ?? e.message}`); return false; }
 }
 
-/** Mesure l'état de chaque système toutes les 10 minutes ; purge et instantané au démarrage puis chaque jour. */
+/** Mesure l'état de chaque système toutes les 10 minutes ; purge chaque jour ; instantané chaque heure (copié par mcp-backup). */
 export function start(connectors, status) {
   if (!open()) return;
   const measure = () => { for (const c of connectors) if (!c.mock) { const s = status(c); sample(c.id, s.state, s.p95); } };
-  const daily = () => { purge(); snapshot(); };
-  setTimeout(daily, 60_000).unref(); // premier instantané une minute après le démarrage
-  setInterval(daily, DAY).unref();
+  setTimeout(() => { purge(); snapshot(); }, 60_000).unref(); // premier instantané une minute après le démarrage
+  setInterval(purge, DAY).unref();
+  setInterval(snapshot, 3_600_000).unref();
   setInterval(measure, SLOT).unref();
 }

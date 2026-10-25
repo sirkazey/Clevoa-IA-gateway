@@ -86,6 +86,8 @@ test("Base illisible : le hub continue sans historique ni compteurs, sans jamais
   db.close();
   const bad = join(DIR, "abime.db"); writeFileSync(bad, "ceci n'est pas une base SQLite".repeat(200));
   assert.equal(db.open(bad), false);
+  const torn = join(DIR, "dechiree.db"); writeFileSync(torn, Buffer.concat([Buffer.from("SQLite format 3\0"), Buffer.alloc(4000, 7)])); // en-tête correct, contenu abîmé
+  assert.equal(db.open(torn), false);
   assert.equal(db.ready(), false);
   assert.equal(db.count("sagex3", "u1", false), undefined);
   assert.deepEqual(db.availability("sagex3"), { pct: null, samples: 0, days: 30 });
@@ -142,5 +144,6 @@ test("Hub : base hub.db illisible au démarrage → le hub démarre et sert les 
     await c.connect(new StreamableHTTPClientTransport(new URL(`${h.url}/mcp`), { requestInit: { headers: { Authorization: `Bearer ${KEY}` } } }));
     try { assert.ok(!(await c.callTool({ name: "sagex3_representations", arguments: {} })).isError); } finally { await c.close(); }
     assert.match(h.logs(), /base d'exploitation indisponible/);
+    assert.ok(h.logs().indexOf("base d'exploitation indisponible") < h.logs().indexOf("Hub MCP v"), "signalé avant l'annonce du démarrage (vérification de ops/restore.sh)");
   } finally { await h.stop(); }
 });

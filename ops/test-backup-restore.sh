@@ -3,7 +3,8 @@
 # sauvegardes automatiques dans BACKUP_DIR). Joué par la CI ; exécutable sur un poste avec Docker (jamais contre la production).
 # Couvre : deux sauvegardes le même jour (sans doublon si rien ne change), sidecar relancé après corruption puis perte de users.json,
 # sauvegarde invalide qui ne remplace rien, restauration d'anciens et nouveaux noms de fichiers, incohérence conteneur / volume refusée,
-# sauvegarde manuelle, mauvaise ENCRYPTION_KEY détectée.
+# sauvegarde manuelle, mauvaise ENCRYPTION_KEY détectée ; base d'exploitation (1.5) : instantané sauvegardé, restauré, base abîmée signalée
+# sans toucher aux collaborateurs.
 set -eu
 HUB_URL=${HUB_URL:-http://localhost:8080}; COMPOSE=${COMPOSE:-docker compose -f docker-compose.dev.yml}; BACKUP_DIR=${BACKUP_DIR:?dossier des sauvegardes automatiques}
 WORK=$(mktemp -d); trap 'sudo rm -rf "$WORK"' EXIT   # des fichiers y sont créés par sudo (copies de sauvegardes root)
@@ -51,4 +52,16 @@ cp .env "$WORK/env.bak"; sed -i "s/^ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$(openssl r
 $COMPOSE up -d mcp-hub >/dev/null 2>&1
 if sudo ops/restore.sh "$m" 2>"$WORK/err"; then echo "l'erreur de clé aurait dû être signalée"; exit 1; fi
 grep -q "ENCRYPTION_KEY différente" "$WORK/err"; cp "$WORK/env.bak" .env; echo "ok : erreur de clé signalée"
+say "M. base d'exploitation : l'instantané du hub (une minute après le démarrage) est sauvegardé en hub-*.db"
+for i in $(seq 1 90); do docker run --rm -v "$(vol):/data:ro" node:24-alpine test -f /data/hub-instantane.db && break; sleep 1; done
+sidecar >/dev/null; db=$(ls -t "$BACKUP_DIR"/hub-*.db | head -n 1); [ "$(sudo head -c 15 "$db")" = "SQLite format 3" ]; echo "ok : $db"
+say "N. restauration de la base d'exploitation seule : l'ancienne conservée, les collaborateurs intacts"
+sudo ops/restore.sh "$db"; health; connected "$WORK/jar1"
+docker run --rm -v "$(vol):/data:ro" node:24-alpine test -f /data/hub.db.avant-restauration; echo "ok"
+say "O. base abîmée restaurée : échec signalé, le hub sert quand même les collaborateurs ; la bonne base se restaure ensuite"
+printf 'SQLite format 3\000' > "$WORK/hub-abimee.db"; head -c 8192 /dev/urandom >> "$WORK/hub-abimee.db"
+if sudo ops/restore.sh "$WORK/hub-abimee.db" 2>"$WORK/err"; then echo "la base abîmée aurait dû être signalée"; exit 1; fi
+grep -q "hub.db restaurée illisible" "$WORK/err"; health; connected "$WORK/jar1"
+sudo ops/restore.sh "$db" | grep -q "OK"; echo "ok"
+
 say "Tous les scénarios passent."
