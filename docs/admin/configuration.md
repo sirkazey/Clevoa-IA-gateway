@@ -250,10 +250,10 @@ envoyé, et comment le vérifier : [sécurité § 4](securite.md#4-télémétrie
 
 | Variable | Rôle |
 |---|---|
-| `PROBE` | vide : le hub vérifie que chaque système réel répond (requête `HEAD` sans identifiant) toutes les 10 minutes, du lundi au vendredi de 7 h à 19 h (heure `TZ`) ; `off` : jamais ; `always` : à toute heure (essai d'installation) |
+| `PROBE` | vide : le hub vérifie que chaque système réel répond (requête `HEAD` sans identifiant vers la racine de son adresse) toutes les 10 minutes, du lundi au vendredi de 7 h à 19 h (heure `TZ`) ; `off` (ou `false`, `0`) : jamais ; `always` : à toute heure (essai d'installation) |
 | `SLOW_MS` | temps de réponse p95 (ms, appels réussis de la dernière heure) au-delà duquel le portail affiche « Lent » ; défaut 10000 |
 | `CONNECTOR_DOMAINS` | classement des applications sur le portail, ex. `sagex3=industrie,myreport=finance` ; valeurs : `commerce`, `finance`, `industrie`, `documents`, `rh`, `autre` ; par défaut Salesforce en Commerce, Sage X3 et MyReport en Finance, SharePoint et Dropbox en Documents |
-| `METRICS_TOKEN` | jeton de la supervision pour `GET /metrics` (Prometheus) et `GET /metrics/prtg` (PRTG) ; vide = routes désactivées ([exploitation § 11](exploitation.md#11-supervision-du-hub)) |
+| `METRICS_TOKEN` | jeton de la supervision pour `GET /metrics` (Prometheus) et `GET /metrics/prtg` (PRTG), 24 caractères au moins (le hub refuse de démarrer sinon) ; vide = routes désactivées ([exploitation § 11](exploitation.md#11-supervision-du-hub)) |
 
 La vérification part du serveur du hub vers les adresses déjà configurées (`SAGE_URL`, `SF_MCP_URL`, `GRAPH_URL`,
 `DROPBOX_MCP_URL`, `MYREPORT_MCP_URL`) : prévenir l'équipe réseau, un pare-feu ou un WAF peut journaliser ces requêtes

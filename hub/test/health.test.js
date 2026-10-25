@@ -43,15 +43,30 @@ test("Sonde HEAD : toute réponse HTTP vaut « joignable » (401, 405 compris), 
 test("État calculé sur les appels de la dernière heure : erreurs, injoignable, lent, inconnu ; erreurs d'usage ignorées", () => {
   health.reset();
   const c = (id) => ({ id, apiKey: {}, mock: false });
-  for (let i = 0; i < 10; i++) health.record("err", 100, i < 3 ? Object.assign(new Error("x"), { status: 500 }) : undefined);
-  assert.equal(health.status(c("err")).state, "erreurs", "30 % d'erreurs du système");
-  for (let i = 0; i < 10; i++) health.record("down", 5000, i < 6 ? new Error("Sage X3 injoignable") : undefined);
+  for (let i = 0; i < 10; i++) health.record("err", 100, i < 3 ? Object.assign(new Error("x"), { status: 500 }) : undefined, `cle-${i}`);
+  assert.equal(health.status(c("err")).state, "erreurs", "30 % d'erreurs du système, plusieurs collaborateurs touchés");
+  for (let i = 0; i < 10; i++) health.record("seul", 100, i < 5 ? Object.assign(new Error("x"), { status: 500 }) : undefined, "cle-unique");
+  assert.equal(health.status(c("seul")).state, "ok", "un seul collaborateur touché : pas d'incident pour tous");
+  for (let i = 0; i < 10; i++) health.record("droits", 100, i < 8 ? Object.assign(new Error("x"), { status: i % 2 ? 403 : 400 }) : undefined, `cle-${i}`);
+  assert.equal(health.status(c("droits")).state, "ok", "droits insuffisants, jeton expiré, filtre invalide : le fait du collaborateur, pas du système");
+  for (let i = 0; i < 10; i++) health.record("plafond", 10, i < 6 ? new Error("MyReport : plafond de 20 appels par minute atteint, réessayez dans un instant.") : undefined, `cle-${i}`);
+  assert.equal(health.status(c("plafond")).state, "ok", "plafond du hub : l'appel n'a pas atteint le système");
+  for (let i = 0; i < 10; i++) health.record("mixte", 100, undefined, `cle-${i}`);
+  for (let i = 0; i < 3; i++) health.record("mixte", 100, Object.assign(new Error("x"), { status: 502 }), `cle-${i}`);
+  for (let i = 0; i < 10; i++) health.record("mixte", 100, new Error("Non connecté à Sage X3."), `cle-${i}`);
+  assert.equal(health.status(c("mixte")).state, "erreurs", "erreurs d'usage hors du calcul : 3 sur 13");
+  for (let i = 0; i < 19; i++) health.record("pointe", 1000); health.record("pointe", 60_000);
+  assert.equal(health.status(c("pointe")).state, "ok", "une seule pointe sur 20 appels n'est pas une lenteur");
+  for (let i = 0; i < 10; i++) health.record("down", 5000, i < 6 ? new Error("Sage X3 injoignable") : undefined, `cle-${i}`);
   assert.equal(health.status(c("down")).state, "injoignable", "erreurs surtout réseau");
   for (let i = 0; i < 10; i++) health.record("usage", 100, new Error("Non connecté à Sage X3."));
-  assert.equal(health.status(c("usage")).state, "ok", "outil non connecté : erreur d'usage, le système va bien");
+  assert.equal(health.status(c("usage")).state, "inconnu", "outil non connecté : aucun appel n'a atteint le système, aucun incident");
   for (let i = 0; i < 10; i++) health.record("slow", 15_000);
   const slow = health.status(c("slow"));
-  assert.equal(slow.state, "lent"); assert.equal(slow.p95, 15_000); assert.ok(slow.lastOk);
+  assert.equal(slow.state, "lent"); assert.equal(slow.p95, 15_000);
+  assert.ok(!("lastOk" in slow), "jamais l'heure d'un appel (activité d'un collaborateur)");
+  for (let i = 0; i < 4; i++) health.record("peu", 100);
+  assert.equal(health.status(c("peu")).p95, null, "moins de 5 appels : pas de temps de réponse");
   assert.equal(health.status(c("rien")).state, "inconnu", "aucun appel, aucune sonde récente");
   assert.equal(health.status({ id: "sim", mock: true }).state, "simule");
   assert.equal(health.status(c("err"), Date.now() + 2 * 3600_000).state, "inconnu", "au-delà d'une heure, les appels ne comptent plus");
@@ -61,13 +76,16 @@ test("Hub : /api/status réservé au collaborateur ; sonde des seuls systèmes r
   const hub = await startHub({ upstreamUrl: up.url, users: { [KEY]: connectedUser(up.url) }, env: { PROBE: "always", MYREPORT_MCP_URL: "" } });
   try {
     assert.equal((await fetch(`${hub.url}/api/status`)).status, 401, "sans clé de portail");
+    const anon = (await fetch(`${hub.url}/api/me`)).headers.get("set-cookie").split(";")[0];
+    assert.equal((await fetch(`${hub.url}/api/status`, { headers: { Cookie: anon } })).status, 403, "visiteur sans application connectée (hub public sans SSO) : refusé");
     const deadline = Date.now() + 5000;
     while (up.requests("", "HEAD").length < 4 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 50));
     const heads = up.requests("", "HEAD");
     assert.ok(heads.length >= 4, `${heads.length} sondes`);
     assert.ok(heads.every((r) => !r.headers.authorization), "aucun identifiant envoyé");
+    assert.ok(heads.every((r) => r.path === "/"), "racine de l'adresse, jamais le chemin MCP");
     const s = await (await fetch(`${hub.url}/api/status`, { headers: { Cookie: `mcp_key=${KEY}` } })).json();
-    assert.equal(s.paused, false); assert.match(s.probeHours, /lundi au vendredi/);
+    assert.equal(s.paused, false); assert.match(s.probeHours, /en continu/, "PROBE=always");
     const byId = Object.fromEntries(s.systems.map((x) => [x.id, x]));
     if (process.env.APP_ENV === "production") assert.equal(byId.myreport, undefined, "production : simulateur non exposé");
     else assert.equal(byId.myreport.state, "simule", "simulateur : jamais sondé");
@@ -87,6 +105,7 @@ test("Hub : domaine d'une application surchargé par CONNECTOR_DOMAINS ; valeur 
 });
 
 test("Supervision /metrics et /metrics/prtg : absentes sans METRICS_TOKEN ; jeton exigé ; formats Prometheus et PRTG sans identité ni clé", async () => {
+  await assert.rejects(startHub({ upstreamUrl: up.url, env: { METRICS_TOKEN: "court" } }), /METRICS_TOKEN trop court/, "jeton court refusé au démarrage");
   const off = await startHub({ upstreamUrl: up.url });
   try { for (const r of ["/metrics", "/metrics/prtg"]) assert.equal((await fetch(`${off.url}${r}`)).status, 404, "désactivée par défaut"); } finally { await off.stop(); }
   const hub = await startHub({ upstreamUrl: up.url, users: { [KEY]: connectedUser(up.url) }, env: { METRICS_TOKEN: "jeton-supervision-0123456789" } });

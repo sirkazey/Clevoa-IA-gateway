@@ -39,11 +39,12 @@ d'outils ; noms d'objets validés (`^\w+$`) ; outils annotés `readOnlyHint`.
   autre origine ; PKCE S256 sur tous les flux.
 * Transport SSE : `POST /messages` exige la clé MCP et la session doit avoir été ouverte par cette clé (403 sinon).
 * État des systèmes (1.4.0) : le hub envoie, du lundi au vendredi de 7 h à 19 h, une requête `HEAD` toutes les 10 minutes
-  vers l'adresse de chaque système réel, **sans aucun identifiant** ni redirection suivie (`PROBE=off` la désactive). Le
-  portail (`/api/status`, collaborateur connecté) n'affiche qu'un état et un temps de réponse par système, jamais un
-  volume ni une identité. La supervision (`/metrics`, `/metrics/prtg`) exige un jeton dédié `METRICS_TOKEN`, distinct des clés des
+  vers la racine de l'adresse de chaque système réel, **sans aucun identifiant** ni redirection suivie (`PROBE=off` la
+  désactive). Le portail (`/api/status`, réservé à un collaborateur identifié par le SSO ou ayant connecté une
+  application) n'affiche qu'un état et un temps de réponse par système (à partir de 5 appels), jamais un volume, l'heure
+  d'un appel ni une identité. Le jeton de supervision doit compter 24 caractères au moins. La supervision (`/metrics`, `/metrics/prtg`) exige un jeton dédié `METRICS_TOKEN`, distinct des clés des
   collaborateurs, et n'existe pas sans lui ; elle ne contient ni identité, ni clé, ni adresse, ni donnée métier.
-* Limitation de débit en mémoire, par adresse IP et par minute : 20 diagnostics, 30 actions portail, 60 `/api/me` et
+* Limitation de débit en mémoire, par adresse IP et par minute : 20 diagnostics, 30 actions portail, 60 `/api/me`, 60
   `/api/status`, 30 `/metrics`,
   60 départs et retours OAuth, 20 échecs d'authentification MCP (une clé valide n'est jamais freinée par les échecs
   d'autres clients). `TRUST_PROXY` indique le nombre de reverse proxys pour lire l'IP réelle. Les routes MCP elles-mêmes

@@ -99,13 +99,13 @@ function buildServer(key) {
       try {
         const out = await call(c, key, (tok, schema) => t.run(tok, args, schema));
         telemetry.record(c.id, key, Date.now() - t0); // nombres seulement : appel, durée, empreinte locale de l'appelant
-        health.record(c.id, Date.now() - t0);
+        health.record(c.id, Date.now() - t0, undefined, key);
         debug(`${t.name} ok ${Date.now() - t0} ms`); // jamais les arguments ni les résultats
         const body = out?.$content ? out.$content : [{ type: "text", text: typeof out === "string" ? out : JSON.stringify(out) }]; // $content : contenu MCP relayé tel quel (image, resource)
         return { content: [...body, { type: "text", text: provenance(c) }] }; // traçabilité : d'où vient chaque donnée
       } catch (e) {
         telemetry.record(c.id, key, Date.now() - t0, e); // type d'erreur seulement, jamais le message
-        health.record(c.id, Date.now() - t0, e);
+        health.record(c.id, Date.now() - t0, e, key);
         debug(`${t.name} erreur ${Date.now() - t0} ms : ${e.status ?? "erreur"}`); // jamais le message (il peut citer une clé demandée)
         return { isError: true, content: [{ type: "text", text: e.message }] };
       }
@@ -197,9 +197,13 @@ app.get("/api/test/:system", limit("diag", 20), portalUser, async (req, res) => 
   catch (e) { res.json({ ok: false, error: e.message.slice(0, 300) }); }
 });
 
-// État des systèmes pour le portail : un état et un temps de réponse par système, jamais un volume ni une identité.
-app.get("/api/status", limit("me", 60), portalUser, (_req, res) => {
-  res.json({ probeHours: health.PROBE_HOURS, paused: process.env.PROBE !== "always" && !health.inProbeHours(), probe: process.env.PROBE !== "off",
+// État des systèmes pour le portail : un état et un temps de réponse par système, jamais un volume ni une identité. Réservé, comme la
+// configuration, à un collaborateur identifié (SSO) ou ayant connecté au moins un système : pas à un visiteur d'un hub public.
+app.get("/api/status", limit("status", 60), portalUser, (req, res) => {
+  const u = store.get(req.key);
+  if (!sso.MODE && !CONNECTORS.some((c) => hasCredential(u[c.id]))) return res.status(403).json({ error: "Connectez d'abord une application." });
+  const mode = health.probeMode(), probing = mode !== "off" && CONNECTORS.some(health.probeable);
+  res.json({ probeHours: health.probeHours(), paused: probing && mode !== "always" && !health.inProbeHours(), probe: probing,
     systems: CONNECTORS.map((c) => ({ id: c.id, ...health.status(c) })) });
 });
 
@@ -207,6 +211,8 @@ app.get("/api/status", limit("me", 60), portalUser, (_req, res) => {
 // capteur PRTG « HTTP Data Advanced ». Jeton METRICS_TOKEN distinct des clés des collaborateurs, en Bearer ou en mot de passe
 // d'une authentification HTTP (identifiant libre). Sans jeton configuré, les routes n'existent pas. Aucune identité, clé ni donnée métier.
 const METRICS_TOKEN = process.env.METRICS_TOKEN || "";
+// Jeton court = devinable par essais depuis plusieurs adresses : refusé au démarrage (openssl rand -hex 24).
+if (METRICS_TOKEN && METRICS_TOKEN.length < 24) { console.error("[metrics] METRICS_TOKEN trop court : 24 caractères au moins (openssl rand -hex 24)"); process.exit(1); }
 const metricsAuth = (req) => {
   const h = req.headers.authorization || "";
   const basic = h.match(/^Basic\s+(\S+)$/i)?.[1];
@@ -215,14 +221,17 @@ const metricsAuth = (req) => {
 const sameToken = (given) => timingSafeEqual(createHash("sha256").update(String(given)).digest(), createHash("sha256").update(METRICS_TOKEN).digest());
 const STATES = ["ok", "lent", "erreurs", "injoignable", "inconnu", "simule"];
 const promLabel = (v) => String(v).replace(/[\\"\n]/g, "_");
-const metricsGate = (req, res, next) => {
-  if (!METRICS_TOKEN) return res.sendStatus(404);
-  if (!sameToken(metricsAuth(req))) return res.status(hit("auth-fail", req.ip, 20) ? 429 : 401).set("WWW-Authenticate", 'Basic realm="supervision"').type("text/plain").send("jeton de supervision requis\n");
-  next();
+/** Vrai si la requête est refusée (réponse déjà envoyée) : route absente sans jeton configuré, 401 ou 429 sinon. */
+const metricsDenied = (req, res) => {
+  if (!METRICS_TOKEN) { res.sendStatus(404); return true; }
+  if (sameToken(metricsAuth(req))) return false;
+  res.status(hit("auth-fail", req.ip, 20) ? 429 : 401).set("WWW-Authenticate", 'Basic realm="supervision"').type("text/plain").send("jeton de supervision requis\n");
+  return true;
 };
 // PRTG : un canal « Santé » par système (0 bon, 1 avertissement si lent, 2 erreur si en erreurs ou injoignable ; seuils posés
 // par le hub), joignabilité, temps de réponse p95, appels et erreurs du système (mode différence : par intervalle de PRTG).
-app.get("/metrics/prtg", limit("metrics", 30), metricsGate, (_req, res) => {
+app.get("/metrics/prtg", limit("metrics", 30), (req, res) => {
+  if (metricsDenied(req, res)) return;
   const result = [], bad = [];
   for (const c of CONNECTORS) {
     const s = health.status(c), n = health.counters(c.id);
@@ -231,17 +240,18 @@ app.get("/metrics/prtg", limit("metrics", 30), metricsGate, (_req, res) => {
     if (level) bad.push(`${c.label} : ${s.state}${s.probe?.reason ? ` (${s.probe.reason})` : ""}`);
     result.push({ channel: `${c.label} · santé`, value: level, unit: "Custom", customunit: "", limitmode: 1, limitmaxwarning: 0.5, limitmaxerror: 1.5,
       limitwarningmsg: `${c.label} lent`, limiterrormsg: `${c.label} en erreurs ou injoignable` });
-    if (n.probe) result.push({ channel: `${c.label} · joignable`, value: n.probe.ok ? 1 : 0, unit: "Custom", customunit: "", limitmode: 1, limitminerror: 0.5, limiterrormsg: `${c.label} injoignable` });
+    if (n.probe && n.probe.at >= Date.now() - 25 * 60_000) result.push({ channel: `${c.label} · joignable`, value: n.probe.ok ? 1 : 0, unit: "Custom", customunit: "", limitmode: 1, limitminerror: 0.5, limiterrormsg: `${c.label} injoignable` });
     if (s.p95 != null) result.push({ channel: `${c.label} · p95`, value: s.p95, unit: "TimeResponse" });
     result.push({ channel: `${c.label} · appels`, value: n.calls, unit: "Count", mode: "Difference" });
-    result.push({ channel: `${c.label} · erreurs système`, value: Object.entries(n.errors).filter(([t]) => t !== "user").reduce((x, [, v]) => x + v, 0), unit: "Count", mode: "Difference" });
+    result.push({ channel: `${c.label} · erreurs système`, value: n.sys, unit: "Count", mode: "Difference" });
   }
   result.push({ channel: "Hub · sièges", value: store.seats(), unit: "Count" });
   result.push({ channel: "Hub · mémoire", value: process.memoryUsage().rss, unit: "BytesMemory" });
   result.push({ channel: "Hub · durée de fonctionnement", value: Math.round(process.uptime()), unit: "TimeSeconds" });
   res.json({ prtg: { result, text: bad.length ? bad.join(" · ") : `Clevoa AI Gateway ${VERSION} : systèmes opérationnels` } });
 });
-app.get("/metrics", limit("metrics", 30), metricsGate, (req, res) => {
+app.get("/metrics", limit("metrics", 30), (req, res) => {
+  if (metricsDenied(req, res)) return;
   const m = [], g = (name, help, type = "gauge") => m.push(`# HELP ${name} ${help}`, `# TYPE ${name} ${type}`);
   g("clevoa_hub_info", "Version et environnement du hub");
   m.push(`clevoa_hub_info{version="${promLabel(VERSION)}",env="${promLabel(APP_ENV)}"} 1`);
@@ -253,10 +263,12 @@ app.get("/metrics", limit("metrics", 30), metricsGate, (req, res) => {
   const rows = CONNECTORS.map((c) => ({ c, s: health.status(c), n: health.counters(c.id) }));
   g("clevoa_system_state", "État du système (1 pour l'état courant)");
   for (const { c, s } of rows) for (const st of STATES) m.push(`clevoa_system_state{system="${promLabel(c.id)}",state="${st}"} ${s.state === st ? 1 : 0}`);
-  g("clevoa_system_up", "Dernière sonde HEAD : 1 joignable, 0 injoignable (absente si jamais sondé)");
-  for (const { c, n } of rows) if (n.probe) m.push(`clevoa_system_up{system="${promLabel(c.id)}"} ${n.probe.ok ? 1 : 0}`);
-  g("clevoa_system_probe_seconds", "Durée de la dernière sonde HEAD");
-  for (const { c, n } of rows) if (n.probe) m.push(`clevoa_system_probe_seconds{system="${promLabel(c.id)}"} ${(n.probe.ms / 1000).toFixed(3)}`);
+  // Sonde de moins de 25 minutes seulement : hors des heures de vérification, une sonde ancienne ne maintient pas une alerte.
+  const freshProbe = (n) => n.probe && n.probe.at >= Date.now() - 25 * 60_000;
+  g("clevoa_system_up", "Sonde HEAD de moins de 25 minutes : 1 joignable, 0 injoignable (absente sinon)");
+  for (const { c, n } of rows) if (freshProbe(n)) m.push(`clevoa_system_up{system="${promLabel(c.id)}"} ${n.probe.ok ? 1 : 0}`);
+  g("clevoa_system_probe_seconds", "Durée de la sonde HEAD de moins de 25 minutes");
+  for (const { c, n } of rows) if (freshProbe(n)) m.push(`clevoa_system_probe_seconds{system="${promLabel(c.id)}"} ${(n.probe.ms / 1000).toFixed(3)}`);
   g("clevoa_system_calls_total", "Appels d'outils depuis le démarrage", "counter");
   for (const { c, n } of rows) m.push(`clevoa_system_calls_total{system="${promLabel(c.id)}"} ${n.calls}`);
   g("clevoa_system_errors_total", "Erreurs d'outils par type depuis le démarrage", "counter");

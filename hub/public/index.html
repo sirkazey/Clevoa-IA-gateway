@@ -444,7 +444,7 @@ function showClient(kind) {
 // ---- Bandeau de situation : connexions, assistant, état des services, prochaine action ----
 function paintSummary() {
   if (!ME) return;
-  const real = ME.systems.filter((s) => !s.mock), ready = ME.systems.filter((s) => s.connected || s.mock).length, total = ME.systems.length;
+  const real = ME.systems.filter((s) => !s.mock && (s.configured || s.apiKey)), ready = ME.systems.filter((s) => s.connected || s.mock).length, total = ME.systems.length;
   const copied = store.get("cfgCopied") === "1";
   const down = (STATUS?.systems ?? []).filter((x) => ["injoignable", "erreurs"].includes(x.state)).map((x) => ME.systems.find((s) => s.id === x.id)?.label).filter(Boolean);
   const action = !ready && real.length ? ["Connecter une application", "#outils"] : !copied ? ["Brancher mon assistant", "#assistant"] : null;
@@ -462,20 +462,22 @@ function stateOf(s) { // [classe, libellé, explication]
   return ["todo", "À connecter", s.oauth && s.configured ? "Connectez votre compte pour que votre assistant puisse l'interroger." : `Saisissez votre ${esc(s.apiKey?.label || "jeton personnel")}.`];
 }
 function service(id) {
+  if (STATUS === false) return `<div class="svc"><span class="dot" aria-hidden="true"></span><span>Service : visible après la connexion d'une application</span></div>`;
   const x = STATUS?.systems.find((y) => y.id === id);
   if (!x) return `<div class="svc"><span class="dot" aria-hidden="true"></span><span>Service : …</span></div>`;
   const parts = [];
   if (x.p95 != null && x.state !== "injoignable") parts.push(secs(x.p95));
   if (x.state === "injoignable" && x.probe?.reason) parts.push(x.probe.reason);
   if (x.state === "inconnu" && STATUS.paused) parts.push("vérification en pause");
-  const title = [x.lastOk && `Dernier appel réussi à ${hhmm(x.lastOk)}`, x.probe && `Vérifié à ${hhmm(x.probe.at)} : ${x.probe.ok ? `joignable en ${secs(x.probe.ms)}` : x.probe.reason}`,
+  if (x.state === "inconnu" && !STATUS.probe) parts.push("vérification désactivée");
+  const title = [x.probe && `Vérifié à ${hhmm(x.probe.at)} : ${x.probe.ok ? `joignable en ${secs(x.probe.ms)}` : x.probe.reason}`,
     STATUS.probe && `Vérification ${STATUS.probeHours}`].filter(Boolean).join(" · ");
   return `<div class="svc ${esc(x.state)}" title="${esc(title)}"><span class="dot" aria-hidden="true"></span><span><span class="sr-only">Service : </span><b>${esc(SERVICE[x.state] || x.state)}</b>${parts.length ? ` · ${esc(parts.join(" · "))}` : ""}</span></div>`;
 }
 function appRow(s) {
   const t = TOOLS[s.id] || { icon: "plug", desc: "Application connectée" }, [cls, tag, why] = stateOf(s), id = esc(s.id);
   const oauthBtn = s.oauth && !s.mock && s.configured && !s.connected ? `<a class="btn primary" href="/auth/${esc(s.id)}">Se connecter</a>` : "";
-  const tokenBtn = s.apiKey && !s.connected && !oauthBtn ? `<button class="btn primary" type="button" onclick="toggle('${id}', true)">Saisir mon jeton</button>` : "";
+  const tokenBtn = s.apiKey && !s.connected && !oauthBtn ? `<button class="btn primary" type="button" onclick="toggle('${id}', true, true)">Saisir mon jeton</button>` : "";
   const form = s.apiKey && !s.connected ? `
       <form class="apikey" autocomplete="off" onsubmit="saveApiKey(event, '${id}')">
         ${s.apiKey.mode === "basic" ? `<div class="field"><label for="${id}-login">Identifiant</label><input id="${id}-login" name="${id}-login" autocomplete="off" required></div>` : ""}
@@ -505,11 +507,12 @@ function appRow(s) {
       </div>
     </li>`;
 }
-function toggle(id, force) {
+function toggle(id, force, focus = false) {
+  const drawer = $(`#drawer-${id}`); if (!drawer) return; // liste rechargée entre-temps
   const on = force ?? !open.has(id);
   if (on) open.add(id); else open.delete(id);
-  $(`#drawer-${id}`).hidden = !on; $(`#more-${id}`).setAttribute("aria-expanded", String(on));
-  if (on && force) $(`#${id}-login, #${id}-apikey`)?.focus();
+  drawer.hidden = !on; $(`#more-${id}`).setAttribute("aria-expanded", String(on));
+  if (on && focus) $(`#${id}-login, #${id}-apikey`)?.focus(); // seulement depuis « Saisir mon jeton »
 }
 function paintSystems() {
   const groups = Object.keys(DOMAINS).map((d) => [d, ME.systems.filter((s) => (DOMAINS[s.domain] ? s.domain : "autre") === d)]).filter(([, l]) => l.length);
@@ -527,14 +530,18 @@ function paintStatus() {
   paintSummary();
 }
 async function loadStatus() {
-  try { const r = await fetch("/api/status"); if (r.ok) { STATUS = await r.json(); paintStatus(); } } catch { /* la page reste utilisable sans l'état des services */ }
+  try {
+    const r = await fetch("/api/status");
+    if (r.ok) STATUS = await r.json(); else if (r.status === 403) STATUS = false; else return; // 403 : aucune application connectée encore
+    paintStatus();
+  } catch { /* la page reste utilisable sans l'état des services */ }
 }
 
 function view(name) { $("#app").hidden = name !== "app"; $("#signin").hidden = name !== "signin"; $("#offline").hidden = name !== "offline"; }
 let seq = 0;
 async function load() {
   const n = ++seq; let me;
-  try { me = await fetch("/api/me").then((r) => r.json()); } catch { view("offline"); $("#profile").innerHTML = ""; return; }
+  try { const r = await fetch("/api/me"); if (!r.ok) throw new Error(`HTTP ${r.status}`); me = await r.json(); } catch { view("offline"); $("#profile").innerHTML = ""; return; }
   if (n !== seq) return; // une réponse plus récente a pris le relais
   $("#env").innerHTML = `v${esc(me.version)} · ENV: <b class="${me.env === "PRODUCTION" ? "prod" : ""}">${esc(me.env)}</b>`;
   $("#env-foot").textContent = `${me.instance || "Clevoa AI Gateway"} · v${me.version} · ${me.env}`;

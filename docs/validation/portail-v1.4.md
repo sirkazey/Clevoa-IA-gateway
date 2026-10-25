@@ -22,21 +22,26 @@ domaine sans application n'est jamais affiché.
 
 Calculé par le hub (`hub/health.js`), sans aucun identifiant :
 
-* appels réels des collaborateurs sur la dernière heure : plus de 20 % d'erreurs du système sur au moins 5 appels donne
-  « Erreurs » (« Injoignable » si ce sont surtout des erreurs réseau), un temps de réponse p95 au-delà de `SLOW_MS`
-  (10 s) donne « Lent » ; les erreurs d'usage (outil non connecté, hors liste blanche) ne comptent pas ;
-* une requête `HEAD` vers chaque système réel toutes les 10 minutes, du lundi au vendredi de 7 h à 19 h : toute réponse
-  HTTP prouve la joignabilité ; échec DNS, certificat, refus de connexion ou délai de 5 s donnent « Injoignable » avec la
-  cause. Hors de ces heures, sans appel récent, la ligne indique « Pas d'appel récent · vérification en pause ».
+* appels réels des collaborateurs sur la dernière heure : plus de 20 % d'erreurs du système sur au moins 5 appels, touchant
+  au moins deux collaborateurs, donne « Erreurs » (« Injoignable » si ce sont surtout des erreurs réseau) ; un temps de
+  réponse p95 au-delà de `SLOW_MS` (10 s) donne « Lent ». Ne comptent pas contre le système : les erreurs d'usage (outil
+  non connecté, hors liste blanche), les refus d'authentification et requêtes refusées (jeton expiré, droits, filtre
+  invalide : le fait d'un collaborateur) et le plafond d'appels du hub ;
+* une requête `HEAD` vers la racine de l'adresse de chaque système réel toutes les 10 minutes, du lundi au vendredi de
+  7 h à 19 h : toute réponse HTTP prouve la joignabilité ; échec DNS, certificat, refus de connexion ou délai de 5 s
+  donnent « Injoignable » avec la cause, sauf si un appel réel a réussi depuis. Hors de ces heures, sans appel récent, la
+  ligne indique « Pas d'appel récent · vérification en pause ».
 
-Le portail n'affiche jamais un volume d'appels ni une identité. La même mesure est exposée à la supervision par
+Le portail n'affiche jamais un volume d'appels, l'heure d'un appel ni une identité ; le temps de réponse n'apparaît
+qu'à partir de 5 appels réussis dans l'heure. L'état n'est visible que d'un collaborateur identifié par le SSO ou ayant
+connecté au moins une application. La même mesure est exposée à la supervision par
 `/metrics` ([exploitation § 11](../admin/exploitation.md#11-supervision-du-hub)).
 
 ## Vérifications
 
 | Vérification | Résultat |
 |---|---|
-| Tests du hub | 112 tests (111 exécutés et 1 réservé à la production ; en mode production 110 et 2), dont 6 pour l'état des systèmes et `/metrics` ; cohérence des URL de la page avec les routes du serveur |
+| Tests du hub | 112 tests (111 exécutés et 1 réservé à la production ; en mode production 110 et 2), dont 6 pour l'état des systèmes, `/metrics` et `/metrics/prtg` ; cohérence des URL de la page avec les routes du serveur |
 | Accessibilité (axe-core, WCAG 2.1 A et AA) | 0 violation en thème clair (détail d'une ligne ouvert), sombre et mobile |
 | Débordement horizontal | aucun à 1 440 px et 390 px |
 | Erreurs de la console du navigateur | aucune |
@@ -59,6 +64,16 @@ Téléphone :
 ![Téléphone](portail-v1.4/3-mobile.png)
 
 Avant, pour comparaison : [portail 1.3.1](portail-v1.3.1/2-outils-connectes-desktop.png).
+
+## Revues indépendantes
+
+Deux relectures (sécurité, fonctionnelle) du premier état de la branche : sécurité GO sous réserve, fonctionnelle NO-GO
+(faux incident pour tous sur le jeton expiré d'un seul collaborateur). Corrigés : état réservé aux collaborateurs
+identifiés ou connectés, heure du dernier appel retirée, temps de réponse à partir de 5 appels, erreurs du fait d'un
+collaborateur et plafond du hub hors du calcul, deux collaborateurs touchés au minimum, erreurs d'usage hors du
+dénominateur, sonde sur la racine de l'adresse et effacée par un appel réussi, sonde de plus de 25 minutes non publiée à
+la supervision, jeton de supervision de 24 caractères au moins, `PROBE` et `SLOW_MS` validés, focus et limite de débit
+du portail.
 
 ## Reste à faire
 
