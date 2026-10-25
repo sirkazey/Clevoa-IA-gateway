@@ -48,14 +48,15 @@ La liste complète des tests réels restants est dans [l'état des fonctionnalit
 
 ## 3. Axe 2 — Observabilité et maintenance
 
-Objectif : Clevoa sait quelles installations tournent, dans quelle version, et l'administrateur du client garde la
-main sur son déploiement. Aucun accès de Clevoa à l'infrastructure ni aux données du client.
+Objectif : Clevoa sait quelles installations tournent, dans quelle version et avec quelle qualité de service, et
+l'administrateur du client garde la main sur son déploiement. Aucun accès de Clevoa à l'infrastructure ni aux données du client.
 
 | Sujet | Statut | Critère de sortie |
 |---|---|---|
 | Télémétrie éditeur : identifiant d'installation, version, dernier contact, connecteurs déclarés, persistance, détection des installations silencieuses et des versions obsolètes | fait (tests sans AWS) ; déploiement AWS à faire | [sécurité § 4](admin/securite.md#4-télémétrie-clevoa), [backend](../clevoa-backend/README.md) ; validation juridique de la télémétrie |
+| Statistiques par connecteur toutes les 6 h, e-mails d'incident seulement (ouverture, fermeture), console de suivi en lecture seule sur le NAS de Clevoa ([décision du 2026-10-25](history/decisions.md)) | fait (tests sans AWS, console en démonstration et en conteneur) ; redéploiement du backend et installation de la console à faire | [console](../clevoa-console/README.md), [backend](../clevoa-backend/README.md) ; premier incident réel reçu par e-mail et visible dans la console |
 | Diagnostic exportable, relu par l'administrateur avant envoi | fait | [exploitation § 9](admin/exploitation.md#9-diagnostic-et-support) ; test automatisé de l'absence de valeur sensible |
-| Publication de versions figées (tag Git, image de base par empreinte) et déploiement d'une version choisie | fait (procédure) ; tag `v1.3.2-rc.1` et protection des tags `v*` à poser | [installation § 6](admin/installation.md#6-cycle-de-livraison-et-versions), `hub/test/release.test.js` |
+| Publication de versions figées (tag Git, image de base par empreinte) et déploiement d'une version choisie | fait (procédure) ; tag `v1.3.2-rc.2` et protection des tags `v*` à poser | [installation § 6](admin/installation.md#6-cycle-de-livraison-et-versions), `hub/test/release.test.js` |
 | Retour arrière à la version précédente | fait (testé en local et en CI) | [exploitation § 10](admin/exploitation.md#10-mise-à-jour-et-retour-arrière), `ops/test-rollback.sh` |
 | Suivi des versions du SDK MCP et des dépendances | à faire, à chaque version | `npm audit` et Trivy sans vulnérabilité haute ou critique corrigeable |
 
@@ -82,9 +83,9 @@ configuration, il n'est pas exposé en production) ; une personnalisation ne jus
 * registre et gestion d'Agent Skills (branche `docs/roadmap-skills-adoption-2026-10`, conservée comme archive, non
   fusionnée) ;
 * interface web conversationnelle ou appel d'un LLM depuis le hub ;
-* mini-portail d'administration, santé des connecteurs sur le portail, interface déclarative des connecteurs MCP,
-  tableau de bord graphique des installations
-  ([archive § 2](history/roadmap-2026-10.md#2-catalogue-des-évolutions-possibles-optionnel-roadmap-clevoa)) ;
+* mini-portail d'administration, santé des connecteurs sur le portail, interface déclarative des connecteurs MCP
+  (le tableau de bord graphique des installations est réintégré à l'axe 2 sous la forme de la console de suivi de
+  Clevoa, décision du 2026-10-25) ([archive § 2](history/roadmap-2026-10.md#2-catalogue-des-évolutions-possibles-optionnel-roadmap-clevoa)) ;
 * accès depuis claude.ai web et mobile, écarté ([décisions](history/decisions.md)).
 
 Une de ces pistes ne revient qu'avec une nouvelle décision datée et un client qui la demande.

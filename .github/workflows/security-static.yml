@@ -26,8 +26,9 @@ jobs:
           node-version: 22
       - run: npm ci --prefix hub
       - run: npm ci --prefix clevoa-mcp-stub
+      - run: npm ci --prefix clevoa-console
       - name: npm audit (dépendances de production, niveau haut et critique)
-        run: npm audit --omit=dev --audit-level=high --prefix hub && npm audit --omit=dev --audit-level=high --prefix clevoa-mcp-stub
+        run: npm audit --omit=dev --audit-level=high --prefix hub && npm audit --omit=dev --audit-level=high --prefix clevoa-mcp-stub && npm audit --omit=dev --audit-level=high --prefix clevoa-console
       - name: Hub, pré-prod
         run: npm test --prefix hub
       - name: Hub, verrous de production
@@ -36,6 +37,8 @@ jobs:
         run: npm test --prefix clevoa-mcp-stub
       - name: Backend Clevoa (sans AWS)
         run: npm test --prefix clevoa-backend
+      - name: Console de suivi (données de démonstration, sans AWS)
+        run: npm test --prefix clevoa-console
   docs:
     name: Documentation (liens Markdown, ancres, fichiers cités)
     runs-on: ubuntu-latest
@@ -149,7 +152,7 @@ jobs:
           path: trivy.json
           if-no-files-found: ignore
   trivy-image:
-    name: Trivy image du hub construite (système Alpine, Node, dépendances)
+    name: Trivy images construites du hub et de la console (système Alpine, Node, dépendances)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -167,9 +170,24 @@ jobs:
           exit-code: '1'
           format: json
           output: trivy-image.json
+      - name: Construire l'image de la console
+        if: always()
+        run: docker build -t clevoa-console:ci -f clevoa-console/Dockerfile .
+      - name: Scan de l'image de la console
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: clevoa-console:ci
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: json
+          output: trivy-image-console.json
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: trivy-image-results
-          path: trivy-image.json
+          path: trivy-image*.json
           if-no-files-found: ignore

@@ -1,0 +1,16 @@
+{
+  "name": "clevoa-console",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Console de suivi des installations Clevoa AI Gateway : lecture seule de la table DynamoDB de télémétrie, à héberger sur un poste ou un NAS de Clevoa.",
+  "scripts": {
+    "start": "node server.js",
+    "demo": "CONSOLE_DEMO=1 node server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "3.1148.0"
+  }
+}

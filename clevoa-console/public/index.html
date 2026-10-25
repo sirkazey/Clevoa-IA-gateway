@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Console Clevoa</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+@font-face { font-family: "Outfit"; src: url("/fonts/outfit-variable-latin.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+/* Charte Clevoa (mêmes jetons que le portail) ; une colonne : synthèse, tableau des installations, détail de celle choisie. */
+:root {
+  --bg: #F6F5FA; --surface: #FFFFFF; --ink: #2B2540; --muted: #625C75; --line: #E3E0EE; --accent: #6B30D9; --accent-soft: #EEE7FC;
+  --ok: #0B7A73; --ok-soft: #E3F3F1; --warn: #9A5B00; --warn-soft: #FBF0DE; --bad: #B42318; --bad-soft: #FCE8E6; --grey-soft: #ECEAF2;
+  --font: "Outfit", ui-sans-serif, system-ui, sans-serif; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --c1: #6B30D9; --c2: #0B7A73; --c3: #C2410C; --c4: #2563EB; --c5: #A21CAF;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #17141F; --surface: #211D2C; --ink: #ECE9F4; --muted: #ABA4BF; --line: #352F45; --accent: #B79CF0; --accent-soft: #2E2645;
+  --ok: #5CC8BE; --ok-soft: #16302E; --warn: #E2A64B; --warn-soft: #33280F; --bad: #F2867A; --bad-soft: #3A1A18; --grey-soft: #2B2638;
+  --c1: #B79CF0; --c2: #5CC8BE; --c3: #F59E5B; --c4: #7DA6F7; --c5: #E07CE8; color-scheme: dark } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font); }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 24px max(16px, env(safe-area-inset-right, 0px)) 56px max(16px, env(safe-area-inset-left, 0px)); display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
+header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand b { font-size: 22px; letter-spacing: -0.02em; }
+.brand span { color: var(--muted); }
+.meta { color: var(--muted); font-size: 13px; }
+.banner { background: var(--warn-soft); color: var(--warn); border-radius: 10px; padding: 10px 14px; font-weight: 500; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 2px; }
+.tile .v { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tile .l { color: var(--muted); font-size: 13px; }
+.tile.alert .v { color: var(--bad); }
+h2 { font-size: 18px; margin: 0 0 10px; }
+.box { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-size: 12px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+tbody tr { cursor: pointer; }
+tbody tr:hover, tbody tr.sel { background: var(--accent-soft); }
+tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+tbody tr:last-child td { border-bottom: none; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.chip.ok { background: var(--ok-soft); color: var(--ok); } .chip.incident { background: var(--bad-soft); color: var(--bad); }
+.chip.silencieuse { background: var(--warn-soft); color: var(--warn); } .chip.perdue { background: var(--grey-soft); color: var(--muted); }
+.old { color: var(--warn); font-size: 12px; margin-left: 6px; }
+.sub { color: var(--muted); font-size: 12px; }
+.detail { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.detail-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px; }
+.incidents { display: grid; gap: 6px; }
+.incidents div { background: var(--bad-soft); color: var(--bad); border-radius: 8px; padding: 8px 12px; font-size: 14px; }
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 16px; }
+.chart { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 8px; min-width: 0; }
+.chart h3 { margin: 0; font-size: 15px; }
+.chart svg { width: 100%; height: auto; display: block; }
+.chart svg text { fill: var(--muted); font: 11px var(--font); }
+.chart svg .grid { stroke: var(--line); stroke-width: 1; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.empty { color: var(--muted); padding: 24px; text-align: center; }
+.err { background: var(--bad-soft); color: var(--bad); border-radius: 10px; padding: 12px 14px; }
+@media (prefers-reduced-motion: no-preference) { tbody tr { transition: background .12s; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><b>clevoa</b><span>Console de suivi des installations</span></div>
+    <div class="meta" id="meta">Chargement…</div>
+  </header>
+  <div class="banner" id="demo" hidden>Données de démonstration : trois installations fictives, générées localement. Aucune donnée réelle.</div>
+  <div class="err" id="error" hidden></div>
+  <section class="tiles" id="tiles" aria-label="Synthèse"></section>
+  <section>
+    <h2>Installations</h2>
+    <div class="box"><table>
+      <thead><tr><th>État</th><th>Client</th><th>Environnement</th><th>Version</th><th>Dernier contact</th><th class="num">Sièges</th><th class="num">Appels (6 h)</th><th class="num">Erreurs</th><th class="num">p95 max</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="9" class="empty">Chargement des installations…</td></tr></tbody>
+    </table></div>
+  </section>
+  <section class="detail" id="detail" hidden>
+    <div class="detail-head"><h2 id="d-title"></h2><span class="sub" id="d-sub"></span></div>
+    <div class="incidents" id="d-incidents"></div>
+    <div class="charts">
+      <div class="chart"><h3>Appels par période de 6 h</h3><div class="legend"><span><i style="background:var(--c1)"></i>appels réussis</span><span><i style="background:var(--bad)"></i>erreurs du système</span><span><i style="background:var(--warn)"></i>erreurs d'usage</span></div><div id="c-calls"></div></div>
+      <div class="chart"><h3>Taux d'erreur par connecteur</h3><div class="legend" id="l-rate"></div><div id="c-rate"></div></div>
+      <div class="chart"><h3>Latence p95 par connecteur</h3><div class="legend" id="l-lat"></div><div id="c-lat"></div></div>
+      <div class="chart"><h3>Sur 30 jours, par connecteur</h3><div class="box" style="border:none"><table><thead><tr><th>Connecteur</th><th class="num">Appels</th><th class="num">Erreurs</th><th class="num">Médiane</th><th class="num">p95</th></tr></thead><tbody id="d-table"></tbody></table></div></div>
+    </div>
+  </section>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

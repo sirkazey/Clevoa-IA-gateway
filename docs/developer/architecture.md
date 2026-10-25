@@ -18,14 +18,14 @@ Assistant IA (Claude Code, Claude Desktop, ChatGPT, Copilot)
 │ cache.js       structure des tables en mémoire, par utilisateur,     │
 │                expirée chaque nuit à 03:00                           │
 │ mcpclient.js   client MCP partagé par les connecteurs proxy          │
-│ telemetry.js   compteurs envoyés à Clevoa au démarrage puis à 03:00  │
-│                (identifiant d'installation, délai et essais bornés)  │
+│ telemetry.js   compteurs envoyés à Clevoa au démarrage puis toutes   │
+│                les 6 h (statistiques par connecteur, essais bornés)  │
 │ version.js     VERSION stricte + APP_ENV (PRODUCTION / PRE-PROD)     │
 │ diagnostic.js  rapport de support lancé par l'administrateur, sans   │
 │                secret ni donnée métier (docker exec, lecture seule)  │
 │ connectors/    salesforce · sagex3 · sharepoint · dropbox · myreport │
 │ public/        index.html, le portail                                │
-│ test/          node:test, amont mocké, 102 tests                     │
+│ test/          node:test, amont mocké, 106 tests                     │
 └───┬─────────────┬───────────────┬───────────────┬───────────────┬────┘
     ▼ MCP HTTP    ▼ REST Syracuse ▼ Graph (GET)   ▼ MCP HTTP      ▼ MCP SSE
  Salesforce    Sage X3 24R1    SharePoint      Dropbox (MCP    MyReport Server
@@ -110,8 +110,11 @@ Scripts d'exploitation dans `ops/` (`backup-loop.sh` dans le conteneur de sauveg
 
 * [`clevoa-mcp-stub/`](../../clevoa-mcp-stub/README.md) : bouchon d'entreprise (~430 lignes), mires OAuth et Entra,
   serveurs MCP simulés, données fictives, deux collaborateurs aux droits différents.
-* [`clevoa-backend/`](../../clevoa-backend/README.md) : AWS Lambda qui reçoit la télémétrie, une table DynamoDB (une fiche par
-  installation) et un rapport quotidien des installations silencieuses ou obsolètes (`serverless.yml`).
+* [`clevoa-backend/`](../../clevoa-backend/README.md) : AWS Lambda qui reçoit la télémétrie, une table DynamoDB (une fiche et
+  un historique par installation), les incidents et leurs e-mails, un contrôle horaire des installations silencieuses
+  (`serverless.yml`).
+* [`clevoa-console/`](../../clevoa-console/README.md) : console de suivi de Clevoa, en lecture seule sur la table, en
+  conteneur sur un NAS du réseau privé de Clevoa ; jamais installée chez un client.
 * [`loadtest/`](../../loadtest/README.md) : bouchons rapides et générateur d'utilisateurs MCP pour la campagne de charge.
 
 ## 8. Règles de simplicité

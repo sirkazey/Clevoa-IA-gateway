@@ -23,10 +23,11 @@ test("CHANGELOG : une section pour la version courante (tag vX.Y.Z et Release Gi
   assert.match(heading.slice(`## [${VERSION}] – `.length), /^\d{4}-\d{2}-\d{2}/);
 });
 
-test("Image de base figée par empreinte : Dockerfile du hub et du bouchon, conteneur de sauvegarde", () => {
+test("Image de base figée par empreinte : Dockerfile du hub, du bouchon et de la console, conteneur de sauvegarde", () => {
   const pinned = /node:22-alpine@sha256:[0-9a-f]{64}/;
   const from = (p) => read(p).split("\n").find((l) => l.startsWith("FROM "));
   assert.match(from("hub/Dockerfile"), pinned);
   assert.equal(from("clevoa-mcp-stub/Dockerfile"), from("hub/Dockerfile"), "une seule image de base");
+  assert.equal(from("clevoa-console/Dockerfile"), from("hub/Dockerfile"), "console sur la même image de base");
   assert.ok(read("docker-compose.yml").includes(from("hub/Dockerfile").slice(5)), "mcp-backup sur la même image");
 });
