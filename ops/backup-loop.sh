@@ -1,7 +1,7 @@
 #!/bin/sh
-# Sauvegarde automatique (conteneur mcp-backup) : au démarrage puis toutes les 24 h, copie dans /backups sous un nom horodaté, jamais
+# Sauvegarde automatique (conteneur mcp-backup) : au démarrage, 10 minutes après, puis toutes les 24 h, copie dans /backups sous un nom horodaté, jamais
 # écrasé : users.json (chiffré) en users-AAAA-MM-JJ_HHMMSS.json, et l'instantané de la base d'exploitation (hub-instantane.db, écrit
-# par le hub chaque heure par la sauvegarde à chaud de SQLite) en hub-AAAA-MM-JJ_HHMMSS.db. Un fichier inchangé depuis sa dernière
+# par le hub toutes les 6 heures par la sauvegarde à chaud de SQLite) en hub-AAAA-MM-JJ_HHMMSS.db. Un fichier inchangé depuis sa dernière
 # sauvegarde n'est pas recopié : un redémarrage du conteneur ne crée pas de doublon. La copie passe par un fichier temporaire vérifié
 # (en-tête, taille, contenu identique) puis publié atomiquement ; une source absente ou invalide ne touche à rien. Rétention : fichiers
 # de plus de BACKUP_KEEP_DAYS jours supprimés seulement après une copie réussie du même type, jamais la plus récente.
@@ -33,7 +33,7 @@ backup() {
   rc=0
   if [ -f "$SRC" ]; then copy "$SRC" users json "enc1:" users.json || rc=1
   else log "users.json absent : ni collaborateur connecté ni télémétrie active, rien à sauvegarder"; rc=1; fi
-  # Base d'exploitation (1.5 et plus) : absente avant la première heure de fonctionnement ou sur une version antérieure, ce n'est pas une erreur.
+  # Base d'exploitation (1.5 et plus) : absente pendant la première minute du hub ou sur une version antérieure, ce n'est pas une erreur.
   if [ -f "$DB_SRC" ]; then copy "$DB_SRC" hub db "SQLite format 3" "hub-instantane.db" || rc=1
   else log "hub-instantane.db absent : pas encore d'instantané de la base d'exploitation"; fi
   return $rc
