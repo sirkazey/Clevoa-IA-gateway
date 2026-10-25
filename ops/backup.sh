@@ -1,6 +1,6 @@
 #!/bin/sh
 # Sauvegarde manuelle du hub : copie users.json (chiffré AES-256-GCM) depuis le volume Docker vers un dossier, et l'instantané
-# de la base d'exploitation (hub-instantane.db, écrit chaque heure par le hub 1.5 et plus) en hub-AAAA-MM-JJ_HHMMSS.db s'il existe.
+# de la base d'exploitation (hub-instantane.db, écrit toutes les 6 heures par le hub 1.5 et plus) en hub-AAAA-MM-JJ_HHMMSS.db s'il existe.
 # Usage : ops/backup.sh [dossier]        (défaut : BACKUP_DIR ou ./backups)
 # Variables : sudo VOLUME=<nom du volume> ops/backup.sh … si plusieurs volumes mcp-data existent sur la machine (VOLUME après sudo :
 # sudo ne transmet pas les variables posées avant lui).

@@ -67,7 +67,7 @@ systèmes, Entra ID et le backend Clevoa ; 11 tests de bout en bout branchent le
   90 jours), `usage` et `usage_users` (appels, erreurs et pseudonymes actifs par mois, 24 mois), `audit` (si `AUDIT=on`,
   e-mail chiffré par `crypto.js`, `AUDIT_DAYS`). Schéma versionné par `pragma user_version` : une migration s'ajoute en
   fin de `MIGRATIONS`, jamais modifiée une fois publiée. Ouverte et vérifiée (`quick_check`) avant l'annonce du démarrage ;
-  toute erreur la désactive sans toucher aux outils (`safely`). Instantané `hub-instantane.db` chaque heure
+  toute erreur la désactive sans toucher aux outils (`safely`). Instantané `hub-instantane.db` toutes les 6 heures
   (`backup()` puis renommage), copié par `mcp-backup`. Lu par `admin.js` (`docker exec`), `/api/status`, `/metrics`.
   `users.json` reste la seule source des identités et des jetons : un retour à la 1.4 ignore simplement `hub.db`.
 * Autres états en mémoire : flux OAuth en cours, compteurs de débit par IP, sessions SSE (`sessionId` → transport +
