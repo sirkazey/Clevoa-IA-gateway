@@ -8,6 +8,7 @@ import { withMcp, callRemote, EMAIL } from "../mcpclient.js";
 
 const LOGIN = (process.env.SF_LOGIN_URL || "https://login.salesforce.com").replace(/\/$/, ""); // My Domain de l'org (serveur d'autorisation)
 const MCP_URL = process.env.SF_MCP_URL || ""; // ex. https://api.salesforce.com/platform/mcp/v1/d/<org>/platform/sobject-reads
+const MAX_SOQL = 100_000; // longueur maximale d'une SOQL chez Salesforce : au-delà, refus avant toute analyse
 const DEFAULT_LIMIT = Number(process.env.SF_DEFAULT_LIMIT || 200); // LIMIT ajouté aux SOQL qui n'en ont pas ("0" = désactivé) ; || car Compose transmet "" quand la variable est vide
 if (MCP_URL && !/\/sobject-reads\/?$/.test(MCP_URL)) { console.error(`[salesforce] SF_MCP_URL refusée : ${MCP_URL}. Seul le serveur de lecture « SObject Reads » (…/sobject-reads) est accepté ; un serveur d'écriture (SObject All, Mutations, Deletes…) ne l'est jamais.`); process.exit(1); }
 
@@ -56,6 +57,26 @@ export async function ping(_tok, schema) {
   return { message: `Connecté au serveur MCP Salesforce (${MCP_URL.split("/d/")[1] || MCP_URL}) · ${tools.length} outils en lecture seule`, tables: tools.map((t) => t.name) };
 }
 
+/** Requête d'agrégat : fonction d'agrégat dans le SELECT principal (COUNT(), COUNT(Id), SUM…) ou GROUP BY. Une seule ligne, ou des
+ *  groupes que Salesforce borne lui-même (2 000 au plus). Un seul parcours, linéaire : littéraux et contenu des parenthèses écartés
+ *  (COUNT(Id) → COUNT#, (SELECT …) → #), puis des motifs sans retour arrière (jamais de calcul quadratique sur une requête longue). */
+export function aggregate(q) {
+  let top = "", depth = 0;
+  for (let i = 0; i < q.length; i++) {
+    const ch = q[i];
+    if (ch === "'") { for (i++; i < q.length && q[i] !== "'"; i++) if (q[i] === "\\") i++; if (!depth) top += "''"; continue; }
+    if (ch === "(") { if (!depth++) top += "#"; continue; }
+    if (ch === ")") { if (depth) depth--; continue; }
+    if (!depth) top += ch;
+  }
+  const select = top.match(/^\s*SELECT\s([\s\S]*?)\bFROM\s/i)?.[1] ?? "";
+  return /\b(COUNT|COUNT_DISTINCT|SUM|AVG|MIN|MAX)\s*#/i.test(select) || /\bGROUP\s+BY\b/i.test(top);
+}
+/** Réponse d'une SOQL bornée par le hub qui a atteint la borne (format de l'API REST : { totalSize, done, records }) : son contenu, sinon null. */
+function truncated(r) {
+  try { const o = typeof r === "string" ? JSON.parse(r) : r; return Array.isArray(o?.records) && o.records.length >= DEFAULT_LIMIT ? o : null; } catch { return null; }
+}
+
 export const tools = [
   {
     name: "salesforce_tools",
@@ -65,14 +86,20 @@ export const tools = [
   },
   {
     name: "salesforce_call",
-    description: `Appelle un outil du serveur MCP Salesforce avec les droits de l'utilisateur, ex. tool='soqlQuery', arguments={q:'SELECT Name FROM Account WHERE Industry = \\'Wine\\' LIMIT 20'} ; tool='getObjectSchema' sans argument pour l'index des objets, puis arguments={objects:'Account'} pour ses champs. Un soqlQuery sans LIMIT reçoit LIMIT ${DEFAULT_LIMIT} d'office.`,
+    description: `Appelle un outil du serveur MCP Salesforce avec les droits de l'utilisateur, ex. tool='soqlQuery', arguments={q:'SELECT Name FROM Account WHERE Industry = \\'Wine\\' LIMIT 20'} ; tool='getObjectSchema' sans argument pour l'index des objets, puis arguments={objects:'Account'} pour ses champs. Un soqlQuery sans LIMIT reçoit LIMIT ${DEFAULT_LIMIT} d'office, sauf les agrégats. Pour répondre à « combien », toujours SELECT COUNT() FROM … (ou COUNT(Id) … GROUP BY …), jamais en comptant les lignes d'une liste.`,
     input: { tool: z.string().regex(/^[\w.-]+$/), arguments: z.record(z.string(), z.any()).default({}) },
     run: (tok, { tool, arguments: args }) => {
       if (WRITE_TOOL.test(tool)) throw new Error(`Outil ${tool} refusé : le hub n'exécute que des lectures.`); // défense en profondeur, en plus de l'URL SObject Reads
+      if (typeof args.q === "string" && args.q.length > MAX_SOQL) throw new Error(`Requête de ${args.q.length} caractères refusée : Salesforce n'accepte pas plus de ${MAX_SOQL} caractères.`);
       // Garde-fou volume : jamais une SOQL sans borne. LIMIT peut être suivi de OFFSET, ALL ROWS ou FOR VIEW/REFERENCE.
-      const unbounded = tool === "soqlQuery" && DEFAULT_LIMIT && typeof args.q === "string" && !/\bLIMIT\s+\d+(\s+OFFSET\s+\d+)?(\s+ALL\s+ROWS)?(\s+FOR\s+(VIEW|REFERENCE))?\s*$/i.test(args.q.trim());
-      if (unbounded) args = { ...args, q: `${args.q.trim()} LIMIT ${DEFAULT_LIMIT}` };
-      return mcp(tok, (c) => callRemote(c, tool, args));
+      // Sauf les agrégats : un LIMIT y fausse le résultat (SELECT COUNT() … LIMIT 200 répond 200) et leur volume est déjà borné.
+      const unbounded = tool === "soqlQuery" && DEFAULT_LIMIT && typeof args.q === "string" && !aggregate(args.q)
+        && !/\bLIMIT\s+\d+(\s+OFFSET\s+\d+)?(\s+ALL\s+ROWS)?(\s+FOR\s+(VIEW|REFERENCE))?\s*$/i.test(args.q.trim());
+      if (!unbounded) return mcp(tok, (c) => callRemote(c, tool, args));
+      return mcp(tok, (c) => callRemote(c, tool, { ...args, q: `${args.q.trim()} LIMIT ${DEFAULT_LIMIT}` })).then((r) => {
+        const cut = truncated(r);
+        return cut ? { avertissement: `Liste coupée à ${DEFAULT_LIMIT} lignes par le hub (LIMIT ajouté) : il peut y en avoir davantage. Ce n'est pas un total ; pour compter, SELECT COUNT() FROM … avec le même WHERE.`, resultat: cut } : r;
+      });
     },
   },
 ];
