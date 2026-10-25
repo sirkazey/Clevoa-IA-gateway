@@ -15,8 +15,9 @@ import * as dropbox from "./connectors/dropbox.js";
 import * as myreport from "./connectors/myreport.js";
 import * as telemetry from "./telemetry.js";
 import * as health from "./health.js";
+import * as db from "./db.js";
 import { createHash, timingSafeEqual } from "node:crypto";
-import { rateLimit } from "express-rate-limit"; // déjà fourni par le SDK MCP (même version) ; utilisé pour les routes de supervision
+import { rateLimit, MemoryStore } from "express-rate-limit"; // déjà fourni par le SDK MCP (même version) : toutes les limites de débit du hub
 import { VERSION, APP_ENV, IS_PROD } from "./version.js";
 
 const PORT = process.env.PORT || 8080;
@@ -38,17 +39,18 @@ const byId = Object.assign(Object.create(null), Object.fromEntries(CONNECTORS.ma
 const ENV = Object.keys(process.env).filter((n) => /^(PUBLIC_URL|APP_ENV|LOG_LEVEL|TRUST_PROXY|ENCRYPTION_KEY|SSO_MODE|MCP_SERVER_NAME|INSTANCE_LABEL|SF_|SAGE_|MS_|SP_|GRAPH_URL|DROPBOX_|MYREPORT_|CLEVOA_|PROBE$|SLOW_MS$|METRICS_TOKEN$|CONNECTOR_DOMAINS$)/.test(n)).sort();
 const masked = (n) => (/SECRET|CLEVOA_KEY|ENCRYPTION_KEY|METRICS_TOKEN/.test(n) ? "••••••••" : process.env[n]); // CLEVOA_KEY est une clé de licence, masquée comme les secrets
 
-// ---------- Limitation de débit (mémoire, par adresse IP) ----------
-// Protège le diagnostic, les jetons et les échecs d'authentification contre la force brute. Fenêtre fixe simple.
-const buckets = new Map(); // "règle:ip" -> { n, reset }
-function hit(rule, ip, max, windowMs = 60_000) {
-  const id = `${rule}:${ip}`, now = Date.now();
-  let b = buckets.get(id);
-  if (!b || b.reset < now) { b = { n: 0, reset: now + windowMs }; buckets.set(id, b); }
-  if (buckets.size > 10_000) for (const [k, v] of buckets) if (v.reset < now) buckets.delete(k); // purge paresseuse
-  return ++b.n > max;
-}
-const limit = (rule, max) => (req, res, next) => hit(rule, req.ip, max) ? res.status(429).json({ error: "Trop de requêtes, réessayez dans une minute." }) : next();
+// ---------- Limitation de débit (express-rate-limit, mémoire, par adresse IP, fenêtre d'une minute) ----------
+// Protège le diagnostic, les jetons et les échecs d'authentification contre la force brute. Une règle = un compteur, partagé par
+// toutes les routes qui la citent (ex. « portal » pour les quatre actions du portail).
+const perMinute = (max, error) => rateLimit({ windowMs: 60_000, limit: max, standardHeaders: "draft-8", legacyHeaders: false, message: { error } });
+const rules = new Map();
+const limit = (rule, max) => rules.get(rule) ?? rules.set(rule, perMinute(max, "Trop de requêtes, réessayez dans une minute.")).get(rule);
+// Échecs d'authentification (clé MCP, cookie du portail, jeton de supervision) : seuls les échecs sont comptés, 20 par minute et par IP.
+// La supervision garde sa réponse texte avec WWW-Authenticate, comme avant express-rate-limit.
+const authFailures = rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: "draft-8", legacyHeaders: false,
+  handler: (req, res) => (req.path.startsWith("/metrics")
+    ? res.status(429).set("WWW-Authenticate", 'Basic realm="supervision"').type("text/plain").send("jeton de supervision requis\n")
+    : res.status(429).json({ error: "Trop d'échecs d'authentification, réessayez dans une minute." })) });
 
 // ---------- Identité ----------
 // Cookie "mcp_key" pour le portail ; en-tête "Authorization: Bearer <clé>" UNIQUEMENT pour les clients MCP
@@ -60,13 +62,20 @@ const user = (key) => { const u = store.get(key); return u && (!sso.MODE || u.ss
 const requireKey = (read) => (req, res, next) => {
   req.key = read(req);
   if (user(req.key)) return next(); // une clé valide n'est jamais freinée par les échecs d'autres clients de la même IP
-  if (hit("auth-fail", req.ip, 20)) return res.status(429).json({ error: "Trop d'échecs d'authentification, réessayez dans une minute." });
-  res.status(401).json({ error: "Clé MCP inconnue ou absente : utilisez l'en-tête Authorization: Bearer <clé> obtenue sur le portail." });
+  authFailures(req, res, () => res.status(401).json({ error: "Clé MCP inconnue ou absente : utilisez l'en-tête Authorization: Bearer <clé> obtenue sur le portail." }));
 };
 const portalUser = requireKey(cookieKey);
 // Tout appel MCP authentifié marque l'assistant comme branché ; une écriture impossible (disque plein) ne bloque jamais l'appel.
 const seen = (req, _res, next) => { try { store.assistantSeen(req.key); } catch (e) { console.error(`[store] dernier usage non enregistré : ${e.code ?? e.message}`); } next(); };
-const mcpUser = [requireKey(mcpKey), seen];
+// Débit par clé MCP authentifiée (et non par IP : tout un bureau sort par la même adresse) : 300 requêtes par minute, très au-dessus
+// d'un assistant normal (une question = quelques requêtes), mais une clé fuitée ou un assistant qui boucle ne martèle pas les systèmes.
+const MCP_PER_MIN = 300;
+// Placé avant la vérification de la clé ; une clé inconnue n'y crée aucune entrée (skip) et reste traitée par authFailures.
+const mcpRate = rateLimit({ windowMs: 60_000, limit: MCP_PER_MIN, standardHeaders: "draft-8", legacyHeaders: false,
+  skip: (req) => !user(mcpKey(req)),
+  keyGenerator: (req) => createHash("sha256").update(mcpKey(req)).digest("base64url"), // empreinte : jamais la clé en mémoire du limiteur
+  message: { error: `Trop de requêtes avec cette clé (${MCP_PER_MIN} par minute) : réessayez dans une minute.` } });
+const mcpAuth = requireKey(mcpKey);
 // Les POST du portail changent l'état du collaborateur : un navigateur qui annonce une autre origine (formulaire d'un site frère sous le
 // même domaine, que SameSite=Lax laisse passer) est refusé. Les clients MCP n'appellent pas ces routes.
 const ORIGIN = new URL(PUBLIC_URL).origin;
@@ -74,9 +83,11 @@ const sameOrigin = (req, res, next) => (req.headers.origin && req.headers.origin
 
 /** Exécute un outil/ping d'un connecteur avec le jeton de l'utilisateur et sa structure en cache.
  *  Un connecteur peut plafonner ses appels sortants (maxPerMinute, tous utilisateurs confondus) pour ménager un système de production. */
-const capped = (c, key) => c.maxPerMinute && hasCredential(store.get(key)?.[c.id]) && hit(`upstream:${c.id}`, "*", c.maxPerMinute); // 1 appel d'outil ou de diagnostic = 1 unité
-const call = (c, key, fn) => {
-  if (capped(c, key)) throw new Error(`${c.label} : plafond de ${c.maxPerMinute} appels par minute atteint, réessayez dans un instant.`);
+const upstream = new MemoryStore(); // compteur d'express-rate-limit, hors HTTP : un par connecteur, tous utilisateurs confondus
+upstream.init({ windowMs: 60_000 });
+const capped = async (c, key) => !!c.maxPerMinute && hasCredential(store.get(key)?.[c.id]) && (await upstream.increment(c.id)).totalHits > c.maxPerMinute; // 1 appel d'outil ou de diagnostic = 1 unité
+const call = async (c, key, fn) => {
+  if (await capped(c, key)) throw new Error(`${c.label} : plafond de ${c.maxPerMinute} appels par minute atteint, réessayez dans un instant.`);
   return withToken(c, key, (tok) => fn(tok, () => cachedSchema(key, c.id, () => c.schema(tok))));
 };
 
@@ -91,6 +102,13 @@ const INSTRUCTIONS = [
   "Documents : sharepoint_search / sharepoint_read, dropbox_tools puis dropbox_call. Analyses MyReport : myreport_tools puis myreport_call.",
 ].join(" ");
 
+/** Compteur d'usage du mois et, avec AUDIT=on, ligne d'audit (qui, quel outil, quand, résultat) ; jamais les arguments ni le résultat. */
+function usage(c, t, key, ms, e) {
+  const user = store.pseudonym(key), u = store.get(key);
+  db.count(c.id, user, !!e && health.systemFault(telemetry.category(e), e)); // même définition que la supervision : jeton expiré, refus, plafond du hub ne comptent pas
+  db.audit({ user, who: u?.email || u?.sso?.upn || null, system: c.id, tool: t.name, outcome: e ? telemetry.category(e) : "ok", ms });
+}
+
 function buildServer(key) {
   const server = new McpServer(
     { name: SERVER_NAME, version: VERSION },
@@ -104,12 +122,14 @@ function buildServer(key) {
         const out = await call(c, key, (tok, schema) => t.run(tok, args, schema));
         telemetry.record(c.id, key, Date.now() - t0); // nombres seulement : appel, durée, empreinte locale de l'appelant
         health.record(c.id, Date.now() - t0, undefined, key);
+        usage(c, t, key, Date.now() - t0);
         debug(`${t.name} ok ${Date.now() - t0} ms`); // jamais les arguments ni les résultats
         const body = out?.$content ? out.$content : [{ type: "text", text: typeof out === "string" ? out : JSON.stringify(out) }]; // $content : contenu MCP relayé tel quel (image, resource)
         return { content: [...body, { type: "text", text: provenance(c) }] }; // traçabilité : d'où vient chaque donnée
       } catch (e) {
         telemetry.record(c.id, key, Date.now() - t0, e); // type d'erreur seulement, jamais le message
         health.record(c.id, Date.now() - t0, e, key);
+        usage(c, t, key, Date.now() - t0, e);
         debug(`${t.name} erreur ${Date.now() - t0} ms : ${e.status ?? "erreur"}`); // jamais le message (il peut citer une clé demandée)
         return { isError: true, content: [{ type: "text", text: e.message }] };
       }
@@ -197,7 +217,7 @@ app.post("/api/:system/apikey", limit("portal", 30), sameOrigin, portalUser, (re
 app.get("/api/test/:system", limit("diag", 20), portalUser, async (req, res) => {
   const c = byId[req.params.system];
   if (!c) return res.sendStatus(404);
-  if (capped(c, req.key)) return res.json({ ok: false, error: `${c.label} : plafond de ${c.maxPerMinute} appels par minute atteint, réessayez dans un instant.` });
+  if (await capped(c, req.key)) return res.json({ ok: false, error: `${c.label} : plafond de ${c.maxPerMinute} appels par minute atteint, réessayez dans un instant.` });
   try { res.json({ ok: true, ...(await withToken(c, req.key, (tok) => c.ping(tok, () => c.schema(tok)))) }); } // structure relue, pas le cache
   catch (e) { res.json({ ok: false, error: e.message.slice(0, 300) }); }
 });
@@ -209,7 +229,7 @@ app.get("/api/status", limit("status", 60), portalUser, (req, res) => {
   if (!sso.MODE && !CONNECTORS.some((c) => hasCredential(u[c.id]))) return res.status(403).json({ error: "Connectez d'abord une application." });
   const mode = health.probeMode(), probing = mode !== "off" && CONNECTORS.some(health.probeable);
   res.json({ probeHours: health.probeHours(), paused: probing && mode !== "always" && !health.inProbeHours(), probe: probing,
-    systems: CONNECTORS.map((c) => ({ id: c.id, ...health.status(c) })) });
+    systems: CONNECTORS.map((c) => ({ id: c.id, ...health.status(c), availability: c.mock ? undefined : db.availability(c.id) })) });
 });
 
 // Supervision : /metrics au format texte Prometheus (Zabbix, Centreon, Prometheus, Grafana…) et /metrics/prtg au format JSON du
@@ -226,19 +246,17 @@ const metricsAuth = (req) => {
 const sameToken = (given) => timingSafeEqual(createHash("sha256").update(String(given)).digest(), createHash("sha256").update(METRICS_TOKEN).digest());
 const STATES = ["ok", "lent", "erreurs", "injoignable", "inconnu", "simule"];
 const promLabel = (v) => String(v).replace(/[\\"\n]/g, "_");
-/** Vrai si la requête est refusée (réponse déjà envoyée) : route absente sans jeton configuré, 401 ou 429 sinon. */
-const metricsDenied = (req, res) => {
-  if (!METRICS_TOKEN) { res.sendStatus(404); return true; }
-  if (sameToken(metricsAuth(req))) return false;
-  res.status(hit("auth-fail", req.ip, 20) ? 429 : 401).set("WWW-Authenticate", 'Basic realm="supervision"').type("text/plain").send("jeton de supervision requis\n");
-  return true;
+/** Accès de la supervision : route absente sans jeton configuré, 401 (ou 429 après 20 échecs par minute) sans le bon jeton. */
+const metricsAuthorized = (req, res, next) => {
+  if (!METRICS_TOKEN) return res.sendStatus(404);
+  if (sameToken(metricsAuth(req))) return next();
+  authFailures(req, res, () => res.status(401).set("WWW-Authenticate", 'Basic realm="supervision"').type("text/plain").send("jeton de supervision requis\n"));
 };
 // PRTG : un canal « Santé » par système (0 bon, 1 avertissement si lent, 2 erreur si en erreurs ou injoignable ; seuils posés
 // par le hub), joignabilité, temps de réponse p95, appels et erreurs du système (mode différence : par intervalle de PRTG).
 // 30 relevés par minute et par adresse IP pour les deux routes de supervision (PRTG relève toutes les 1 à 5 minutes).
 const metricsLimit = rateLimit({ windowMs: 60_000, limit: 30, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "Trop de requêtes, réessayez dans une minute." } });
-app.get("/metrics/prtg", metricsLimit, (req, res) => {
-  if (metricsDenied(req, res)) return;
+app.get("/metrics/prtg", metricsLimit, metricsAuthorized, (_req, res) => {
   const result = [], bad = [];
   for (const c of CONNECTORS) {
     const s = health.status(c), n = health.counters(c.id);
@@ -251,14 +269,19 @@ app.get("/metrics/prtg", metricsLimit, (req, res) => {
     if (s.p95 != null) result.push({ channel: `${c.label} · p95`, value: s.p95, unit: "TimeResponse" });
     result.push({ channel: `${c.label} · appels`, value: n.calls, unit: "Count", mode: "Difference" });
     result.push({ channel: `${c.label} · erreurs système`, value: n.sys, unit: "Count", mode: "Difference" });
+    const a = db.availability(c.id);
+    if (a.samples >= 6) result.push({ channel: `${c.label} · disponibilité 30 j`, value: a.pct, unit: "Percent", float: 1 }); // au moins une heure de mesures
   }
   result.push({ channel: "Hub · sièges", value: store.seats(), unit: "Count" });
+  result.push({ channel: "Hub · collaborateurs actifs du mois", value: db.usage().activeUsers, unit: "Count" });
+  const base = db.health(); // historique, compteurs et audit : une base fermée ou des écritures en échec se voient ici
+  result.push({ channel: "Hub · base d'exploitation", value: base.up ? 1 : 0, unit: "Custom", customunit: "", limitmode: 1, limitminerror: 0.5, limiterrormsg: "base d'exploitation indisponible : ni historique ni compteurs ni audit" });
+  result.push({ channel: "Hub · écritures en échec", value: base.failures, unit: "Count", limitmode: 1, limitmaxwarning: 0.5, limitwarningmsg: "écritures en échec dans la base d'exploitation (audit incomplet ?)" });
   result.push({ channel: "Hub · mémoire", value: process.memoryUsage().rss, unit: "BytesMemory" });
   result.push({ channel: "Hub · durée de fonctionnement", value: Math.round(process.uptime()), unit: "TimeSeconds" });
   res.json({ prtg: { result, text: bad.length ? bad.join(" · ") : `Clevoa AI Gateway ${VERSION} : systèmes opérationnels` } });
 });
-app.get("/metrics", metricsLimit, (req, res) => {
-  if (metricsDenied(req, res)) return;
+app.get("/metrics", metricsLimit, metricsAuthorized, (_req, res) => {
   const m = [], g = (name, help, type = "gauge") => m.push(`# HELP ${name} ${help}`, `# TYPE ${name} ${type}`);
   g("clevoa_hub_info", "Version et environnement du hub");
   m.push(`clevoa_hub_info{version="${promLabel(VERSION)}",env="${promLabel(APP_ENV)}"} 1`);
@@ -282,18 +305,30 @@ app.get("/metrics", metricsLimit, (req, res) => {
   for (const { c, n } of rows) for (const t of telemetry.ERROR_TYPES) m.push(`clevoa_system_errors_total{system="${promLabel(c.id)}",type="${t}"} ${n.errors[t] ?? 0}`);
   g("clevoa_system_latency_p95_seconds", "Temps de réponse p95 des appels réussis de la dernière heure");
   for (const { c, s } of rows) if (s.p95 != null) m.push(`clevoa_system_latency_p95_seconds{system="${promLabel(c.id)}"} ${(s.p95 / 1000).toFixed(3)}`);
+  g("clevoa_system_availability_30d_ratio", "Part des mesures « opérationnel » ou « lent » sur 30 jours (au moins une heure de mesures)");
+  for (const { c } of rows) { const a = db.availability(c.id); if (a.samples >= 6) m.push(`clevoa_system_availability_30d_ratio{system="${promLabel(c.id)}"} ${(a.pct / 100).toFixed(3)}`); }
+  const month = db.usage();
+  g("clevoa_usage_month_calls", "Appels d'outils du mois en cours (persistés)");
+  for (const r of month.systems) m.push(`clevoa_usage_month_calls{system="${promLabel(r.system)}",month="${month.month}"} ${r.calls}`);
+  g("clevoa_usage_month_active_users", "Collaborateurs ayant appelé au moins un outil ce mois");
+  m.push(`clevoa_usage_month_active_users{month="${month.month}"} ${month.activeUsers}`);
+  const base = db.health();
+  g("clevoa_hub_db_up", "Base d'exploitation (historique, compteurs, audit) ouverte : 1, indisponible : 0");
+  m.push(`clevoa_hub_db_up ${base.up ? 1 : 0}`);
+  g("clevoa_hub_db_write_failures_total", "Écritures en échec dans la base d'exploitation depuis le démarrage", "counter");
+  m.push(`clevoa_hub_db_write_failures_total ${base.failures}`);
   res.type("text/plain; version=0.0.4; charset=utf-8").send(m.join("\n") + "\n");
 });
 
 // Transport SSE (standard historique) : GET /sse ouvre le flux, POST /messages?sessionId= reçoit les requêtes.
 const sseSessions = new Map(); // sessionId -> { transport, key } : une session n'est utilisable qu'avec la clé qui l'a ouverte
-app.get("/sse", mcpUser, async (req, res) => {
+app.get("/sse", mcpRate, mcpAuth, seen, async (req, res) => {
   const transport = new SSEServerTransport("/messages", res);
   sseSessions.set(transport.sessionId, { transport, key: req.key });
   res.on("close", () => sseSessions.delete(transport.sessionId));
   await buildServer(req.key).connect(transport);
 });
-app.post("/messages", mcpUser, async (req, res) => {
+app.post("/messages", mcpRate, mcpAuth, seen, async (req, res) => {
   const s = sseSessions.get(String(req.query.sessionId ?? ""));
   if (!s) return res.status(404).json({ error: "Session SSE inconnue" });
   if (s.key !== req.key) return res.status(403).json({ error: "Session SSE ouverte par une autre clé" });
@@ -301,7 +336,7 @@ app.post("/messages", mcpUser, async (req, res) => {
 });
 
 // Transport Streamable HTTP (sans état) : un serveur jetable par requête.
-app.post("/mcp", mcpUser, async (req, res) => {
+app.post("/mcp", mcpRate, mcpAuth, seen, async (req, res) => {
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   const server = buildServer(req.key);
   res.on("close", () => { transport.close(); server.close(); });
@@ -312,8 +347,9 @@ app.all("/mcp", (_req, res) => res.status(405).json({ error: "Utilisez POST (mod
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
+db.start(CONNECTORS, (c) => health.status(c)); // avant l'annonce du démarrage : une base illisible est journalisée d'abord (ops/restore.sh)
 app.listen(PORT, () => {
-  console.log(`Hub MCP v${VERSION} · ENV: ${APP_ENV} · ${PUBLIC_URL} (port ${PORT})${sagex3.mock ? " · Sage X3 simulé" : ""}${myreport.mock ? " · MyReport simulé" : ""}${sso.MODE ? ` · SSO ${sso.MODE}` : ""}${process.env.LOG_LEVEL === "debug" ? " · logs détaillés" : ""}`);
+  console.log(`Hub MCP v${VERSION} · ENV: ${APP_ENV} · ${PUBLIC_URL} (port ${PORT})${sagex3.mock ? " · Sage X3 simulé" : ""}${myreport.mock ? " · MyReport simulé" : ""}${sso.MODE ? ` · SSO ${sso.MODE}` : ""}${process.env.LOG_LEVEL === "debug" ? " · logs détaillés" : ""}${db.AUDIT ? ` · journal d'audit ${db.AUDIT_DAYS} j` : ""}`);
   telemetry.start(CONNECTORS, store.seats, store.installationId);
   health.start(CONNECTORS);
 });

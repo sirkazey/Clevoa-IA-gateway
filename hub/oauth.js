@@ -1,8 +1,13 @@
 // Flux OAuth2 "authorization code" générique + rafraîchissement des jetons.
-// Chaque connecteur fournit sa config { authUrl, tokenUrl, clientId, clientSecret, scope }.
+// Chaque connecteur fournit sa config { authUrl, tokenUrl, clientId, clientSecret, scope, issuer? }.
+// Avec `issuer` (annuaires OIDC : SSO Entra, SharePoint), l'échange de code et le refresh passent par openid-client (bibliothèque
+// certifiée OpenID) : émetteur, audience, expiration ET signature de l'id_token vérifiés avec les clés publiées par l'annuaire.
+// Sans `issuer` (Salesforce, Dropbox, IdP de Sage) : OAuth2 simple, le jeton n'est qu'un laissez-passer opaque que le système vérifie lui-même.
 import { Router } from "express";
 import { randomBytes, createHash } from "node:crypto";
+import * as oidc from "openid-client";
 import { store } from "./store.js";
+import { IS_PROD } from "./version.js";
 
 export const PUBLIC_URL = (process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 8080}`).replace(/\/$/, "");
 const pending = new Map(); // state -> { key, system, verifier, silent, exp }
@@ -24,6 +29,49 @@ async function postToken(c, params) {
   if (!r.ok) throw Object.assign(new Error(`Échange de jeton OAuth refusé (${r.status} ${code})`), { status: r.status, code });
   return body;
 }
+
+// ---------- Annuaires OIDC (openid-client) ----------
+const configs = new Map(); // "émetteur|client" -> promesse de Configuration (découverte une fois, puis gardée)
+/** Configuration OIDC découverte auprès de l'annuaire. http seulement hors production (mires simulées) ; en production, openid-client refuse. */
+function oidcConfig(o) {
+  const id = `${o.issuer}|${o.clientId}`;
+  if (!configs.has(id)) {
+    const execute = [oidc.enableNonRepudiationChecks, ...(!IS_PROD && o.issuer.startsWith("http:") ? [oidc.allowInsecureRequests] : [])]; // signature de l'id_token vérifiée
+    const p = oidc.discovery(new URL(o.issuer), o.clientId, o.clientSecret, undefined, { execute, timeout: 10 });
+    p.catch(() => configs.delete(id)); // annuaire injoignable : nouvelle découverte au prochain essai
+    configs.set(id, p);
+  }
+  return configs.get(id);
+}
+// Codes d'openid-client (oauth4webapi) signifiant un id_token ou une réponse jeton invalides (signature, émetteur, audience, dates…).
+const ID_TOKEN_ERRORS = new Set(["OAUTH_JWT_CLAIM_COMPARISON_FAILED", "OAUTH_JWT_TIMESTAMP_CHECK_FAILED", "OAUTH_INVALID_RESPONSE", "OAUTH_PARSE_ERROR",
+  "OAUTH_KEY_SELECTION_FAILED", "OAUTH_JSON_ATTRIBUTE_COMPARISON_FAILED"]);
+/** Erreurs d'openid-client ramenées à la forme du hub. Seul un refus explicite de l'annuaire (400/401 avec code OAuth) porte un statut
+ *  400/401, que withToken traite comme un refresh token révoqué (jetons effacés). Panne de l'annuaire (5xx, réponse non JSON, délai
+ *  dépassé, réseau) : aucun statut, les jetons sont conservés et le collaborateur réessaie. id_token invalide : 400 au retour du
+ *  navigateur (aucune clé posée), mais sans statut au refresh (on ne détruit pas une connexion sur une réponse douteuse). */
+function oidcError(e, during) {
+  if (e instanceof oidc.ResponseBodyError) return Object.assign(new Error(`Échange de jeton OAuth refusé (${e.status} ${/^[\w.-]{1,40}$/.test(e.error) ? e.error : "erreur"})`), { status: e.status, code: e.error });
+  if (e instanceof oidc.ClientError && ID_TOKEN_ERRORS.has(e.code)) return Object.assign(new Error(`SSO : id_token refusé (${e.code})`), during === "code" ? { status: 400, sso: true } : {});
+  if (e instanceof oidc.ClientError) return new Error(`Annuaire indisponible (${e.cause?.status ?? (e.code === "OAUTH_TIMEOUT" ? "délai dépassé" : "réseau")})`);
+  return e; // réseau (sans statut) ou défi WWW-Authenticate (statut 401 de l'annuaire)
+}
+/** Échange du code reçu au retour du navigateur. */
+async function codeGrant(c, query, verifier) {
+  if (!c.oauth.issuer) return postToken(c.oauth, { grant_type: "authorization_code", code: query.code, redirect_uri: redirectUri(c.id), code_verifier: verifier });
+  const current = new URL(redirectUri(c.id));
+  // L'adresse enregistrée chez l'annuaire (pas celle vue derrière un proxy), avec le code, le state et l'iss (RFC 9207) s'il est renvoyé.
+  current.search = new URLSearchParams({ code: String(query.code ?? ""), state: String(query.state ?? ""), ...(query.iss ? { iss: String(query.iss) } : {}) });
+  try { return { ...(await oidc.authorizationCodeGrant(await oidcConfig(c.oauth), current, { pkceCodeVerifier: verifier, expectedState: String(query.state) })) }; }
+  catch (e) { throw oidcError(e, "code"); }
+}
+/** Renouvellement d'un jeton. */
+async function refreshGrant(o, refreshToken) {
+  if (!o.issuer) return postToken(o, { grant_type: "refresh_token", refresh_token: refreshToken });
+  try { return { ...(await oidc.refreshTokenGrant(await oidcConfig(o), refreshToken)) }; }
+  catch (e) { throw oidcError(e, "refresh"); }
+}
+
 const refreshing = new Map(); // "clé:système" -> promesse de refresh en cours, partagée entre appels concurrents
 
 /** Vrai si l'entrée users.json contient de quoi s'authentifier (jeton OAuth ou clé d'API personnelle). */
@@ -43,8 +91,8 @@ export async function withToken(connector, key, fn) {
     const current = store.get(key)?.[connector.id];
     if (current?.access_token && current.access_token !== tokens.access_token) return fn(current); // déjà rafraîchi par un appel concurrent
     const id = `${key}:${connector.id}`;
-    const refresh = refreshing.get(id) ?? postToken(connector.oauth, { grant_type: "refresh_token", refresh_token: tokens.refresh_token })
-      .then((fresh) => { store.setTokens(key, connector.id, fresh); return fresh; })
+    const refresh = refreshing.get(id) ?? refreshGrant(connector.oauth, tokens.refresh_token)
+      .then(({ id_token: _unused, ...fresh }) => { store.setTokens(key, connector.id, fresh); return fresh; }) // l'id_token n'est jamais conservé
       .catch((re) => {
         if (re.status !== 400 && re.status !== 401) throw re;
         store.clearTokens(key, connector.id); // refresh_token révoqué : l'entrée disparaît, le portail repasse à « non connecté »
@@ -94,7 +142,7 @@ export function oauthRouter(connectors, getKey) {
       return res.status(400).send(denied ? "Connexion refusée (access_denied) : réessayez depuis le portail." : "Le fournisseur OAuth a renvoyé une erreur : réessayez depuis le portail ou contactez l'administrateur.");
     }
     try {
-      const tokens = await postToken(c.oauth, { grant_type: "authorization_code", code: req.query.code, redirect_uri: redirectUri(c.id), code_verifier: p.verifier });
+      const tokens = await codeGrant(c, req.query, p.verifier);
       if (c.bindIdentity) { const key = c.bindIdentity(p.key, tokens); res.setHeader("Set-Cookie", keyCookie(key)); return res.redirect(c.next(key)); } // SSO : identité liée, jetons non conservés
       if (c.silent) byId.sso?.assertSame(p.key, tokens); // même application Entra que le SSO : jetons du même compte Microsoft, ou rien
       const email = c.identity ? await c.identity(tokens).catch(() => null) : null;

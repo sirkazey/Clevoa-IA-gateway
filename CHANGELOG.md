@@ -7,6 +7,27 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
+## [1.5.0-rc.1] – 2026-10-25
+
+Version candidate : Node 24, base d'exploitation SQLite (historique de disponibilité, usage, journal d'audit facultatif) et
+composants éprouvés à la place du code maison (OpenID Connect, limites de débit). `users.json` inchangé ; retour à la 1.4
+possible sur le même volume.
+
+### Ajouté
+- Base d'exploitation `/data/hub.db` (SQLite intégré à Node 24) : disponibilité de chaque système (mesure toutes les 10 minutes, 90 jours), affichée sur 30 jours dans le détail des applications du portail et exposée à la supervision ; appels, erreurs et collaborateurs actifs (pseudonymes) par mois, 24 mois.
+- Journal d'audit facultatif (`AUDIT=on`, `AUDIT_DAYS`) : collaborateur, système, outil, résultat, durée, jamais les arguments ni les données ; outil d'administration `docker exec … node admin.js disponibilite | usage | audit` (CSV).
+- Sauvegarde de la base : instantané toutes les 6 h, copié chaque jour en `hub-AAAA-MM-JJ_HHMMSS.db` par `mcp-backup` (et par `ops/backup.sh`), restauré par `ops/restore.sh` ; supervision de la base (`clevoa_hub_db_up`, écritures en échec) ; scénarios CI de sauvegarde, restauration, base abîmée et retour arrière vers 1.3.1 et 1.4.0-rc.2.
+
+### Sécurité
+- Routes MCP plafonnées par clé : 300 requêtes par minute (alerte CodeQL `js/missing-rate-limiting`), contre une clé fuitée ou un assistant qui boucle ; une autre clé de la même adresse n'est pas freinée.
+- SSO Entra et SharePoint : échange de code, refresh et vérification de l'id_token par openid-client 6.8.8 (certifié OpenID), **signature comprise** ; un id_token falsifié ou non signé est refusé.
+- `ops/restore.sh` : noms de fichiers passés en arguments, jamais interprétés par le shell ; copie vérifiée avant toute mise de côté de l'ancien fichier (un nom de fichier avec espace ou parenthèse, ou un disque plein, laisse le volume intact) ; image figée comme le hub.
+
+### Modifié
+- Toutes les limites de débit du hub passent par express-rate-limit (limiteur maison retiré) : mêmes seuils et mêmes réponses ; en plus, en-têtes `RateLimit` et adresses IPv6 comptées par préfixe /56.
+- Panne d'Entra au renouvellement d'un jeton SharePoint : la connexion du collaborateur est conservée ; seul un refus explicite (`invalid_grant`) l'efface. Actions de la CI figées par empreinte de commit.
+- Suivi des dépendances : SBOM CycloneDX, licences et Dependabot ; Node 24 (image `node:24-alpine` figée par empreinte) partout, `engines` du hub `>=24`.
+
 ## [1.4.0-rc.2] – 2026-10-25
 
 Version candidate corrective de la 1.4.0-rc.1, issue des tests sur la pré-production : comptages Salesforce faux au-delà
