@@ -1,7 +1,9 @@
 // Annuaires OIDC simulés pour les tests du serveur OAuth du hub : des Entra (émetteur /entra/<annuaire>/v2.0, oid + tid) et un
-// Google (/google, hd), avec découverte, PKCE, nonce, refresh, compte désactivé, panne et id_token falsifiable.
+// Google (/google, hd), avec découverte, clés publiées, id_token signés RS256, PKCE, nonce, refresh, compte désactivé, panne et
+// id_token falsifiable (revendication ou signature).
 import { createServer } from "node:http";
 import { createHash, randomBytes } from "node:crypto";
+import { sign, jwks } from "./jwt.js";
 
 export const USERS = {
   marie: { kind: "entra", oid: "oid-marie", upn: "marie.dupont@charlois.com", name: "Marie Dupont" },
@@ -16,17 +18,16 @@ export const SECRET = "secret-de-l-annuaire";
 export async function startIdp() {
   const st = { next: "marie", flaw: "", disabled: new Set(), down: false, badSecret: false, refreshes: 0, lastAuthorize: null };
   const codes = new Map();
-  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
   const json = (res, status, body) => { res.writeHead(status, { "Content-Type": "application/json" }); res.end(JSON.stringify(body)); };
   let base;
 
   function idToken(issuer, tenant, clientId, user, nonce) {
     const u = USERS[user], f = st.flaw, now = Math.floor(Date.now() / 1000);
-    const common = { iss: f === "iss" ? "http://evil.example.invalid" : issuer, aud: f === "aud" ? "autre-appli" : clientId, nonce: f === "nonce" ? "autre" : nonce, iat: now, exp: f === "exp" ? now - 10 : now + 3600, name: u.name };
+    const common = { iss: f === "iss" ? "http://evil.example.invalid" : issuer, aud: f === "aud" ? "autre-appli" : clientId, nonce: f === "nonce" ? "autre" : nonce, iat: now, exp: f === "exp" ? now - 300 : now + 3600, name: u.name };
     const claims = u.kind === "entra"
       ? { ...common, oid: u.oid, sub: `pairwise-${u.oid}`, tid: f === "tid" ? "autre-annuaire" : tenant, preferred_username: u.upn, email: u.upn, ...(f === "guest" ? { idp: "https://sts.windows.net/annuaire-d-origine/" } : {}) }
       : { ...common, sub: u.sub, email: u.email, email_verified: true, ...(u.hd ? { hd: u.hd } : {}) };
-    return [b64({ alg: "none" }), b64(claims), ""].join(".");
+    return sign(claims, { tamper: f === "sig" });
   }
 
   const server = createServer(async (req, res) => {
@@ -37,7 +38,8 @@ export async function startIdp() {
     if (!m) return json(res, 404, {});
     const issuer = `${base}/${m[1]}`, tenant = m[2] || "", rest = m[3];
     if (rest === "/.well-known/openid-configuration")
-      return json(res, 200, { issuer, authorization_endpoint: `${issuer}/authorize`, token_endpoint: `${issuer}/token`, response_types_supported: ["code"] });
+      return json(res, 200, { issuer, authorization_endpoint: `${issuer}/authorize`, token_endpoint: `${issuer}/token`, jwks_uri: `${issuer}/keys`, response_types_supported: ["code"], subject_types_supported: ["public"], id_token_signing_alg_values_supported: ["RS256"] });
+    if (rest === "/keys") return json(res, 200, jwks);
     if (rest === "/authorize") { // pas d'interface : le compte `st.next` approuve (ou refuse avec "deny")
       st.lastAuthorize = url.searchParams;
       const back = new URL(url.searchParams.get("redirect_uri"));

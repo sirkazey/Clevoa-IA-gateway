@@ -6,6 +6,7 @@
 // statiques restent sur le port interne.
 import express from "express";
 import { rateLimit } from "express-rate-limit";
+import * as oidc from "openid-client";
 import { randomBytes, createHash, timingSafeEqual, createCipheriv, createDecipheriv } from "node:crypto";
 import { mcpAuthRouter, getOAuthProtectedResourceMetadataUrl } from "@modelcontextprotocol/sdk/server/auth/router.js";
 import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
@@ -130,44 +131,30 @@ const purge = (m) => { const now = Date.now(); for (const [k, v] of m) if (v.exp
 /** Purge puis vrai si la table est pleine : le hub refuse (503) au lieu de grossir sans limite. */
 const full = (m, max = MAX_PENDING) => { purge(m); return m.size >= max; };
 
-// ---------- Annuaires : découverte, échange de code, identité ----------
-const discovered = new Map(); // id -> { at, meta }
-async function discover(p) {
-  const d = discovered.get(p.id);
-  if (d && d.at > Date.now() - 3600_000) return d.meta;
-  const r = await fetch(`${p.issuer}/.well-known/openid-configuration`, { signal: AbortSignal.timeout(3000) });
-  const meta = await r.json().catch(() => ({}));
-  if (!r.ok || !meta.authorization_endpoint || !meta.token_endpoint) throw new Error("découverte OIDC invalide");
-  if (String(meta.issuer).replace(/\/$/, "") !== p.issuer) throw new Error("émetteur annoncé différent de l'émetteur configuré");
-  discovered.set(p.id, { at: Date.now(), meta });
-  return meta;
+// ---------- Annuaires : openid-client (découverte, échange de code, nonce, signature de l'id_token, refresh) ----------
+const configs = new Map(); // id de l'annuaire -> promesse de Configuration (découverte une fois, refaite après un échec)
+/** Configuration OIDC de l'annuaire : la signature des id_token est vérifiée avec les clés qu'il publie. http seulement pour les
+ *  annuaires simulés hors production (contrôlé au démarrage) ; délai de 5 s par requête. */
+function idpConfig(p) {
+  if (!configs.has(p.id)) {
+    const execute = [oidc.enableNonRepudiationChecks, ...(!IS_PROD && p.issuer.startsWith("http:") ? [oidc.allowInsecureRequests] : [])];
+    const c = oidc.discovery(new URL(p.issuer), p.clientId, p.clientSecret, undefined, { execute, timeout: 5 });
+    c.catch(() => configs.delete(p.id));
+    configs.set(p.id, c);
+  }
+  return configs.get(p.id);
 }
-async function idpToken(p, params) {
-  const meta = await discover(p);
-  const r = await fetch(meta.token_endpoint, {
-    method: "POST", signal: AbortSignal.timeout(5000),
-    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-    body: new URLSearchParams({ client_id: p.clientId, client_secret: p.clientSecret, ...params }),
-  });
-  const body = await r.json().catch(() => ({}));
-  // Du corps, seul le code d'erreur normalisé est gardé (invalid_grant, invalid_client…) : la description peut citer le compte.
-  if (!r.ok) throw Object.assign(new Error(`annuaire ${p.id} : jeton refusé (${r.status})`), { status: r.status, code: /^[a-z_]{1,40}$/.test(body.error) ? body.error : "" });
-  return body;
-}
+/** Erreur d'openid-client avec un code court journalisable : code OAuth de l'annuaire (invalid_grant…), « id_token » si la
+ *  vérification a échoué ; jamais la description, qui peut citer le compte. */
+const idpError = (e) => Object.assign(e, { code: e instanceof oidc.ResponseBodyError ? (/^[a-z_]{1,40}$/.test(e.error) ? e.error : "") : e instanceof oidc.ClientError ? "id_token" : "" });
 class Refused extends Error {} // compte authentifié mais refusé par la politique du hub (domaine, annuaire)
 
-/** Identité vérifiée de l'id_token reçu en direct du point de terminaison token de l'annuaire (TLS, code + PKCE + secret :
- *  la signature n'est pas revérifiée, OIDC Core § 3.1.3.7 règle 6). Entra : annuaire épinglé par l'émetteur et `tid`, identité
- *  = `oid` (stable entre applications du même annuaire, comme le SSO du portail). Google : domaine Workspace (`hd`) exigé.
- *  Autre OIDC : e-mail vérifié dans un domaine autorisé. L'e-mail ne sert qu'à l'affichage pour Entra (revendication modifiable). */
-export function identity(p, idToken, nonce) {
-  let c; try { c = JSON.parse(Buffer.from(String(idToken).split(".")[1], "base64url").toString("utf8")); } catch { c = null; }
-  if (!c) throw new Error("id_token absent ou illisible");
-  const iss = String(c.iss || "").replace(/\/$/, "");
-  if (iss !== p.issuer && !(p.kind === "google" && iss === "accounts.google.com")) throw new Error("émetteur inattendu");
-  if (!(c.aud === p.clientId || (Array.isArray(c.aud) && c.aud.includes(p.clientId) && c.azp === p.clientId))) throw new Error("audience inattendue");
-  if (!(c.exp > Date.now() / 1000)) throw new Error("id_token expiré");
-  if (!nonce || c.nonce !== nonce) throw new Error("nonce inattendu");
+/** Politique du hub sur les revendications d'un id_token déjà vérifié par openid-client (signature, émetteur, audience,
+ *  expiration, nonce). Entra : annuaire épinglé par `tid`, identité = `oid` (stable entre applications du même annuaire, comme le
+ *  SSO du portail), invités refusés. Google : domaine Workspace (`hd`) exigé. Autre OIDC : e-mail vérifié dans un domaine
+ *  autorisé. L'e-mail ne sert qu'à l'affichage pour Entra (revendication modifiable). */
+export function identity(p, c) {
+  if (!c) throw new Error("id_token absent");
   const email = String(c.email || c.preferred_username || "").toLowerCase(), domainOf = (e) => e.split("@")[1] || "";
   if (p.kind === "entra") {
     if (typeof c.oid !== "string" || !c.oid || String(c.tid || "").toLowerCase() !== p.tenant) throw new Error("annuaire Entra inattendu");
@@ -221,7 +208,7 @@ async function revalidate(sid) {
   if (!p || !s.idpRefresh) return endSession(sid, "annuaire sans renouvellement possible, reconnexion demandée");
   revalidating.add(sid);
   try {
-    const t = await idpToken(p, { grant_type: "refresh_token", refresh_token: s.idpRefresh, scope: p.scope });
+    let t; try { t = await oidc.refreshTokenGrant(await idpConfig(p), s.idpRefresh, { scope: p.scope }); } catch (e) { throw idpError(e); }
     if (!sessionOf(sid)) return;
     if (t.refresh_token) s.idpRefresh = t.refresh_token; // Entra tourne ses refresh tokens ; Google garde le même
     s.revalidatedAt = Date.now(); store.persist();
@@ -379,14 +366,13 @@ export function publicApp(mcpHandler) {
     const rid = String(req.query.rid || ""), r = request(req, rid), p = byIdp[req.params.idp];
     // La demande doit avoir été ouverte par CE navigateur (cookie chiffré) : un lien forgé ne peut pas faire entrer la victime dans la demande d'un autre.
     if (!r || !p) return errorPage(res, 400, "Demande de connexion inconnue ou expirée.");
-    let meta; try { meta = await discover(p); } catch { console.error(`[oauth-server] annuaire ${p.id} injoignable (découverte)`); return errorPage(res, 502, `${p.label} ne répond pas pour le moment. Réessayez dans quelques minutes.`, rid); }
+    let config; try { config = await idpConfig(p); } catch { console.error(`[oauth-server] annuaire ${p.id} injoignable (découverte)`); return errorPage(res, 502, `${p.label} ne répond pas pour le moment. Réessayez dans quelques minutes.`, rid); }
     // Une seule connexion en cours par demande : recliquer remplace la précédente (le cookie ne garde que la dernière).
     const login = { idp: p.id, st: `${rid}.${rand()}`, verifier: rand(), nonce: rand(16) };
     setRequest(res, { ...r, login });
-    const u = new URL(meta.authorization_endpoint);
-    u.search = new URLSearchParams({ ...p.authParams, ...(req.query.select === "1" ? { prompt: p.kind === "google" ? "select_account consent" : "select_account" } : {}),
-      response_type: "code", client_id: p.clientId, redirect_uri: `${PUBLIC}/oauth/callback/${p.id}`, scope: p.scope, state: login.st, nonce: login.nonce,
-      code_challenge: createHash("sha256").update(login.verifier).digest("base64url"), code_challenge_method: "S256" });
+    const u = oidc.buildAuthorizationUrl(config, { ...p.authParams, ...(req.query.select === "1" ? { prompt: p.kind === "google" ? "select_account consent" : "select_account" } : {}),
+      redirect_uri: `${PUBLIC}/oauth/callback/${p.id}`, scope: p.scope, state: login.st, nonce: login.nonce,
+      code_challenge: await oidc.calculatePKCECodeChallenge(login.verifier), code_challenge_method: "S256" });
     res.redirect(rewriteFrom ? u.href.replace(rewriteFrom, rewriteTo) : u.href);
   });
 
@@ -406,8 +392,11 @@ export function publicApp(mcpHandler) {
     }
     setRequest(res, { ...r, login: undefined }); // la connexion n'est utilisable qu'une fois ; la demande reste ouverte pour réessayer
     try {
-      const t = await idpToken(p, { grant_type: "authorization_code", code: String(req.query.code || ""), redirect_uri: `${PUBLIC}/oauth/callback/${p.id}`, code_verifier: l.verifier });
-      const id = identity(p, t.id_token, l.nonce);
+      // Adresse de retour telle qu'enregistrée chez l'annuaire (pas celle vue derrière cloudflared), avec le code, le state et l'iss éventuel.
+      const current = new URL(`${PUBLIC}/oauth/callback/${p.id}`);
+      current.search = new URLSearchParams({ code: String(req.query.code || ""), state: st, ...(req.query.iss ? { iss: String(req.query.iss) } : {}) });
+      let t; try { t = await oidc.authorizationCodeGrant(await idpConfig(p), current, { pkceCodeVerifier: l.verifier, expectedState: st, expectedNonce: l.nonce, idTokenExpected: true }); } catch (e) { throw idpError(e); }
+      const id = identity(p, t.claims());
       bind(id);
       if (full(codes)) return errorPage(res, 503, "Trop de connexions en cours, réessayez dans quelques minutes.", rid);
       const code = rand();

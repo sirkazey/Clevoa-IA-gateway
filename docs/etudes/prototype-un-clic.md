@@ -58,7 +58,8 @@ Ce qui est construit dans le hub (désactivé par défaut, `OAUTH=on` pour l'act
   l'inscription et à chaque usage.
 
 Détails techniques : métadonnées RFC 9728 et RFC 8414, inscription dynamique (DCR), PKCE S256, `resource` (RFC 8707),
-`iss` (RFC 9207), révocation (RFC 7009) ; OIDC code + PKCE + nonce ; refresh token tourné à chaque usage (l'ancien reste
+`iss` (RFC 9207), révocation (RFC 7009) ; connexion aux annuaires par openid-client (bibliothèque certifiée OpenID :
+découverte, code + PKCE + nonce, signature de l'id_token vérifiée avec les clés publiées par l'annuaire, refresh) ; refresh token tourné à chaque usage (l'ancien reste
 accepté 30 secondes, au-delà son retour ferme la session) ; demandes de connexion en cours portées par un cookie chiffré,
 rien en mémoire avant le retour de l'annuaire.
 

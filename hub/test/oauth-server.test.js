@@ -203,7 +203,7 @@ test("Politique : compte Google personnel, autre domaine, mauvais annuaire Entra
   assert.equal(new URL(retry.headers.get("location")).searchParams.get("prompt"), "select_account");
   const again = await fetch((await fetch(retry.headers.get("location"), manual)).headers.get("location"), { headers: { cookie: cookieOf(retry) }, ...manual });
   assert.equal(again.status, 302); assert.ok(new URL(again.headers.get("location")).searchParams.get("code"));
-  for (const flaw of ["tid", "aud", "iss", "nonce", "exp"]) {
+  for (const flaw of ["tid", "aud", "iss", "nonce", "exp", "sig"]) {
     idp.state.flaw = flaw;
     b = await attempt("paul", "charlois");
     assert.equal(b.cb.status, 502, flaw);

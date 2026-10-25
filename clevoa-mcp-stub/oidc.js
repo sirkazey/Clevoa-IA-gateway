@@ -3,6 +3,7 @@
 // désactivation d'un compte pour montrer la coupure au renouvellement. Émetteur : <bouchon>/oidc/<annuaire>/v2.0.
 import { Router } from "express";
 import { randomBytes, createHash } from "node:crypto";
+import { signJwt, jwks } from "./auth.js";
 
 // Comptes par annuaire. Le compte Google personnel doit être refusé par le hub (pas de domaine Workspace `hd`).
 export const DIRECTORY = {
@@ -24,7 +25,7 @@ function idToken(issuer, dir, clientId, email, nonce) {
   const claims = GOOGLE.has(dir)
     ? { ...common, sub: `g-${oid(email)}`, email, email_verified: true, ...(u.hd ? { hd: u.hd } : {}) }
     : { ...common, sub: `pairwise-${oid(email)}`, oid: oid(email), tid: dir, preferred_username: email, email };
-  return [enc({ alg: "none", typ: "JWT" }), enc(claims), ""].join("."); // non signé : reçu en direct du point de terminaison token
+  return signJwt(claims); // signé RS256 : le hub vérifie la signature avec les clés publiées ci-dessous
 }
 
 const DIRS = [...new Set(Object.values(DIRECTORY).map((u) => u.dir))];
@@ -43,8 +44,10 @@ export function oidcRouter() {
 
   r.get("/oidc/:dir/v2.0/.well-known/openid-configuration", known, (req, res) => {
     const iss = issuerOf(req);
-    res.json({ issuer: iss, authorization_endpoint: `${iss}/authorize`, token_endpoint: `${iss}/token`, response_types_supported: ["code"], code_challenge_methods_supported: ["S256"], scopes_supported: ["openid", "email", "profile", "offline_access"] });
+    res.json({ issuer: iss, authorization_endpoint: `${iss}/authorize`, token_endpoint: `${iss}/token`, jwks_uri: `${iss}/keys`, response_types_supported: ["code"], subject_types_supported: ["public"],
+      id_token_signing_alg_values_supported: ["RS256"], code_challenge_methods_supported: ["S256"], scopes_supported: ["openid", "email", "profile", "offline_access"] });
   });
+  r.get("/oidc/:dir/v2.0/keys", known, (_req, res) => res.json(jwks));
 
   r.get("/oidc/:dir/v2.0/authorize", known, (req, res) => {
     const q = req.query;
