@@ -131,8 +131,8 @@ test("Identité ↔ clé : la même identité retrouve sa clé depuis un autre n
   assert.equal(Object.values(hub.readUsers()).filter((u) => u.sso).length, 3);
 });
 
-test("Usurpation : id_token d'un autre locataire, d'une autre application, d'un autre émetteur ou expiré → 400 sans clé ; state d'un autre navigateur → 400", async () => {
-  for (const flaw of ["tid", "aud", "iss", "exp"]) {
+test("Usurpation : id_token d'un autre locataire, d'une autre application, d'un autre émetteur, expiré, à la signature falsifiée ou non signé → 400 sans clé ; state d'un autre navigateur → 400", async () => {
+  for (const flaw of ["tid", "aud", "iss", "exp", "sig", "none"]) {
     const { cb, key, tmp } = await sso(null, { code: `eve:${flaw}` });
     assert.equal(cb.status, 400, `${flaw} : ${await cb.text()}`);
     assert.equal(key, undefined, `${flaw} : aucune clé posée`);

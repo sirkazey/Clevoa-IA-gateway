@@ -17,7 +17,7 @@ import * as telemetry from "./telemetry.js";
 import * as health from "./health.js";
 import * as authserver from "./authserver.js";
 import { createHash, timingSafeEqual } from "node:crypto";
-import { rateLimit } from "express-rate-limit"; // déjà fourni par le SDK MCP (même version) ; utilisé pour les routes de supervision
+import { rateLimit, MemoryStore } from "express-rate-limit"; // déjà fourni par le SDK MCP (même version) : toutes les limites de débit du hub
 import { VERSION, APP_ENV, IS_PROD } from "./version.js";
 
 const PORT = process.env.PORT || 8080;
@@ -39,17 +39,14 @@ const byId = Object.assign(Object.create(null), Object.fromEntries(CONNECTORS.ma
 const ENV = Object.keys(process.env).filter((n) => /^(PUBLIC_URL|APP_ENV|LOG_LEVEL|TRUST_PROXY|ENCRYPTION_KEY|SSO_MODE|MCP_SERVER_NAME|INSTANCE_LABEL|SF_|SAGE_|MS_|SP_|GRAPH_URL|DROPBOX_|MYREPORT_|CLEVOA_|PROBE$|SLOW_MS$|METRICS_TOKEN$|CONNECTOR_DOMAINS$|OAUTH|OIDC_)/.test(n)).sort();
 const masked = (n) => (/SECRET|CLEVOA_KEY|ENCRYPTION_KEY|METRICS_TOKEN/.test(n) ? "••••••••" : process.env[n]); // CLEVOA_KEY est une clé de licence, masquée comme les secrets
 
-// ---------- Limitation de débit (mémoire, par adresse IP) ----------
-// Protège le diagnostic, les jetons et les échecs d'authentification contre la force brute. Fenêtre fixe simple.
-const buckets = new Map(); // "règle:ip" -> { n, reset }
-function hit(rule, ip, max, windowMs = 60_000) {
-  const id = `${rule}:${ip}`, now = Date.now();
-  let b = buckets.get(id);
-  if (!b || b.reset < now) { b = { n: 0, reset: now + windowMs }; buckets.set(id, b); }
-  if (buckets.size > 10_000) for (const [k, v] of buckets) if (v.reset < now) buckets.delete(k); // purge paresseuse
-  return ++b.n > max;
-}
-const limit = (rule, max) => (req, res, next) => hit(rule, req.ip, max) ? res.status(429).json({ error: "Trop de requêtes, réessayez dans une minute." }) : next();
+// ---------- Limitation de débit (express-rate-limit, mémoire, par adresse IP, fenêtre d'une minute) ----------
+// Protège le diagnostic, les jetons et les échecs d'authentification contre la force brute. Une règle = un compteur, partagé par
+// toutes les routes qui la citent (ex. « portal » pour les quatre actions du portail).
+const perMinute = (max, error) => rateLimit({ windowMs: 60_000, limit: max, standardHeaders: "draft-8", legacyHeaders: false, message: { error } });
+const rules = new Map();
+const limit = (rule, max) => rules.get(rule) ?? rules.set(rule, perMinute(max, "Trop de requêtes, réessayez dans une minute.")).get(rule);
+// Échecs d'authentification (clé MCP, cookie du portail, jeton de supervision) : seuls les échecs sont comptés, 20 par minute et par IP.
+const authFailures = perMinute(20, "Trop d'échecs d'authentification, réessayez dans une minute.");
 
 // ---------- Identité ----------
 // Cookie "mcp_key" pour le portail ; en-tête "Authorization: Bearer <clé>" UNIQUEMENT pour les clients MCP
@@ -61,8 +58,7 @@ const user = (key) => { const u = store.get(key); return u && (!sso.MODE || u.ss
 const requireKey = (read) => (req, res, next) => {
   req.key = read(req);
   if (user(req.key)) return next(); // une clé valide n'est jamais freinée par les échecs d'autres clients de la même IP
-  if (hit("auth-fail", req.ip, 20)) return res.status(429).json({ error: "Trop d'échecs d'authentification, réessayez dans une minute." });
-  res.status(401).json({ error: "Clé MCP inconnue ou absente : utilisez l'en-tête Authorization: Bearer <clé> obtenue sur le portail." });
+  authFailures(req, res, () => res.status(401).json({ error: "Clé MCP inconnue ou absente : utilisez l'en-tête Authorization: Bearer <clé> obtenue sur le portail." }));
 };
 const mcpUser = requireKey(mcpKey), portalUser = requireKey(cookieKey);
 // Les POST du portail changent l'état du collaborateur : un navigateur qui annonce une autre origine (formulaire d'un site frère sous le
@@ -72,9 +68,11 @@ const sameOrigin = (req, res, next) => (req.headers.origin && req.headers.origin
 
 /** Exécute un outil/ping d'un connecteur avec le jeton de l'utilisateur et sa structure en cache.
  *  Un connecteur peut plafonner ses appels sortants (maxPerMinute, tous utilisateurs confondus) pour ménager un système de production. */
-const capped = (c, key) => c.maxPerMinute && hasCredential(store.get(key)?.[c.id]) && hit(`upstream:${c.id}`, "*", c.maxPerMinute); // 1 appel d'outil ou de diagnostic = 1 unité
-const call = (c, key, fn) => {
-  if (capped(c, key)) throw new Error(`${c.label} : plafond de ${c.maxPerMinute} appels par minute atteint, réessayez dans un instant.`);
+const upstream = new MemoryStore(); // compteur d'express-rate-limit, hors HTTP : un par connecteur, tous utilisateurs confondus
+upstream.init({ windowMs: 60_000 });
+const capped = async (c, key) => !!c.maxPerMinute && hasCredential(store.get(key)?.[c.id]) && (await upstream.increment(c.id)).totalHits > c.maxPerMinute; // 1 appel d'outil ou de diagnostic = 1 unité
+const call = async (c, key, fn) => {
+  if (await capped(c, key)) throw new Error(`${c.label} : plafond de ${c.maxPerMinute} appels par minute atteint, réessayez dans un instant.`);
   return withToken(c, key, (tok) => fn(tok, () => cachedSchema(key, c.id, () => c.schema(tok))));
 };
 
@@ -197,7 +195,7 @@ app.post("/api/:system/apikey", limit("portal", 30), sameOrigin, portalUser, (re
 app.get("/api/test/:system", limit("diag", 20), portalUser, async (req, res) => {
   const c = byId[req.params.system];
   if (!c) return res.sendStatus(404);
-  if (capped(c, req.key)) return res.json({ ok: false, error: `${c.label} : plafond de ${c.maxPerMinute} appels par minute atteint, réessayez dans un instant.` });
+  if (await capped(c, req.key)) return res.json({ ok: false, error: `${c.label} : plafond de ${c.maxPerMinute} appels par minute atteint, réessayez dans un instant.` });
   try { res.json({ ok: true, ...(await withToken(c, req.key, (tok) => c.ping(tok, () => c.schema(tok)))) }); } // structure relue, pas le cache
   catch (e) { res.json({ ok: false, error: e.message.slice(0, 300) }); }
 });
@@ -226,19 +224,17 @@ const metricsAuth = (req) => {
 const sameToken = (given) => timingSafeEqual(createHash("sha256").update(String(given)).digest(), createHash("sha256").update(METRICS_TOKEN).digest());
 const STATES = ["ok", "lent", "erreurs", "injoignable", "inconnu", "simule"];
 const promLabel = (v) => String(v).replace(/[\\"\n]/g, "_");
-/** Vrai si la requête est refusée (réponse déjà envoyée) : route absente sans jeton configuré, 401 ou 429 sinon. */
-const metricsDenied = (req, res) => {
-  if (!METRICS_TOKEN) { res.sendStatus(404); return true; }
-  if (sameToken(metricsAuth(req))) return false;
-  res.status(hit("auth-fail", req.ip, 20) ? 429 : 401).set("WWW-Authenticate", 'Basic realm="supervision"').type("text/plain").send("jeton de supervision requis\n");
-  return true;
+/** Accès de la supervision : route absente sans jeton configuré, 401 (ou 429 après 20 échecs par minute) sans le bon jeton. */
+const metricsAuthorized = (req, res, next) => {
+  if (!METRICS_TOKEN) return res.sendStatus(404);
+  if (sameToken(metricsAuth(req))) return next();
+  authFailures(req, res, () => res.status(401).set("WWW-Authenticate", 'Basic realm="supervision"').type("text/plain").send("jeton de supervision requis\n"));
 };
 // PRTG : un canal « Santé » par système (0 bon, 1 avertissement si lent, 2 erreur si en erreurs ou injoignable ; seuils posés
 // par le hub), joignabilité, temps de réponse p95, appels et erreurs du système (mode différence : par intervalle de PRTG).
 // 30 relevés par minute et par adresse IP pour les deux routes de supervision (PRTG relève toutes les 1 à 5 minutes).
 const metricsLimit = rateLimit({ windowMs: 60_000, limit: 30, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "Trop de requêtes, réessayez dans une minute." } });
-app.get("/metrics/prtg", metricsLimit, (req, res) => {
-  if (metricsDenied(req, res)) return;
+app.get("/metrics/prtg", metricsLimit, metricsAuthorized, (_req, res) => {
   const result = [], bad = [];
   for (const c of CONNECTORS) {
     const s = health.status(c), n = health.counters(c.id);
@@ -257,8 +253,7 @@ app.get("/metrics/prtg", metricsLimit, (req, res) => {
   result.push({ channel: "Hub · durée de fonctionnement", value: Math.round(process.uptime()), unit: "TimeSeconds" });
   res.json({ prtg: { result, text: bad.length ? bad.join(" · ") : `Clevoa AI Gateway ${VERSION} : systèmes opérationnels` } });
 });
-app.get("/metrics", metricsLimit, (req, res) => {
-  if (metricsDenied(req, res)) return;
+app.get("/metrics", metricsLimit, metricsAuthorized, (_req, res) => {
   const m = [], g = (name, help, type = "gauge") => m.push(`# HELP ${name} ${help}`, `# TYPE ${name} ${type}`);
   g("clevoa_hub_info", "Version et environnement du hub");
   m.push(`clevoa_hub_info{version="${promLabel(VERSION)}",env="${promLabel(APP_ENV)}"} 1`);

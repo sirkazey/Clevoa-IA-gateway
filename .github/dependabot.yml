@@ -1,0 +1,37 @@
+# Mises à jour des dépendances (Dependabot, « version updates ») : chaque lundi, une PR groupée par écosystème pour les mises à
+# jour mineures et correctives, une PR par mise à jour majeure, toujours vers dev (jamais main). Une version n'est proposée que
+# 7 jours après sa publication (cooldown) : une version piégée est en général retirée avant. Registre et politique :
+# docs/developer/dependances.md. Les alertes de sécurité Dependabot sont un réglage du dépôt, indépendant de ce fichier.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directories: ["/hub", "/clevoa-mcp-stub", "/clevoa-console"]
+    schedule: { interval: weekly, day: monday, time: "06:00", timezone: Europe/Paris }
+    target-branch: dev
+    cooldown: { default-days: 7 }
+    groups:
+      npm-correctifs: { update-types: [minor, patch] }
+    commit-message: { prefix: "deps" }
+
+  - package-ecosystem: docker          # images de base des Dockerfile, figées par empreinte
+    directories: ["/hub", "/clevoa-mcp-stub", "/clevoa-console"]
+    schedule: { interval: weekly, day: monday, time: "06:00", timezone: Europe/Paris }
+    target-branch: dev
+    cooldown: { default-days: 7 }
+    commit-message: { prefix: "deps" }
+
+  - package-ecosystem: docker-compose  # images des stacks (node, nginx, cloudflared…)
+    directories: ["/"]
+    schedule: { interval: weekly, day: monday, time: "06:00", timezone: Europe/Paris }
+    target-branch: dev
+    cooldown: { default-days: 7 }
+    commit-message: { prefix: "deps" }
+
+  - package-ecosystem: github-actions  # actions de la CI
+    directory: "/"
+    schedule: { interval: weekly, day: monday, time: "06:00", timezone: Europe/Paris }
+    target-branch: dev
+    cooldown: { default-days: 7 }
+    groups:
+      actions: { update-types: [minor, patch] }
+    commit-message: { prefix: "deps" }

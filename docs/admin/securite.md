@@ -14,6 +14,10 @@ Aucun compte de service, générique ou global, pour aucun des outils connectés
 * Chaque appel MCP est authentifié par la clé de l'appelant. Le hub lit **son** jeton et le transmet tel quel en
   `Authorization: Bearer` à l'outil, qui applique le profil de droits de ce collaborateur.
 * Le cache de structure (objets, champs) est par utilisateur et expire chaque nuit ; aucune donnée métier n'est cachée.
+* SSO Entra et SharePoint : l'id_token est vérifié par openid-client (bibliothèque certifiée OpenID), **signature comprise**
+  avec les clés publiées par l'annuaire, puis par les contrôles du hub (locataire, `oid`). Un id_token falsifié ou non signé
+  est refusé.
+* Dépendances : registre, licences, inventaire (SBOM) et mises à jour suivies dans [dépendances](../developer/dependances.md).
 * Aucun jeton n'est lu depuis l'environnement : les seules variables d'authentification sont les identifiants des
   applications OAuth (échange de code et refresh), jamais utilisés pour requêter les API.
 * Exceptions : les **simulateurs** Sage X3 et MyReport (sans URL), qui ne contactent aucun système.

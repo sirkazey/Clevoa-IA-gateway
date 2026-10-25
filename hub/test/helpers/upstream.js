@@ -2,6 +2,7 @@
 // Dropbox (OAuth2 + MCP), MyReport (MCP SSE) et Clevoa.
 // Il enregistre chaque requête reçue (méthode, chemin, query, en-têtes, corps) pour que les tests
 // vérifient notamment que l'en-tête Authorization transmis est bien le jeton de l'utilisateur.
+import { sign, jwks, discovery } from "./jwt.js";
 import { createServer } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -92,6 +93,10 @@ export async function startUpstream() {
       return json(res, 200, { status: "active" });
     }
     // ---- OAuth2 Microsoft (Entra) ----
+    // Découverte OIDC et clés publiques : le hub vérifie la signature des id_token comme avec le vrai Entra.
+    const msDisc = path.match(/^\/ms\/([^/]+)\/v2\.0\/\.well-known\/openid-configuration$/);
+    if (msDisc) return json(res, 200, discovery(`${base}/ms/${msDisc[1]}/v2.0`, { authorize: `${base}/ms/${msDisc[1]}/oauth2/v2.0/authorize`, token: `${base}/ms/${msDisc[1]}/oauth2/v2.0/token`, keys: `${base}/ms/${msDisc[1]}/discovery/v2.0/keys` }));
+    if (/^\/ms\/[^/]+\/discovery\/v2\.0\/keys$/.test(path)) return json(res, 200, jwks);
     // Autorisation : comme Entra, émet un code lié au code_challenge (PKCE) pour l'utilisateur de login_hint (ou ?mock_user=), vers redirect_uri.
     const msAuth = path.match(/^\/ms\/([^/]+)\/oauth2\/v2\.0\/authorize$/);
     if (msAuth && req.method === "GET") {
@@ -103,7 +108,8 @@ export async function startUpstream() {
       res.writeHead(302, { Location: back.href }); return res.end();
     }
     // Jeton : un code émis ci-dessus exige le code_verifier correspondant (S256) et n'est valable qu'une fois ; sinon le code vaut
-    // « <prénom> » ou « <prénom>:<défaut> » (tests directs), l'id_token portant l'identité du prénom et, pour le défaut (aud, tid, iss, exp), une revendication falsifiée.
+    // « <prénom> » ou « <prénom>:<défaut> » (tests directs), l'id_token signé portant l'identité du prénom et, pour le défaut (aud, tid, iss, exp),
+    // une revendication falsifiée ; « sig » : signature falsifiée ; « none » : jeton non signé.
     const ms = path.match(/^\/ms\/([^/]+)\/oauth2\/v2\.0\/token$/);
     if (ms && req.method === "POST") {
       const p = new URLSearchParams(rawBody);
@@ -117,9 +123,10 @@ export async function startUpstream() {
       } else if (code.startsWith("issued-")) return json(res, 400, { error: "invalid_grant", error_description: "code inconnu ou déjà utilisé" });
       const [who, flaw] = code.split(":"), now = Math.floor(Date.now() / 1000);
       const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
-      const claims = { iss: flaw === "iss" ? `http://evil.example.invalid/${ms[1]}/v2.0` : `${base}/ms/${ms[1]}/v2.0`, aud: flaw === "aud" ? "other-app" : p.get("client_id"), tid: flaw === "tid" ? "other-tenant" : ms[1],
+      const claims = { sub: `pairwise-${who}`, iss: flaw === "iss" ? `http://evil.example.invalid/${ms[1]}/v2.0` : `${base}/ms/${ms[1]}/v2.0`, aud: flaw === "aud" ? "other-app" : p.get("client_id"), tid: flaw === "tid" ? "other-tenant" : ms[1],
         oid: flaw === "noid" ? undefined : `oid-${who}`, preferred_username: `${who}@charlois.example`, name: who[0].toUpperCase() + who.slice(1), iat: now, exp: flaw === "exp" ? now - 60 : now + 600 };
-      return json(res, 200, { access_token: `ms-token-${code}`, refresh_token: `ms-refresh-${code}`, token_type: "Bearer", id_token: [b64({ alg: "none" }), b64(claims), ""].join(".") });
+      const idToken = flaw === "none" ? [b64({ alg: "none" }), b64(claims), ""].join(".") : sign(claims, { tamper: flaw === "sig" });
+      return json(res, 200, { access_token: `ms-token-${code}`, refresh_token: `ms-refresh-${code}`, token_type: "Bearer", id_token: idToken });
     }
     // ---- OAuth2 Dropbox ----
     if (path === "/oauth2/token" && req.method === "POST") {

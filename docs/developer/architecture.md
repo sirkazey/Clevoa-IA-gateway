@@ -1,7 +1,8 @@
 # Architecture
 
-Pour le développeur qui reprend le code. Un seul conteneur Node 22, quatre dépendances directes (`@modelcontextprotocol/sdk`,
-`express`, `zod`, et `express-rate-limit`, déjà fournie par le SDK, déclarée en 1.4.0 pour les routes de supervision), un seul fichier d'état chiffré, aucune abstraction. Les connecteurs sont des
+Pour le développeur qui reprend le code. Un seul conteneur Node 22, cinq dépendances directes (`@modelcontextprotocol/sdk`,
+`express`, `zod`, `express-rate-limit` pour toutes les limites de débit, `openid-client` pour le SSO et SharePoint ; registre et
+politique : [dépendances](dependances.md)), un seul fichier d'état chiffré, aucune abstraction. Les connecteurs sont des
 modules, pas des services.
 
 ## 1. Vue d'ensemble
@@ -49,9 +50,11 @@ systèmes, Entra ID et le backend Clevoa ; 11 tests de bout en bout branchent le
 * **`oauth.js`** : un routeur pour tous les connecteurs (`/auth/<système>` et `/auth/<système>/callback`), code + PKCE
   S256, `state` lié au cookie du navigateur qui a lancé le flux, refresh partagé (une promesse par utilisateur et par
   système), `withToken(connecteur, clé, fn)` qui relit le store et rejoue l'appel après un refresh sur 401. Un refresh
-  token révoqué efface l'entrée et demande une reconnexion.
-* **`sso.js`** : pseudo-connecteur OIDC (`openid profile email`), vérification des claims de l'`id_token` (émetteur,
-  locataire, audience, expiration), `bindIdentity` (clé fraîche à la première liaison), `assertSame` (jetons SharePoint
+  token révoqué efface l'entrée et demande une reconnexion. Connecteurs OIDC (`issuer` : SSO, SharePoint) : échange et
+  refresh par openid-client, id_token vérifié (émetteur, audience, expiration, **signature** avec les clés de l'annuaire) ;
+  autres connecteurs : OAuth2 simple, jeton opaque vérifié par le système lui-même.
+* **`sso.js`** : pseudo-connecteur OIDC (`openid profile email`), contrôles propres au hub après openid-client (locataire,
+  `oid`, émetteur, audience, expiration), `bindIdentity` (clé fraîche à la première liaison), `assertSame` (jetons SharePoint
   du même compte), enchaînement silencieux vers SharePoint (`prompt=none`), déconnexion Microsoft.
 * **`cache.js`** : `Map` « clé:système » → structure, invalidée à la coupure de 03:00 (`TZ`).
 * Autres états en mémoire : flux OAuth en cours, compteurs de débit par IP, sessions SSE (`sessionId` → transport +

@@ -7,6 +7,15 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
+## [Non publié]
+
+### Sécurité
+- SSO Entra et SharePoint : échange de code, refresh et vérification de l'id_token par openid-client 6.8.8 (certifié OpenID), **signature comprise** ; un id_token falsifié ou non signé est refusé.
+
+### Modifié
+- Toutes les limites de débit du hub passent par express-rate-limit (limiteur maison retiré) ; mêmes seuils et mêmes réponses.
+- Suivi des dépendances : SBOM CycloneDX et contrôle des licences en CI, Dependabot hebdomadaire vers `dev`, registre `docs/developer/dependances.md`.
+
 ## [1.4.0-rc.1] – 2026-10-25
 
 Version candidate (non qualifiée pour la production) : portail refondu en écran de travail, état des systèmes et

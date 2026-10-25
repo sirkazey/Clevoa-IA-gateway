@@ -151,6 +151,39 @@ jobs:
           name: trivy-results
           path: trivy.json
           if-no-files-found: ignore
+  sbom:
+    name: Inventaire des dépendances (SBOM CycloneDX), vulnérabilités et licences
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      # Dépendances de production de chaque paquet livré, depuis le fichier de verrouillage (outil intégré à npm, rien à installer).
+      # Le backend Clevoa n'en a aucune (SDK AWS fourni par le runtime Lambda) : voir docs/developer/dependances.md.
+      - name: SBOM CycloneDX (hub, bouchon, console)
+        run: |
+          mkdir -p sbom
+          for p in hub clevoa-mcp-stub clevoa-console; do
+            (cd "$p" && npm sbom --sbom-format cyclonedx --omit dev --package-lock-only) > "sbom/$p.cdx.json"
+          done
+      # Vulnérabilités HIGH/CRITICAL corrigées et licences interdites ou restrictives (AGPL, GPL…) : échec.
+      - name: Trivy sur le SBOM du hub
+        uses: aquasecurity/trivy-action@v0.36.0
+        with: { scan-type: sbom, scan-ref: sbom/hub.cdx.json, scanners: "vuln,license", severity: "HIGH,CRITICAL", ignore-unfixed: true, exit-code: '1' }
+      - name: Trivy sur le SBOM du bouchon
+        uses: aquasecurity/trivy-action@v0.36.0
+        with: { scan-type: sbom, scan-ref: sbom/clevoa-mcp-stub.cdx.json, scanners: "vuln,license", severity: "HIGH,CRITICAL", ignore-unfixed: true, exit-code: '1' }
+      - name: Trivy sur le SBOM de la console
+        uses: aquasecurity/trivy-action@v0.36.0
+        with: { scan-type: sbom, scan-ref: sbom/clevoa-console.cdx.json, scanners: "vuln,license", severity: "HIGH,CRITICAL", ignore-unfixed: true, exit-code: '1' }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: sbom
+          path: sbom/
+          if-no-files-found: ignore
   trivy-image:
     name: Trivy images construites du hub et de la console (système Alpine, Node, dépendances)
     runs-on: ubuntu-latest

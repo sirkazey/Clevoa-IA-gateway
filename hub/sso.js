@@ -27,8 +27,8 @@ if (MODE) {
 const ISSUER = `${LOGIN}/${TENANT}/v2.0`.toLowerCase();
 
 /** Revendications de l'id_token, vérifiées : émetteur et locataire attendus, audience = notre application, non expiré.
- *  Le jeton arrive en direct du point de terminaison token (TLS, code + PKCE + secret) : la signature n'est pas revérifiée
- *  (OIDC Core § 3.1.3.7, règle 6). */
+ *  La signature, l'émetteur, l'audience et l'expiration sont déjà vérifiés par openid-client à l'échange du code (oauth.js) ;
+ *  ces contrôles s'y ajoutent (locataire, oid), pour le SSO comme pour SharePoint (même application Entra). */
 export function claims(idToken) {
   let c; try { c = JSON.parse(Buffer.from(String(idToken).split(".")[1], "base64url").toString("utf8")); } catch { c = null; }
   const bad = (m) => Object.assign(new Error(`SSO : id_token refusé (${m})`), { status: 400, sso: true });
@@ -47,7 +47,8 @@ export const logoutUrl = `${LOGIN}/${TENANT}/oauth2/v2.0/logout?${new URLSearchP
 export const connector = {
   id: "sso",
   label: MODE === "mock" ? "Microsoft Entra ID (simulé)" : "Microsoft Entra ID",
-  oauth: { authUrl: `${LOGIN}/${TENANT}/oauth2/v2.0/authorize`, tokenUrl: `${LOGIN}/${TENANT}/oauth2/v2.0/token`, clientId: CLIENT_ID, clientSecret: CLIENT_SECRET, scope: "openid profile email" },
+  // `issuer` : échange et id_token vérifiés par openid-client (signature comprise) ; claims() ajoute les contrôles propres au hub.
+  oauth: { authUrl: `${LOGIN}/${TENANT}/oauth2/v2.0/authorize`, tokenUrl: `${LOGIN}/${TENANT}/oauth2/v2.0/token`, issuer: ISSUER, clientId: CLIENT_ID, clientSecret: CLIENT_SECRET, scope: "openid profile email" },
   /** Fin du flux : lie l'identité Entra à une clé MCP et renvoie la clé à poser dans le cookie.
    *  Une identité déjà connue retrouve SA clé, depuis n'importe quel navigateur ; une identité nouvelle reçoit une clé FRAÎCHE,
    *  jamais celle que le navigateur portait avant l'authentification : une clé connue d'avance (fixation de session sur un
