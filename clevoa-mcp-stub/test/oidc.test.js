@@ -48,10 +48,10 @@ before(async () => {
   for (let i = 0; i < 100; i++) { try { if ((await fetch(stubUrl + "/")).ok) break; } catch { /* démarrage */ } await sleep(50); }
   const op = await freePort(), dir = (d) => `${stubUrl}/oidc/${d}/v2.0`;
   hub = await startHub({ upstreamUrl: stubUrl, env: {
-    APP_ENV: "preprod", SAGE_URL: "", MYREPORT_MCP_URL: "", OAUTH: "on", OAUTH_PORT: String(op), OAUTH_PUBLIC_URL: `http://127.0.0.1:${op}`, OAUTH_REVALIDATE_MIN: "0",
+    APP_ENV: "preprod", SAGE_URL: "", MYREPORT_MCP_URL: "", OAUTH: "on", OAUTH_LOOPBACK: "on", OAUTH_PORT: String(op), OAUTH_PUBLIC_URL: `http://127.0.0.1:${op}`, OAUTH_REVALIDATE_MIN: "0",
     OIDC_PROVIDERS: "charlois,oakwood,acquise",
-    OIDC_CHARLOIS_ISSUER: dir("charlois"), OIDC_CHARLOIS_KIND: "entra", OIDC_CHARLOIS_CLIENT_ID: "hub", OIDC_CHARLOIS_CLIENT_SECRET: "s", OIDC_CHARLOIS_LABEL: "Microsoft (Charlois)",
-    OIDC_OAKWOOD_ISSUER: dir("oakwood"), OIDC_OAKWOOD_KIND: "entra", OIDC_OAKWOOD_CLIENT_ID: "hub", OIDC_OAKWOOD_CLIENT_SECRET: "s", OIDC_OAKWOOD_LABEL: "Microsoft (Oakwood Cooperage)",
+    OIDC_CHARLOIS_ISSUER: dir("charlois"), OIDC_CHARLOIS_KIND: "entra", OIDC_CHARLOIS_CLIENT_ID: "hub", OIDC_CHARLOIS_CLIENT_SECRET: "s", OIDC_CHARLOIS_LABEL: "Microsoft (Charlois)", OIDC_CHARLOIS_DOMAINS: "charlois.com",
+    OIDC_OAKWOOD_ISSUER: dir("oakwood"), OIDC_OAKWOOD_KIND: "entra", OIDC_OAKWOOD_CLIENT_ID: "hub", OIDC_OAKWOOD_CLIENT_SECRET: "s", OIDC_OAKWOOD_LABEL: "Microsoft (Oakwood Cooperage)", OIDC_OAKWOOD_DOMAINS: "oakwoodcooperage.com",
     OIDC_ACQUISE_ISSUER: dir("acquise"), OIDC_ACQUISE_KIND: "google", OIDC_ACQUISE_CLIENT_ID: "hub", OIDC_ACQUISE_CLIENT_SECRET: "s", OIDC_ACQUISE_LABEL: "Google (société acquise)", OIDC_ACQUISE_DOMAINS: "acquise.example",
   } });
   pub = hub.env.OAUTH_PUBLIC_URL;

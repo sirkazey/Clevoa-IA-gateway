@@ -5,10 +5,11 @@
 // expose : /mcp, métadonnées, /authorize, /token, /register, /revoke, /oauth/login et /oauth/callback. Le portail et les clés
 // statiques restent sur le port interne.
 import express from "express";
+import { rateLimit } from "express-rate-limit";
 import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import { mcpAuthRouter, getOAuthProtectedResourceMetadataUrl } from "@modelcontextprotocol/sdk/server/auth/router.js";
 import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
-import { InvalidGrantError, InvalidTokenError, InvalidTargetError, InvalidClientMetadataError, ServerError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
+import { InvalidGrantError, InvalidTokenError, InvalidTargetError, InvalidClientMetadataError, ServerError, TemporarilyUnavailableError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import { store } from "./store.js";
 import { IS_PROD } from "./version.js";
 
@@ -19,11 +20,13 @@ export const RESOURCE = `${PUBLIC}/mcp`;
 const ACCESS_TTL = 15 * 60; // secondes : un compte désactivé perd l'accès au plus tard à l'expiration du jeton suivant la revalidation
 const SESSION_DAYS = Number(process.env.OAUTH_SESSION_DAYS || 30); // sans utilisation pendant ce délai, la session expire
 const REVALIDATE_MIN = Number(process.env.OAUTH_REVALIDATE_MIN || 60); // au renouvellement, l'annuaire est réinterrogé au moins à ce rythme
-const MAX_CLIENTS = 500;
+const MAX_CLIENTS = 500; // au-delà, les inscriptions de plus de 24 h sans session sont oubliées
+const MAX_PENDING = 5000; // plafond de chaque table en mémoire (demandes, connexions, codes) : au-delà, 503 plutôt qu'une saturation
 export const SCOPES = ["mcp.read", "offline_access"]; // un scope métier en plus d'offline_access : certains clients n'envoient rien sinon
-// Adresses de retour acceptées à l'inscription : Claude par défaut ; les applications locales (Claude Code, inspecteur MCP) sur la boucle locale.
+// Adresses de retour acceptées à l'inscription : Claude par défaut. La boucle locale (Claude Code, inspecteur MCP) seulement avec
+// OAUTH_LOOPBACK=on : sinon un lien piégé pourrait faire livrer un code à une application locale quelconque.
 const REDIRECTS = (process.env.OAUTH_REDIRECT_URIS || "https://claude.ai/api/mcp/auth_callback,https://claude.com/api/mcp/auth_callback").split(",").map((s) => s.trim()).filter(Boolean);
-const LOOPBACK = process.env.OAUTH_LOOPBACK !== "off";
+const LOOPBACK = process.env.OAUTH_LOOPBACK === "on";
 const [rewriteFrom, rewriteTo] = (process.env.BROWSER_URL_REWRITE || "").split("=>"); // pré-prod : annuaire simulé joint par son nom Docker
 
 // ---------- Annuaires (OIDC_PROVIDERS=charlois,oakwood,acquise ; OIDC_<ID>_ISSUER, _CLIENT_ID, _CLIENT_SECRET, _LABEL, _DOMAINS…) ----------
@@ -58,9 +61,12 @@ if (ENABLED) {
     if (!p.clientId || !p.clientSecret) fail(`${who} : CLIENT_ID et CLIENT_SECRET requis`);
     if (!["entra", "google", "oidc"].includes(p.kind)) fail(`${who} : KIND doit être entra, google ou oidc`);
     if (p.kind === "entra" && !p.tenant) fail(`${who} : émetteur Entra attendu en https://login.microsoftonline.com/<ID de l'annuaire>/v2.0`);
-    if (p.kind !== "entra" && !p.domains.length) fail(`${who} : DOMAINS requis (domaines autorisés), sinon tout compte ${p.kind} entrerait`);
-    if (IS_PROD) { // en production : de vrais annuaires seulement
-      if (!p.issuer.startsWith("https://")) fail(`${who} : émetteur en https exigé en production`);
+    if (!p.domains.length) fail(`${who} : DOMAINS requis (domaines des comptes autorisés), sinon tout compte ${p.kind === "entra" ? "de l'annuaire, invités compris," : p.kind} entrerait`);
+    // Un émetteur en http n'est admis que pour les annuaires simulés (bouchon, boucle locale), et jamais en production ; un vrai
+    // annuaire (https) est contrôlé dès la pré-production : Microsoft avec l'ID de l'annuaire, Google à son adresse officielle.
+    const simulated = /^http:\/\/(mcp-stub|localhost|127\.0\.0\.1)(:\d+)?\//.test(p.issuer + "/");
+    if (!p.issuer.startsWith("https://") && (IS_PROD || !simulated)) fail(`${who} : émetteur en https exigé${IS_PROD ? " en production" : " (http réservé aux annuaires simulés)"}`);
+    if (p.issuer.startsWith("https://")) {
       if (p.kind === "entra" && (p.host !== "login.microsoftonline.com" || !GUID.test(p.tenant))) fail(`${who} : Entra exige login.microsoftonline.com et l'ID (GUID) de l'annuaire, jamais common ni organizations`);
       if (p.kind === "google" && p.host !== "accounts.google.com") fail(`${who} : Google exige https://accounts.google.com`);
     }
@@ -76,16 +82,19 @@ const sameResource = (r) => !r || String(r).replace(/#.*$/, "").replace(/\/$/, "
 const LOOP = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?\//;
 export const redirectAllowed = (u) => REDIRECTS.includes(u) || (LOOPBACK && LOOP.test(u));
 const state = () => store.oauthState();
-const cookie = (req) => req.headers.cookie?.match(/(?:^|;\s*)clevoa_oauth=([\w-]+)/)?.[1];
-const secure = PUBLIC.startsWith("https") ? "; Secure" : "";
+// Préfixe __Host- en https : le cookie ne peut être posé ni par un sous-domaine frère, ni pour le domaine parent.
+const COOKIE = PUBLIC.startsWith("https") ? "__Host-clevoa_oauth" : "clevoa_oauth", secure = PUBLIC.startsWith("https") ? "; Secure" : "";
+const cookie = (req) => req.headers.cookie?.split(/;\s*/).find((c) => c.startsWith(`${COOKIE}=`))?.slice(COOKIE.length + 1);
 
 // Mémoire seulement (perdus au redémarrage, sans conséquence : l'assistant recommence ou renouvelle) :
 const requests = new Map(); // demande d'autorisation en cours -> { clientId, clientName, redirectUri, codeChallenge, state, scopes, exp }
 const logins = new Map();   // state envoyé à l'annuaire -> { req, idp, verifier, nonce, exp }
 const codes = new Map();    // empreinte du code -> { clientId, redirectUri, codeChallenge, scopes, identity, idpRefresh, exp }
-const usedCodes = new Map(); // empreinte d'un code déjà échangé -> { sid, exp } (rejeu : la session issue du code est révoquée)
+const usedCodes = new Map(); // empreinte d'un code déjà échangé -> { sid, clientId, exp } (rejeu par le même client : la session issue du code est révoquée)
 const access = new Map();   // empreinte du jeton d'accès -> { sid, clientId, scopes, exp }
 const purge = (m) => { const now = Date.now(); for (const [k, v] of m) if (v.exp < now) m.delete(k); };
+/** Purge puis vrai si la table est pleine : le hub refuse (503) au lieu de grossir sans limite. */
+const full = (m, max = MAX_PENDING) => { purge(m); return m.size >= max; };
 
 // ---------- Annuaires : découverte, échange de code, identité ----------
 const discovered = new Map(); // id -> { at, meta }
@@ -127,8 +136,10 @@ export function identity(p, idToken, nonce) {
   const email = String(c.email || c.preferred_username || "").toLowerCase(), domainOf = (e) => e.split("@")[1] || "";
   if (p.kind === "entra") {
     if (typeof c.oid !== "string" || !c.oid || String(c.tid || "").toLowerCase() !== p.tenant) throw new Error("annuaire Entra inattendu");
+    // Invité B2B : son compte vient d'un autre fournisseur (revendication idp, ou acct=1 si configurée) ; refusé, seuls les membres entrent.
+    if ((c.idp && c.idp !== c.iss && c.idp.toLowerCase() !== `https://sts.windows.net/${p.tenant}/`) || c.acct === 1) throw new Refused(`compte invité : seuls les comptes de ${p.label} sont acceptés`);
     const upn = String(c.preferred_username || "").toLowerCase();
-    if (p.domains.length && !p.domains.includes(domainOf(upn))) throw new Refused(`domaine ${domainOf(upn) || "inconnu"} non autorisé pour ${p.label}`);
+    if (!p.domains.includes(domainOf(upn))) throw new Refused(`domaine ${domainOf(upn) || "inconnu"} non autorisé pour ${p.label}`);
     return { sub: c.oid, tid: String(c.tid).toLowerCase(), upn, name: c.name || "", email: email || null };
   }
   if (typeof c.sub !== "string" || !c.sub) throw new Error("sub absent");
@@ -146,13 +157,13 @@ function bind(id) {
 
 // ---------- Jetons du hub ----------
 /** Jeton d'accès opaque de 15 min (mémoire) et refresh token tourné à chaque usage (empreinte seule sur disque). */
-function issue(sid, s) {
+function issue(sid, s, scopes = s.scopes) {
   purge(access);
   const at = `cgo_at_${rand()}`, secret = rand();
-  access.set(sha(at), { sid, clientId: s.clientId, scopes: s.scopes, exp: Date.now() + ACCESS_TTL * 1000 });
+  access.set(sha(at), { sid, clientId: s.clientId, scopes, exp: Date.now() + ACCESS_TTL * 1000 });
   s.refreshHash = sha(secret);
   s.exp = Date.now() + SESSION_DAYS * 86_400_000;
-  return { access_token: at, token_type: "Bearer", expires_in: ACCESS_TTL, refresh_token: `cgo_rt_${sid}.${secret}`, scope: s.scopes.join(" ") };
+  return { access_token: at, token_type: "Bearer", expires_in: ACCESS_TTL, refresh_token: `cgo_rt_${sid}.${secret}`, scope: scopes.join(" ") };
 }
 function endSession(sid) {
   delete state().sessions[sid];
@@ -183,7 +194,11 @@ export const provider = {
     getClient: (id) => (Object.hasOwn(state().clients, id) ? state().clients[id] : undefined),
     registerClient(client) {
       if (!client.redirect_uris.length || !client.redirect_uris.every(redirectAllowed)) throw new InvalidClientMetadataError("redirect_uri non autorisée par ce hub");
-      if (Object.keys(state().clients).length >= MAX_CLIENTS) throw new InvalidClientMetadataError("nombre maximal de clients inscrits atteint");
+      if (Object.keys(state().clients).length >= MAX_CLIENTS) { // plafond : on oublie les inscriptions de plus de 24 h sans session ouverte
+        const active = new Set(Object.values(state().sessions).map((x) => x.clientId)), old = Date.now() / 1000 - 86_400;
+        for (const [id, c] of Object.entries(state().clients)) if (!active.has(id) && (c.client_id_issued_at ?? 0) < old) delete state().clients[id];
+        if (Object.keys(state().clients).length >= MAX_CLIENTS) throw new InvalidClientMetadataError("nombre maximal de clients inscrits atteint");
+      }
       const c = { ...client, client_name: String(client.client_name || "").slice(0, 80) };
       state().clients[c.client_id] = c; store.persist();
       return c;
@@ -193,12 +208,12 @@ export const provider = {
   /** Page « Se connecter avec… » : choix de l'annuaire et consentement (le nom de l'application et son adresse de retour). */
   async authorize(client, params, res) {
     if (!sameResource(params.resource)) throw new InvalidTargetError("resource inconnue de ce hub");
-    purge(requests);
+    if (full(requests)) throw new TemporarilyUnavailableError("Trop de connexions en cours, réessayez dans quelques minutes.");
     const id = rand(16);
     const scopes = [...new Set(["mcp.read", ...(params.scopes || []).filter((s) => SCOPES.includes(s))])];
     requests.set(id, { clientId: client.client_id, redirectUri: params.redirectUri, codeChallenge: params.codeChallenge, state: params.state, scopes, exp: Date.now() + 10 * 60_000 });
     const app = client.client_name || "Assistant IA", host = new URL(params.redirectUri).host;
-    res.setHeader("Set-Cookie", `clevoa_oauth=${id}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${secure}`);
+    res.setHeader("Set-Cookie", `${COOKIE}=${id}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${secure}`);
     res.type("html").send(page("Connexion", `<h1>Connexion à vos applications</h1>
 <p><b>${esc(app)}</b> <span class="muted">(${esc(host)})</span> demande à lire, en votre nom et avec vos droits, les données des applications de l'entreprise. Aucune modification n'est possible.</p>
 <p class="muted">Choisissez le compte de votre entreprise :</p>
@@ -211,7 +226,7 @@ ${PROVIDERS.map((p) => `<a class="btn" href="/oauth/login/${p.id}?req=${id}">Con
     // Le SDK demande le challenge PKCE avant l'échange : c'est ici qu'un code déjà échangé est vu rejoué. La session qu'il a
     // ouverte est révoquée (OAuth 2.1 § 4.1.3 : le code a probablement fuité).
     const used = !c && usedCodes.get(h);
-    if (used) { usedCodes.delete(h); endSession(used.sid); }
+    if (used && used.clientId === client.client_id) { usedCodes.delete(h); endSession(used.sid); } // un autre client ne peut pas couper la session d'autrui
     if (!c || c.clientId !== client.client_id || c.exp < Date.now()) throw new InvalidGrantError("Code d'autorisation invalide ou expiré");
     return c.codeChallenge;
   },
@@ -225,7 +240,7 @@ ${PROVIDERS.map((p) => `<a class="btn" href="/oauth/login/${p.id}?req=${id}">Con
     if (!sameResource(resource)) throw new InvalidTargetError("resource inconnue de ce hub");
     const sid = rand(24), now = Date.now();
     const s = { clientId: c.clientId, idp: c.idp, sub: c.identity.sub, tid: c.identity.tid, scopes: c.scopes, idpRefresh: c.idpRefresh || null, revalidatedAt: now, createdAt: new Date(now).toISOString() };
-    purge(usedCodes); usedCodes.set(h, { sid, exp: now + 10 * 60_000 });
+    if (!full(usedCodes)) usedCodes.set(h, { sid, clientId: c.clientId, exp: now + 10 * 60_000 });
     for (const [k, v] of Object.entries(state().sessions)) if (v.exp < now) delete state().sessions[k];
     const tokens = issue(sid, s);
     state().sessions[sid] = s; store.persist();
@@ -242,8 +257,7 @@ ${PROVIDERS.map((p) => `<a class="btn" href="/oauth/login/${p.id}?req=${id}">Con
     if (!sameResource(resource)) throw new InvalidTargetError("resource inconnue de ce hub");
     if (scopes?.some((x) => !s.scopes.includes(x))) throw new InvalidGrantError("scope plus large que celui accordé");
     s.prevHash = s.refreshHash; // rotation avant toute attente : un second usage concurrent du même jeton est un rejeu
-    const tokens = issue(sid, s);
-    if (scopes?.length) tokens.scope = scopes.join(" ");
+    const tokens = issue(sid, s, scopes?.length ? scopes : s.scopes); // portée réduite : le jeton d'accès porte bien la portée annoncée
     store.persist();
     try {
       if (Date.now() - s.revalidatedAt > REVALIDATE_MIN * 60_000) await revalidate(s);
@@ -302,6 +316,10 @@ export function publicApp(mcpHandler) {
   app.disable("x-powered-by");
   app.set("trust proxy", Number(process.env.TRUST_PROXY ?? 1)); // adresse réelle derrière cloudflared (limites de débit par IP)
   app.use((_req, res, next) => { res.set(PUBLIC_HEADERS); next(); });
+  // Chemins exacts seulement : Express route sans tenir compte de la casse ni de la barre finale, alors que la règle du pare-feu
+  // Cloudflare compare le chemin tel quel ; /REGISTER ou /mcp/ contourneraient le filtrage par adresse de Claude.
+  const CANONICAL = /^\/(mcp|authorize|token|register|revoke|health|\.well-known\/oauth-authorization-server|\.well-known\/oauth-protected-resource\/mcp|oauth\/(login|callback)\/[a-z0-9]{1,20})$/;
+  app.use((req, res, next) => (CANONICAL.test(req.path) ? next() : res.status(404).type("text/plain").send("Introuvable\n")));
   // Les adresses sortantes de Claude sont partagées par tous ses utilisateurs : limites par IP relevées en conséquence.
   const limit = (max, windowMs) => ({ rateLimit: { windowMs, max } });
   app.use(mcpAuthRouter({
@@ -310,13 +328,17 @@ export function publicApp(mcpHandler) {
     clientRegistrationOptions: { clientSecretExpirySeconds: 0, ...limit(100, 3600_000) }, // secret sans expiration : sinon l'assistant perd la connexion au bout de 30 jours
   }));
 
+  // Pages du navigateur : 60 par minute et par adresse (un bureau entier derrière une même adresse reste loin du plafond).
+  app.use("/oauth", rateLimit({ windowMs: 60_000, limit: 60, standardHeaders: "draft-8", legacyHeaders: false, message: "Trop de tentatives, réessayez dans une minute." }));
   app.get("/oauth/login/:idp", async (req, res) => {
     const id = String(req.query.req || ""), r = requests.get(id), p = byIdp[req.params.idp];
     // La demande doit avoir été ouverte par CE navigateur (cookie) : un lien forgé ne peut pas faire entrer la victime dans la demande d'un autre.
     if (!r || r.exp < Date.now() || cookie(req) !== id || !p) return fail(res, 400, "Demande de connexion inconnue ou expirée.");
     let meta; try { meta = await discover(p); } catch { console.error(`[oauth-server] annuaire ${p.id} injoignable (découverte)`); return fail(res, 502, `${p.label} ne répond pas pour le moment.`); }
-    purge(logins);
+    if (r.login) logins.delete(r.login); // une seule connexion en cours par demande : recliquer remplace la précédente
+    if (full(logins)) return fail(res, 503, "Trop de connexions en cours, réessayez dans quelques minutes.");
     const st = rand(), verifier = rand(), nonce = rand(16);
+    r.login = st;
     logins.set(st, { req: id, idp: p.id, verifier, nonce, exp: Date.now() + 10 * 60_000 });
     const u = new URL(meta.authorization_endpoint);
     u.search = new URLSearchParams({ response_type: "code", client_id: p.clientId, redirect_uri: `${PUBLIC}/oauth/callback/${p.id}`, scope: p.scope, state: st, nonce,
@@ -330,7 +352,7 @@ export function publicApp(mcpHandler) {
     logins.delete(String(req.query.state));
     const r = requests.get(l.req); requests.delete(l.req); // une demande ne sert qu'une fois
     if (!r || r.exp < Date.now()) return fail(res, 400, "Demande de connexion expirée.");
-    res.setHeader("Set-Cookie", `clevoa_oauth=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`);
+    res.setHeader("Set-Cookie", `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`);
     const back = new URL(r.redirectUri);
     if (r.state) back.searchParams.set("state", r.state);
     if (req.query.error) { // vocabulaire fixe : rien de ce que renvoie l'annuaire n'est reflété
@@ -342,8 +364,8 @@ export function publicApp(mcpHandler) {
       const t = await idpToken(p, { grant_type: "authorization_code", code: String(req.query.code || ""), redirect_uri: `${PUBLIC}/oauth/callback/${p.id}`, code_verifier: l.verifier });
       const id = identity(p, t.id_token, l.nonce);
       bind(id);
+      if (full(codes)) return fail(res, 503, "Trop de connexions en cours, réessayez dans quelques minutes.");
       const code = rand();
-      purge(codes);
       codes.set(sha(code), { clientId: r.clientId, redirectUri: r.redirectUri, codeChallenge: r.codeChallenge, scopes: r.scopes, idp: p.id, identity: id, idpRefresh: t.refresh_token, exp: Date.now() + 60_000 });
       back.searchParams.set("code", code);
       back.searchParams.set("iss", new URL(PUBLIC).href); // RFC 9207 : l'émetteur de la réponse

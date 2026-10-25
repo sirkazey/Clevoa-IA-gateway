@@ -20,9 +20,9 @@ async function oauthEnv(extra = {}) {
   const port = await freePort();
   return {
     APP_ENV: "preprod", SAGE_URL: "", MYREPORT_MCP_URL: "", // Sage X3 et MyReport en simulateur : pas de connexion par application
-    OAUTH: "on", OAUTH_PORT: String(port), OAUTH_PUBLIC_URL: `http://127.0.0.1:${port}`, OAUTH_REVALIDATE_MIN: "60",
+    OAUTH: "on", OAUTH_LOOPBACK: "on", OAUTH_PORT: String(port), OAUTH_PUBLIC_URL: `http://127.0.0.1:${port}`, OAUTH_REVALIDATE_MIN: "60",
     OIDC_PROVIDERS: "charlois,oakwood,acquise",
-    OIDC_CHARLOIS_ISSUER: idp.entra("charlois-tid"), OIDC_CHARLOIS_KIND: "entra", OIDC_CHARLOIS_CLIENT_ID: "hub-charlois", OIDC_CHARLOIS_CLIENT_SECRET: SECRET, OIDC_CHARLOIS_LABEL: "Microsoft (Charlois)",
+    OIDC_CHARLOIS_ISSUER: idp.entra("charlois-tid"), OIDC_CHARLOIS_KIND: "entra", OIDC_CHARLOIS_CLIENT_ID: "hub-charlois", OIDC_CHARLOIS_CLIENT_SECRET: SECRET, OIDC_CHARLOIS_LABEL: "Microsoft (Charlois)", OIDC_CHARLOIS_DOMAINS: "charlois.com",
     OIDC_OAKWOOD_ISSUER: idp.entra("oakwood-tid"), OIDC_OAKWOOD_KIND: "entra", OIDC_OAKWOOD_CLIENT_ID: "hub-oakwood", OIDC_OAKWOOD_CLIENT_SECRET: SECRET, OIDC_OAKWOOD_LABEL: "Microsoft (Oakwood Cooperage)", OIDC_OAKWOOD_DOMAINS: "oakwoodcooperage.com",
     OIDC_ACQUISE_ISSUER: idp.google, OIDC_ACQUISE_KIND: "google", OIDC_ACQUISE_CLIENT_ID: "hub-google", OIDC_ACQUISE_CLIENT_SECRET: SECRET, OIDC_ACQUISE_LABEL: "Google (société acquise)", OIDC_ACQUISE_DOMAINS: "acquise.example",
     ...extra,
@@ -109,8 +109,13 @@ test("Découverte : 401 avec resource_metadata sur /mcp, métadonnées RFC 9728 
   assert.equal(as.revocation_endpoint, `${pub}/revoke`);
 });
 
-test("Port public cloisonné : ni portail ni API ni clé statique ; le port interne garde la clé statique", async () => {
+test("Port public cloisonné : ni portail ni API ni clé statique, chemins exacts seulement ; le port interne garde la clé statique", async () => {
   for (const path of ["/", "/index.html", "/api/me", "/api/status", "/auth/salesforce", "/metrics", "/sse"]) assert.equal((await fetch(pub + path, manual)).status, 404, path);
+  // Variantes de casse ou de barre finale : refusées, sinon elles passeraient à côté de la règle du pare-feu Cloudflare
+  for (const path of ["/REGISTER", "/Register/", "/register/", "/MCP", "/mcp/", "/Token", "/REVOKE", "//mcp", "/%6dcp"]) {
+    const r = await fetch(pub + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ redirect_uris: ["https://claude.ai/api/mcp/auth_callback"] }) });
+    assert.equal(r.status, 404, path);
+  }
   assert.equal((await mcpPing(KEY)).status, 401, "la clé statique d'un collaborateur n'ouvre rien côté public");
   const internal = await fetch(`${hub.url}/mcp`, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", Authorization: `Bearer ${KEY}` }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }) });
   assert.equal(internal.status, 200);
@@ -171,6 +176,9 @@ test("Politique : compte Google personnel, autre domaine, mauvais annuaire Entra
   assert.equal(b.cb.status, 403); assert.match(await b.cb.text(), /autre\.example non autorisé/);
   b = await attempt("marie", "oakwood"); // Oakwood n'accepte que ses domaines
   assert.equal(b.cb.status, 403);
+  idp.state.flaw = "guest"; // invité B2B dans l'annuaire de Charlois
+  b = await attempt("paul", "charlois");
+  assert.equal(b.cb.status, 403); assert.match(await b.cb.text(), /compte invité/);
   for (const flaw of ["tid", "aud", "iss", "nonce", "exp"]) {
     idp.state.flaw = flaw;
     b = await attempt("paul", "charlois");
@@ -218,6 +226,9 @@ test("Code d'autorisation : à usage unique, lié à l'assistant ; un rejeu rév
   assert.equal(ok.status, 200);
   const first = await ok.json();
   assert.equal((await mcpPing(first.access_token)).status, 200);
+  const foreign = await token({ grant_type: "authorization_code", code, code_verifier: a.verifier, client_id: other.info.client_id, client_secret: other.info.client_secret, redirect_uri: REDIRECT });
+  assert.equal(foreign.status, 400);
+  assert.equal((await mcpPing(first.access_token)).status, 200, "le rejeu par un autre client ne coupe pas la session d'autrui");
   const replay = await token({ grant_type: "authorization_code", code, code_verifier: a.verifier, client_id: a.info.client_id, client_secret: a.info.client_secret, redirect_uri: REDIRECT });
   assert.equal(replay.status, 400);
   assert.equal((await mcpPing(first.access_token)).status, 401, "session révoquée après rejeu");
@@ -305,10 +316,35 @@ test("Verrous de démarrage : URL publique, port, annuaires, domaines, productio
   await fails({ OAUTH_PUBLIC_URL: "https://mcp.example.com/chemin" }, /sans chemin/);
   await fails({ OIDC_PROVIDERS: "" }, /au moins un annuaire/);
   await fails({ OIDC_ACQUISE_DOMAINS: "" }, /DOMAINS requis/);
+  await fails({ OIDC_CHARLOIS_DOMAINS: "" }, /DOMAINS requis.*invités compris/);
+  await fails({ OIDC_CHARLOIS_ISSUER: "http://annuaire.example.com/abc/v2.0" }, /http réservé aux annuaires simulés/);
+  await fails({ OIDC_CHARLOIS_ISSUER: "https://faux-microsoft.example.com/0e5f8c1a-0000-4000-8000-000000000000/v2.0" }, /login\.microsoftonline\.com/);
+  await fails({ OIDC_ACQUISE_ISSUER: "https://accounts.google.example.com" }, /accounts\.google\.com/);
   await fails({ OIDC_CHARLOIS_CLIENT_SECRET: "" }, /CLIENT_SECRET/);
   await fails({ OIDC_CHARLOIS_ISSUER: `${idp.url}/entra/common/oauth2` }, /émetteur Entra attendu/);
   await fails({ APP_ENV: "production", SAGE_URL: up.url, MYREPORT_MCP_URL: `${up.url}/myreport/sse` }, /https exigé en production/);
+  // Boucle locale refusée par défaut (OAUTH_LOOPBACK absent)
+  const strict = await startHub({ upstreamUrl: up.url, env: { ...(await oauthEnv()), OAUTH_LOOPBACK: "" } });
+  try {
+    await waitPublic(strict.env.OAUTH_PUBLIC_URL);
+    const reg = await fetch(`${strict.env.OAUTH_PUBLIC_URL}/register`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ redirect_uris: [REDIRECT] }) });
+    assert.equal(reg.status, 400);
+  } finally { await strict.stop(); }
   // Sans OAUTH=on : aucun port public, aucune variable OIDC exigée (comportement 1.4 inchangé)
   const plain = await startHub({ upstreamUrl: up.url, env: { OAUTH_PORT: hub.env.OAUTH_PORT } });
   try { assert.doesNotMatch(plain.logs(), /Serveur OAuth/); } finally { await plain.stop(); }
+});
+
+// En dernier : épuise le débit de /oauth pour 127.0.0.1 pendant une minute.
+test("Pages du navigateur : une connexion en cours par demande, débit borné par adresse", async () => {
+  const a = new Assistant(); await auth(a, { serverUrl: mcpUrl });
+  const pageRes = await fetch(a.authUrl, manual), html = await pageRes.text(), link = html.match(/href="(\/oauth\/login\/charlois\?req=[\w-]+)"/)[1];
+  const cookie = `clevoa_oauth=${cookieOf(pageRes)}`;
+  const first = await fetch(pub + link, { headers: { cookie }, ...manual }), second = await fetch(pub + link, { headers: { cookie }, ...manual });
+  idp.state.next = "paul";
+  const atIdp = await fetch(first.headers.get("location"), manual);
+  assert.equal((await fetch(atIdp.headers.get("location"), { headers: { cookie }, ...manual })).status, 400, "la connexion remplacée n'aboutit plus");
+  assert.equal(second.status, 302);
+  let last; for (let i = 0; i < 70; i++) last = await fetch(pub + link, { headers: { cookie }, ...manual });
+  assert.equal(last.status, 429, "plafond de 60 par minute et par adresse");
 });

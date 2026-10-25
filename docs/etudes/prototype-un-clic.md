@@ -52,7 +52,8 @@ Ce qui est construit dans le hub (désactivé par défaut, `OAUTH=on` pour l'act
   75 minutes après (60 + jeton de 15 min) ;
 * un port à part (8090), le seul publié par le tunnel : il ne sert que l'autorisation et `/mcp`. Le portail, les clés
   statiques, la supervision et le diagnostic n'existent pas de ce côté ;
-* adresses de retour acceptées à l'inscription : Claude (`claude.ai`, `claude.com`) et la boucle locale ; tout autre site est refusé.
+* adresses de retour acceptées à l'inscription : Claude (`claude.ai`, `claude.com`) seulement ; la boucle locale (Claude Code)
+  sur option `OAUTH_LOOPBACK=on` ; tout autre site est refusé.
 
 ## 2. Prérequis
 
@@ -165,15 +166,22 @@ Tableau de bord → zone `socle.si` :
    * Nom : `Clevoa : MCP réservé à Claude`.
    * Expression (bouton **Edit expression**) :
      ```
-     (http.host eq "mcp-proto.socle.si" and http.request.uri.path in {"/mcp" "/token" "/register" "/revoke"} and not ip.src in {160.79.104.0/21})
+     (http.host eq "mcp-proto.socle.si" and not ip.src in {160.79.104.0/21} and (starts_with(lower(http.request.uri.path), "/mcp") or starts_with(lower(http.request.uri.path), "/token") or starts_with(lower(http.request.uri.path), "/register") or starts_with(lower(http.request.uri.path), "/revoke")))
      ```
+   * `lower` et `starts_with` couvrent les variantes de casse et de barre finale (`/REGISTER`, `/mcp/`). Le hub, de son
+     côté, ne répond qu'aux chemins exacts (toute variante reçoit 404) : les deux protections se recouvrent. L'opérateur
+     d'expression régulière `matches` n'est pas disponible en offre gratuite ; vérifie à l'enregistrement que l'éditeur
+     accepte `lower` et `starts_with`.
    * Action : **Block**.
    * Les pages vues par le navigateur du collaborateur (`/authorize`, `/oauth/…`) et les métadonnées (`/.well-known/…`)
      restent ouvertes : elles ne donnent accès à aucune donnée.
-2. **Security → Bots** : **Bot Fight Mode** sur **Off** pour la zone. Il peut bloquer les appels serveur de Claude, et ne
+2. **Security → WAF → Rate limiting rules** (une règle en offre gratuite) : chemin commençant par `/oauth/` ou `/authorize`,
+   20 requêtes par 10 secondes et par adresse IP, action **Block** pendant 10 secondes. Le hub borne déjà ces pages à
+   60 par minute et par adresse ; la règle Cloudflare arrête une rafale avant le tunnel.
+3. **Security → Bots** : **Bot Fight Mode** sur **Off** pour la zone. Il peut bloquer les appels serveur de Claude, et ne
    se contourne pas par une règle WAF (documentation Cloudflare). Vérifier aussi que le blocage des robots d'IA
    (« Block AI bots » / AI Crawl Control) n'est pas actif sur ce nom d'hôte.
-3. **SSL/TLS** : mode indifférent pour le tunnel ; laisser **Always Use HTTPS** actif.
+4. **SSL/TLS** : mode indifférent pour le tunnel ; laisser **Always Use HTTPS** actif.
 
 `160.79.104.0/21` est la plage sortante publiée par Anthropic pour les appels MCP
 ([adresses IP d'Anthropic](https://platform.claude.com/docs/en/api/ip-addresses), consultée le 25 octobre 2026). Vérifie-la
@@ -211,16 +219,18 @@ Connecteurs → Ajouter → Personnalisé → Web** (même URL) ; chaque membre 
 3. **Autorisations d'API** : Microsoft Graph, déléguées `openid`, `profile`, `email`, `offline_access` (et `User.Read`
    présente par défaut) → **Accorder le consentement administrateur pour Charlois** (sinon chaque collaborateur verrait un
    écran de consentement Microsoft).
-4. Recommandé pour un pilote : **Applications d'entreprise → Clevoa AI Gateway (prototype) → Propriétés → Affectation
+4. **Obligatoire** : **Applications d'entreprise → Clevoa AI Gateway (prototype) → Propriétés → Affectation
    requise : Oui**, puis **Utilisateurs et groupes** : n'affecter que le groupe pilote. Les autres comptes Charlois sont
-   refusés par Microsoft avant même d'atteindre le hub.
+   refusés par Microsoft avant même d'atteindre le hub. Sans cette affectation, tout compte de l'annuaire, y compris un
+   consultant invité, pourrait se connecter ; le hub refuse en plus les comptes invités (revendication `idp`) et les
+   identifiants hors des domaines de `OIDC_CHARLOIS_DOMAINS`.
 5. Page **Vue d'ensemble** : noter l'**ID de l'annuaire (locataire)** et l'**ID d'application (client)**.
 6. Dans `.env.proto` :
    ```
    OIDC_CHARLOIS_ISSUER=https://login.microsoftonline.com/<ID de l'annuaire>/v2.0
    OIDC_CHARLOIS_CLIENT_ID=<ID d'application>
    OIDC_CHARLOIS_CLIENT_SECRET=<valeur du secret>
-   OIDC_CHARLOIS_DOMAINS=charlois.com          # facultatif : domaines des identifiants (UPN) acceptés
+   OIDC_CHARLOIS_DOMAINS=charlois.com          # obligatoire : domaines des identifiants (UPN) acceptés
    OIDC_PROVIDERS=charlois                     # n'afficher que Microsoft (Charlois) pendant cet essai
    ```
 7. `docker compose -f docker-compose.proto.yml --env-file .env.proto up -d` (le hub redémarre ; les connexions déjà
@@ -259,6 +269,11 @@ prototype ; à reconsidérer pour un service.
 
 Puis `OIDC_PROVIDERS=charlois,oakwood,acquise` et redémarrage : la page du hub propose les trois comptes.
 
+Dès qu'un annuaire réel est branché, `OIDC_PROVIDERS` ne doit plus lister que des annuaires réels : un annuaire simulé
+laisse choisir « Marie Dupont » sans mot de passe. Pour la même raison, ne jamais publier le port 4000 du bouchon au-delà
+de la machine (ou du réseau local de test, § 4.3). Le hub refuse au démarrage un annuaire réel en http, un Entra hors de
+`login.microsoftonline.com` ou sans ID d'annuaire, et un Google hors de `accounts.google.com`.
+
 ## 7. Critères de réussite
 
 | # | Vérification | Attendu |
@@ -275,6 +290,8 @@ Puis `OIDC_PROVIDERS=charlois,oakwood,acquise` et redémarrage : la page du hub 
 | 10 | `https://mcp-proto.socle.si/` | 404 : pas de portail |
 | 11 | Pare-feu de la machine Docker | aucune règle entrante, aucune redirection de port |
 | 12 | `docker compose … logs mcp-hub` | ni e-mail, ni jeton, ni identifiant d'annuaire |
+| 13 | Lien piégé : depuis le compte Claude A, copier l'URL de la page du hub ouverte par « Connect » (avant de choisir l'annuaire), l'ouvrir dans un navigateur connecté au compte Claude **B** et aller au bout | claude.ai refuse le retour (le `state` appartient à la session de A) ; **si le connecteur de A devient connecté avec l'identité de B, arrêter le prototype** et me le signaler |
+| 14 | `curl -X POST https://mcp-proto.socle.si/REGISTER` (variante de casse) | 403 Cloudflare ; en local sur `localhost:8090`, 404 du hub |
 
 ## 8. En cas de problème
 
@@ -302,12 +319,14 @@ Puis `OIDC_PROVIDERS=charlois,oakwood,acquise` et redémarrage : la page du hub 
 
 ## 10. Prouvé, à prouver, limites
 
-**Prouvé ici** (126 tests du hub, 13 du bouchon, dont 16 pour le prototype, et un parcours dans un vrai navigateur
+**Prouvé ici** (127 tests du hub, 13 du bouchon, dont 17 pour le prototype, et un parcours dans un vrai navigateur
 Chromium) : parcours complet avec le client OAuth du SDK MCP qui se comporte comme Claude (découverte, inscription, PKCE,
 `resource`) jusqu'à l'appel d'un outil ; trois annuaires dont un Google ; refus des comptes hors politique et des
 id_token falsifiés (émetteur, audience, annuaire, nonce, expiration) ; liaison d'une identité à une seule clé ; rotation,
 rejeu et révocation des jetons ; revalidation et coupure d'un compte désactivé ; tolérance d'une panne courte de
-l'annuaire ; persistance après redémarrage ; cloisonnement du port public ; verrous de démarrage. Le fichier Compose est
+l'annuaire ; persistance après redémarrage ; cloisonnement du port public et chemins exacts ; invités Entra refusés ; débit et tables
+en mémoire bornés ; verrous de démarrage. Revue de sécurité indépendante : GO sous réserve, tous les constats corrigés
+(§ 11). Le fichier Compose est
 validé par `docker compose config`.
 
 **À prouver par toi** (impossible depuis mon environnement : ni Docker en fonctionnement, ni Cloudflare, ni Entra, ni
@@ -321,9 +340,30 @@ affectation, MFA, désactivation) et de Google (`hd`, consentement).
   sur le portail interne ; les enchaîner dans le même parcours est l'étape suivante.
 * Une seule instance du hub ; jetons d'accès et codes en mémoire (un redémarrage force un renouvellement, sans reconnexion).
 * Rejeu de refresh token strict : si une réponse de renouvellement se perd en route, le collaborateur doit se reconnecter.
-* Inscription dynamique ouverte (bornée par la liste d'adresses de retour et un plafond de 500 clients) ; pas de CIMD, que
-  le SDK ne gère pas encore côté serveur.
+* Inscription dynamique ouverte aux adresses de Claude (règle WAF), bornée par la liste d'adresses de retour (Claude
+  seulement ; la boucle locale exige `OAUTH_LOOPBACK=on`) et un plafond de 500 clients, au-delà duquel les inscriptions de
+  plus de 24 h sans session sont oubliées ; pas de CIMD, que le SDK ne gère pas encore côté serveur.
+* Le store chiffré contient, en plus des empreintes des jetons du hub, les refresh tokens des annuaires (pour la
+  revalidation) et les secrets des clients inscrits : `ENCRYPTION_KEY` protège donc aussi l'accès aux annuaires.
 * Pas d'écran d'administration des sessions : la coupure passe par l'annuaire (désactivation) ou par l'effacement du store.
 * Cloudflare voit les échanges en clair : à soumettre au DPO avant toute donnée réelle (alternative étudiée : relais frp,
   [étude § relais](connexion-un-clic.md)).
 * Aucun test d'intrusion externe : obligatoire avant un service réel.
+
+## 11. Revue de sécurité indépendante
+
+Verdict de la revue (25 octobre 2026) : **GO sous réserve**, aucun contournement d'authentification ni de liaison
+d'identité. Constats et corrections :
+
+| Gravité | Constat | Correction |
+|---|---|---|
+| Haute | Saturation de la mémoire sans compte par répétition de `/oauth/login` (démontrée : 30 000 appels sans refus) | une connexion en cours par demande, 60 requêtes par minute et par adresse sur `/oauth`, plafond de 5 000 entrées par table en mémoire (503 au-delà), règle de débit Cloudflare (§ 4.4) |
+| Moyenne | Règle WAF contournable par la casse ou une barre finale (`/REGISTER`, `/mcp/`) | expression `lower` / `starts_with` ; le hub ne sert que les chemins exacts |
+| Moyenne | Entra : tout compte de l'annuaire entrait, invités B2B compris | affectation requise obligatoire, `DOMAINS` obligatoire pour tous les annuaires, comptes invités refusés |
+| Moyenne | Plafond de 500 inscriptions jamais purgé | au plafond, oubli des inscriptions de plus de 24 h sans session |
+| Moyenne | Retours vers la boucle locale acceptés par défaut | désactivés par défaut (`OAUTH_LOOPBACK=on` pour les autoriser) ; liaison du `state` côté claude.ai à vérifier (critère 13) |
+| Basse | Un autre client rejouant un code coupait la session d'autrui | seul le client d'origine déclenche la révocation |
+| Basse | Cookie de demande posable depuis un sous-domaine frère | préfixe `__Host-` en https |
+| Basse | Pré-production sans contrôle des émetteurs réels | http réservé aux annuaires simulés ; contrôles Microsoft et Google dès qu'un émetteur est en https |
+| Basse | Portée réduite au refresh annoncée mais non appliquée | le jeton d'accès porte la portée annoncée |
+

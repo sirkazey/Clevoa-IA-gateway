@@ -24,7 +24,7 @@ export async function startIdp() {
     const u = USERS[user], f = st.flaw, now = Math.floor(Date.now() / 1000);
     const common = { iss: f === "iss" ? "http://evil.example.invalid" : issuer, aud: f === "aud" ? "autre-appli" : clientId, nonce: f === "nonce" ? "autre" : nonce, iat: now, exp: f === "exp" ? now - 10 : now + 3600, name: u.name };
     const claims = u.kind === "entra"
-      ? { ...common, oid: u.oid, sub: `pairwise-${u.oid}`, tid: f === "tid" ? "autre-annuaire" : tenant, preferred_username: u.upn, email: u.upn }
+      ? { ...common, oid: u.oid, sub: `pairwise-${u.oid}`, tid: f === "tid" ? "autre-annuaire" : tenant, preferred_username: u.upn, email: u.upn, ...(f === "guest" ? { idp: "https://sts.windows.net/annuaire-d-origine/" } : {}) }
       : { ...common, sub: u.sub, email: u.email, email_verified: true, ...(u.hd ? { hd: u.hd } : {}) };
     return [b64({ alg: "none" }), b64(claims), ""].join(".");
   }

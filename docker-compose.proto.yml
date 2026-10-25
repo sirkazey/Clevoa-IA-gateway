@@ -37,6 +37,7 @@ services:
       OAUTH_PORT: "8090"
       OAUTH_PUBLIC_URL: https://${PROTO_HOST:?nom public du prototype, ex. mcp-proto.socle.si}
       OAUTH_REVALIDATE_MIN: ${OAUTH_REVALIDATE_MIN:-60}
+      OAUTH_LOOPBACK: "off"                    # Claude seulement : pas de retour vers une application locale
       OAUTH_REDIRECT_URIS: ${OAUTH_REDIRECT_URIS:-https://claude.ai/api/mcp/auth_callback,https://claude.com/api/mcp/auth_callback}
       BROWSER_URL_REWRITE: ${BROWSER_URL_REWRITE:-http://mcp-stub:4000=>http://localhost:4000}
       # --- Annuaires (page « Se connecter avec… », dans cet ordre) ---
@@ -46,13 +47,13 @@ services:
       OIDC_CHARLOIS_ISSUER: ${OIDC_CHARLOIS_ISSUER:-http://mcp-stub:4000/oidc/charlois/v2.0}   # réel : https://login.microsoftonline.com/<ID annuaire>/v2.0
       OIDC_CHARLOIS_CLIENT_ID: ${OIDC_CHARLOIS_CLIENT_ID:-simule}
       OIDC_CHARLOIS_CLIENT_SECRET: ${OIDC_CHARLOIS_CLIENT_SECRET:-simule}
-      OIDC_CHARLOIS_DOMAINS: ${OIDC_CHARLOIS_DOMAINS:-}
+      OIDC_CHARLOIS_DOMAINS: ${OIDC_CHARLOIS_DOMAINS:-charlois.com}    # domaines des identifiants acceptés (les invités B2B sont refusés)
       OIDC_OAKWOOD_LABEL: ${OIDC_OAKWOOD_LABEL:-Microsoft (Oakwood Cooperage)}
       OIDC_OAKWOOD_KIND: entra
       OIDC_OAKWOOD_ISSUER: ${OIDC_OAKWOOD_ISSUER:-http://mcp-stub:4000/oidc/oakwood/v2.0}
       OIDC_OAKWOOD_CLIENT_ID: ${OIDC_OAKWOOD_CLIENT_ID:-simule}
       OIDC_OAKWOOD_CLIENT_SECRET: ${OIDC_OAKWOOD_CLIENT_SECRET:-simule}
-      OIDC_OAKWOOD_DOMAINS: ${OIDC_OAKWOOD_DOMAINS:-}
+      OIDC_OAKWOOD_DOMAINS: ${OIDC_OAKWOOD_DOMAINS:-oakwoodcooperage.com}
       OIDC_ACQUISE_LABEL: ${OIDC_ACQUISE_LABEL:-Google (société acquise)}
       OIDC_ACQUISE_KIND: google
       OIDC_ACQUISE_ISSUER: ${OIDC_ACQUISE_ISSUER:-http://mcp-stub:4000/oidc/acquise/v2.0}     # réel : https://accounts.google.com
