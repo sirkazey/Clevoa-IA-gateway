@@ -21,6 +21,8 @@ const NOTES = { PINVOICE: FACTURES, SINVOICE: FACTURES };
 
 export const id = "sagex3";
 export const label = "Sage X3";
+export const domain = "finance";
+export const probeUrl = BASE; // sonde HEAD sans identifiant (health.js)
 export const source = () => (mock ? "simulateur intégré (aucune donnée réelle)" : `dossier ${FOLDER}`);
 export const mock = !BASE;
 const apiKeyMode = process.env.SAGE_APIKEY_MODE === "basic" ? "basic" : "bearer";

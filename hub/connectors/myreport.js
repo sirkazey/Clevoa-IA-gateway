@@ -12,6 +12,8 @@ const ALLOW = (process.env.MYREPORT_TOOLS || "").split(",").map((s) => s.trim())
 
 export const id = "myreport";
 export const label = "MyReport";
+export const domain = "finance";
+export const probeUrl = MCP_URL; // sonde HEAD sans identifiant (health.js)
 export const mock = !MCP_URL;
 export const apiKey = { mode: "bearer", label: "jeton personnel MyReport Server" };
 export const maxPerMinute = Number(process.env.MYREPORT_MAX_PER_MIN || 20); // || : Compose transmet "" quand la variable est vide ; "0" = illimité // MyReport n'a qu'une production : plafond d'appels sortants, tous utilisateurs confondus (0 = illimité)

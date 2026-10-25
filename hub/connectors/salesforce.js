@@ -14,6 +14,8 @@ if (MCP_URL && !/\/sobject-reads\/?$/.test(MCP_URL)) { console.error(`[salesforc
 const WRITE_TOOL = /create|update|delete|upsert|insert|mutat|write|remove|merge|publish|send|execute|run/i; // tout outil au nom évocateur d'écriture est refusé avant transfert
 export const id = "salesforce";
 export const label = "Salesforce";
+export const domain = "commerce";
+export const probeUrl = MCP_URL || LOGIN; // sonde HEAD sans identifiant (health.js)
 /** Ligne Source : « sandbox <nom> » d'après l'URL (ex. charloisgroup--preprod.sandbox.my.salesforce.com), « production » en prod, sinon l'hôte (bouchon). */
 export const source = () => {
   const h = new URL(LOGIN).hostname, m = h.match(/^[^.]+--([^.]+)\.sandbox\./);
