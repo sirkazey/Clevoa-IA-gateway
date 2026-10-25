@@ -70,10 +70,12 @@ const seen = (req, _res, next) => { try { store.assistantSeen(req.key); } catch 
 // Débit par clé MCP authentifiée (et non par IP : tout un bureau sort par la même adresse) : 300 requêtes par minute, très au-dessus
 // d'un assistant normal (une question = quelques requêtes), mais une clé fuitée ou un assistant qui boucle ne martèle pas les systèmes.
 const MCP_PER_MIN = 300;
+// Placé avant la vérification de la clé ; une clé inconnue n'y crée aucune entrée (skip) et reste traitée par authFailures.
 const mcpRate = rateLimit({ windowMs: 60_000, limit: MCP_PER_MIN, standardHeaders: "draft-8", legacyHeaders: false,
-  keyGenerator: (req) => createHash("sha256").update(req.key).digest("base64url"), // empreinte : jamais la clé en mémoire du limiteur
+  skip: (req) => !user(mcpKey(req)),
+  keyGenerator: (req) => createHash("sha256").update(mcpKey(req)).digest("base64url"), // empreinte : jamais la clé en mémoire du limiteur
   message: { error: `Trop de requêtes avec cette clé (${MCP_PER_MIN} par minute) : réessayez dans une minute.` } });
-const mcpUser = [requireKey(mcpKey), mcpRate, seen];
+const mcpAuth = requireKey(mcpKey);
 // Les POST du portail changent l'état du collaborateur : un navigateur qui annonce une autre origine (formulaire d'un site frère sous le
 // même domaine, que SameSite=Lax laisse passer) est refusé. Les clients MCP n'appellent pas ces routes.
 const ORIGIN = new URL(PUBLIC_URL).origin;
@@ -320,13 +322,13 @@ app.get("/metrics", metricsLimit, metricsAuthorized, (_req, res) => {
 
 // Transport SSE (standard historique) : GET /sse ouvre le flux, POST /messages?sessionId= reçoit les requêtes.
 const sseSessions = new Map(); // sessionId -> { transport, key } : une session n'est utilisable qu'avec la clé qui l'a ouverte
-app.get("/sse", mcpUser, async (req, res) => {
+app.get("/sse", mcpRate, mcpAuth, seen, async (req, res) => {
   const transport = new SSEServerTransport("/messages", res);
   sseSessions.set(transport.sessionId, { transport, key: req.key });
   res.on("close", () => sseSessions.delete(transport.sessionId));
   await buildServer(req.key).connect(transport);
 });
-app.post("/messages", mcpUser, async (req, res) => {
+app.post("/messages", mcpRate, mcpAuth, seen, async (req, res) => {
   const s = sseSessions.get(String(req.query.sessionId ?? ""));
   if (!s) return res.status(404).json({ error: "Session SSE inconnue" });
   if (s.key !== req.key) return res.status(403).json({ error: "Session SSE ouverte par une autre clé" });
@@ -334,7 +336,7 @@ app.post("/messages", mcpUser, async (req, res) => {
 });
 
 // Transport Streamable HTTP (sans état) : un serveur jetable par requête.
-app.post("/mcp", mcpUser, async (req, res) => {
+app.post("/mcp", mcpRate, mcpAuth, seen, async (req, res) => {
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   const server = buildServer(req.key);
   res.on("close", () => { transport.close(); server.close(); });
