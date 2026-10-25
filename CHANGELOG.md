@@ -7,7 +7,10 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
-## [Non publié]
+## [1.4.0-rc.2] – 2026-10-25
+
+Version candidate corrective de la 1.4.0-rc.1, issue des tests sur la pré-production : comptages Salesforce faux au-delà
+de 200, listes Sage X3 coupées sans le dire, état « Assistant » du portail. Aucun outil ni route ajouté ou retiré.
 
 ### Modifié
 - Portail : « Assistant : branché (dernier usage …) » d'après les appels MCP réellement reçus avec la clé du collaborateur (jour seulement, conservé dans `users.json`, une écriture par jour au plus), et non plus d'après le seul clic sur « Copier » dans ce navigateur ; effacé à la régénération de la clé.

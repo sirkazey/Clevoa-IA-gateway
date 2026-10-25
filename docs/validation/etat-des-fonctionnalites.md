@@ -1,6 +1,6 @@
 # État des fonctionnalités et limites connues
 
-Version 1.4.0-rc.1, candidate (portail refondu, état des systèmes et supervision ; suivi des installations côté Clevoa). Statuts selon [les conventions](../CONTRIBUTING.md#statut-des-fonctionnalités) : **disponible** (vérifié
+Version 1.4.0-rc.2, candidate (portail refondu, état des systèmes et supervision ; suivi des installations côté Clevoa ; comptages Salesforce exacts et listes coupées signalées). Statuts selon [les conventions](../CONTRIBUTING.md#statut-des-fonctionnalités) : **disponible** (vérifié
 sur le système réel), **testé sur bouchon** (tests automatisés et simulateur seulement), **expérimental**, **prévu**, **non planifié**.
 Évolutions : [roadmap produit](../roadmap-produit.md). Preuves : [journal des tests réels](journal-tests-reels.md), [campagne de charge](charge-v1.2.1.md), CI.
 
