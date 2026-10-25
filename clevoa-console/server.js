@@ -4,7 +4,7 @@
 // Aucune écriture, aucune commande vers les hubs : la console ne fait que lire ce que les hubs ont envoyé.
 import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 import { dynamoStore, describe, compareVersions } from "../clevoa-backend/handler.js";
 import { demoSource } from "./demo.js";
 
@@ -55,13 +55,14 @@ export function overview(items, now = Date.now()) {
 }
 
 // ---------- Accès ----------
-const digest = (s) => createHash("sha256").update(s).digest();
 const failures = new Map(); // ip -> { n, reset } : 10 échecs par minute, puis 429
 function authorized(req) {
   if (!PASSWORD) return true;
   const m = (req.headers.authorization || "").match(/^Basic\s+(\S+)$/i);
-  const given = m ? Buffer.from(m[1], "base64").toString().split(":").slice(1).join(":") : "";
-  return timingSafeEqual(digest(given), digest(PASSWORD));
+  const given = Buffer.from(m ? Buffer.from(m[1], "base64").toString().split(":").slice(1).join(":") : "");
+  const expected = Buffer.from(PASSWORD);
+  // Comparaison à temps constant ; seule la longueur du mot de passe peut se déduire du temps de réponse.
+  return given.length === expected.length && timingSafeEqual(given, expected);
 }
 
 function send(res, code, body, type = "application/json; charset=utf-8", extra = {}) {

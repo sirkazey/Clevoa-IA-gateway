@@ -27,7 +27,7 @@ const fresh = () => ({ calls: 0, errors: Object.fromEntries(ERROR_TYPES.map((t) 
  *  ou refusé par la liste blanche, une erreur d'usage qui ne compte pas dans le taux d'erreur du système. */
 export function category(e) {
   const s = e?.status, m = String(e?.message || "");
-  if (/^Non connecté|refusé : (absent de la liste blanche|le hub n'exécute)/.test(m)) return "user";
+  if (m.startsWith("Non connecté") || /refusé : (absent de la liste blanche|le hub n'exécute)/.test(m)) return "user";
   if (s === 401 || s === 403 || /expirée ou révoquée/.test(m)) return "auth";
   if (s === 429 || /plafond de \d+ appels/.test(m)) return "quota";
   if (s === 504 || e?.name === "TimeoutError" || /pas de réponse en \d+ s/.test(m)) return "timeout";
