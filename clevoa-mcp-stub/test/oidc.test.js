@@ -24,8 +24,9 @@ class Assistant {
 /** Clic « Continuer avec <annuaire> » puis choix du compte sur la mire du bouchon ; renvoie la réponse du retour au hub. */
 async function login(a, dir, email) {
   const page = await fetch(a.authUrl, manual), html = await page.text();
-  const cookie = `clevoa_oauth=${page.headers.get("set-cookie").match(/clevoa_oauth=([\w-]+)/)[1]}`;
-  const toIdp = await fetch(pub + html.match(new RegExp(`href="(/oauth/login/${dir}\\?req=[\\w-]+)"`))[1], { headers: { cookie }, ...manual });
+  const cookieOf = (r) => r.headers.getSetCookie().map((c) => c.split(";")[0]).find((c) => /^clevoa_oauth_[\w-]{12}=./.test(c)); // cookie chiffré de la demande
+  const toIdp = await fetch(pub + html.match(new RegExp(`href="(/oauth/login/${dir}\\?rid=[\\w-]+)"`))[1], { headers: { cookie: cookieOf(page) }, ...manual });
+  const cookie = cookieOf(toIdp); // la demande complétée de la connexion à l'annuaire
   const mire = await (await fetch(toIdp.headers.get("location"))).text();
   const pick = [...mire.matchAll(/href="(\/oidc\/[^"]+\/approve\?[^"]+)"/g)].map((m) => m[1].replace(/&amp;/g, "&")).find((l) => l.includes(encodeURIComponent(email)));
   assert.ok(pick, `${email} proposé sur la mire ${dir}`);
@@ -81,7 +82,13 @@ test("Compte Google personnel refusé ; compte désactivé dans l'annuaire coup�
   assert.equal((await admin("disable")).status, 200);
   try {
     await sleep(5);
-    const r = await fetch(`${pub}/token`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: a.tok.refresh_token, client_id: a.info.client_id, client_secret: a.info.client_secret }) });
-    assert.equal(r.status, 400); assert.equal((await r.json()).error, "invalid_grant");
+    const refresh = (rt) => fetch(`${pub}/token`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: rt, client_id: a.info.client_id, client_secret: a.info.client_secret }) });
+    const r = await refresh(a.tok.refresh_token); // répond sans attendre l'annuaire, qui est réinterrogé juste après
+    assert.equal(r.status, 200);
+    const t = await r.json(), ping = () => fetch(`${pub}/mcp`, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", Authorization: `Bearer ${t.access_token}` }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }) });
+    for (let i = 0; i < 100 && (await ping()).status !== 401; i++) await sleep(20);
+    assert.equal((await ping()).status, 401, "session close dès la revalidation");
+    const again = await refresh(t.refresh_token);
+    assert.equal(again.status, 400); assert.equal((await again.json()).error, "invalid_grant");
   } finally { await admin("enable"); }
 });

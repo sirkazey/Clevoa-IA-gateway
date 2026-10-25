@@ -150,7 +150,8 @@ Un prototype jetable, sur la préproduction et un nom d'hôte de test, sans touc
 
 **Critère de réussite** : un collaborateur de test clique « Connect » dans Claude Desktop, choisit son annuaire,
 revient connecté, interroge Sage X3 de préproduction, sans rien installer ni copier, et **sans aucun port entrant
-ouvert** ; la désactivation de son compte dans l'annuaire coupe l'assistant en moins de 15 minutes. Puis le même essai
+ouvert** ; la désactivation de son compte dans l'annuaire coupe l'assistant en 75 minutes au plus avec les réglages par défaut
+(revalidation toutes les 60 minutes et jeton de 15 minutes ; délai réglable, voir le [prototype](prototype-un-clic.md)). Puis le même essai
 avec ChatGPT (si un espace Business est disponible) et Copilot Studio.
 
 Éléments à fournir par Clevoa pour le prototype : un nom de domaine de test ; un compte Cloudflare (relais n° 1) et un

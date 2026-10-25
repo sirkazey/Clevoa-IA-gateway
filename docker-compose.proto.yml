@@ -3,8 +3,10 @@
 # publie sur https://<PROTO_HOST> par un tunnel SORTANT (aucun port ouvert sur le pare-feu). Le portail reste en local.
 # Par défaut, les trois annuaires sont ceux du bouchon (Entra Charlois, Entra Oakwood, Google de la société acquise, simulés) :
 # toute la chaîne se teste avec Claude avant d'inscrire quoi que ce soit chez Microsoft ou Google. Renseigner OIDC_<ID>_ISSUER,
-# _CLIENT_ID et _CLIENT_SECRET dans .env rebranche un annuaire sur le vrai.
-#   docker compose -f docker-compose.proto.yml --env-file .env.proto up -d --build
+# _CLIENT_ID et _CLIENT_SECRET dans .env.proto rebranche un annuaire sur le vrai.
+#   docker compose -f docker-compose.proto.yml --env-file .env.proto up -d --build      (Docker Compose 2.24 ou plus : balise !override)
+# Réseaux : cloudflared n'est que sur « tunnel », avec le hub ; il ne voit pas le bouchon. Tout port publié sur l'hôte l'est sur
+# 127.0.0.1 seulement, écrit en dur : aucune variable oubliée ne peut exposer le portail ou les annuaires simulés au réseau.
 name: clevoa-proto
 
 services:
@@ -12,7 +14,7 @@ services:
     build: ./clevoa-mcp-stub
     restart: unless-stopped
     ports:
-      - "${STUB_PORT:-127.0.0.1:4000}:4000"   # le navigateur doit joindre les mires des annuaires simulés (même machine par défaut)
+      - "127.0.0.1:4000:4000"                  # mires des annuaires simulés, pour le navigateur de cette machine (ailleurs : tunnel SSH, voir le guide)
     user: "node"
     read_only: true
     security_opt:
@@ -36,7 +38,9 @@ services:
       OAUTH: "on"
       OAUTH_PORT: "8090"
       OAUTH_PUBLIC_URL: https://${PROTO_HOST:?nom public du prototype, ex. mcp-proto.socle.si}
-      OAUTH_REVALIDATE_MIN: ${OAUTH_REVALIDATE_MIN:-60}
+      OAUTH_REVALIDATE_MIN: ${OAUTH_REVALIDATE_MIN:-60}      # minutes entre deux vérifications du compte auprès de l'annuaire
+      OAUTH_SESSION_DAYS: ${OAUTH_SESSION_DAYS:-30}          # jours sans usage avant de devoir se reconnecter
+      OAUTH_SUPPORT_CONTACT: ${OAUTH_SUPPORT_CONTACT:-}      # contact affiché sur les pages d'erreur, ex. « Service informatique, poste 1234 »
       OAUTH_LOOPBACK: "off"                    # Claude seulement : pas de retour vers une application locale
       OAUTH_REDIRECT_URIS: ${OAUTH_REDIRECT_URIS:-https://claude.ai/api/mcp/auth_callback,https://claude.com/api/mcp/auth_callback}
       BROWSER_URL_REWRITE: ${BROWSER_URL_REWRITE:-http://mcp-stub:4000=>http://localhost:4000}
@@ -60,8 +64,16 @@ services:
       OIDC_ACQUISE_CLIENT_ID: ${OIDC_ACQUISE_CLIENT_ID:-simule}
       OIDC_ACQUISE_CLIENT_SECRET: ${OIDC_ACQUISE_CLIENT_SECRET:-simule}
       OIDC_ACQUISE_DOMAINS: ${OIDC_ACQUISE_DOMAINS:-acquise.example}  # domaine Google Workspace (revendication hd) autorisé
-    ports:
-      - "127.0.0.1:8090:8090"                  # port public du hub, en local seulement (essais sans tunnel) ; Internet passe par cloudflared
+    ports: !override                           # remplace le port de la base (${HUB_PORT:-8080}, toutes interfaces)
+      - "127.0.0.1:8080:8080"                  # portail : en local seulement
+      - "127.0.0.1:8090:8090"                  # port public du hub, en local seulement (contrôles) ; Internet passe par cloudflared
+    networks: [default, tunnel]
+    healthcheck:                               # les deux ports ; cloudflared ne démarre qu'une fois le hub prêt
+      test: ["CMD", "node", "-e", "Promise.all([8080, 8090].map((p) => fetch(`http://127.0.0.1:$${p}/health`))).then((rs) => process.exit(rs.every((r) => r.ok) ? 0 : 1), () => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     volumes:
       - proto-data:/data                       # store du prototype, distinct de toute pré-production
     user: "node"
@@ -82,12 +94,18 @@ services:
     environment:
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?jeton du tunnel Cloudflare (Zero Trust > Networks > Tunnels)}
     depends_on:
-      - mcp-hub
+      mcp-hub:
+        condition: service_healthy
+    networks: [tunnel]                         # joint mcp-hub, pas le bouchon ; la route Cloudflare doit viser http://mcp-hub:8090
     read_only: true
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
+
+networks:
+  default:
+  tunnel:
 
 volumes:
   proto-data:

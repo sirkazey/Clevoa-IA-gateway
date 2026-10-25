@@ -89,12 +89,15 @@ const INSTRUCTIONS = [
   "Documents : sharepoint_search / sharepoint_read, dropbox_tools puis dropbox_call. Analyses MyReport : myreport_tools puis myreport_call.",
 ].join(" ");
 
-function buildServer(key) {
+/** `oauth` : collaborateur connecté par le serveur OAuth du hub, qui n'a pas accès au portail. Seuls les systèmes utilisables
+ *  sans passer par le portail lui sont proposés (simulateurs et systèmes déjà connectés), et les instructions le disent. */
+function buildServer(key, oauth = false) {
+  const u = store.get(key), usable = oauth ? CONNECTORS.filter((c) => c.mock || hasCredential(u?.[c.id])) : CONNECTORS;
   const server = new McpServer(
     { name: SERVER_NAME, version: VERSION },
-    { instructions: INSTRUCTIONS },
+    { instructions: oauth ? `${INSTRUCTIONS} Pour cet utilisateur, seuls ces systèmes sont disponibles : ${usable.map((c) => c.label).join(", ") || "aucun"} ; ne pas proposer d'interroger les autres.` : INSTRUCTIONS },
   );
-  for (const c of CONNECTORS) for (const t of c.tools) {
+  for (const c of usable) for (const t of c.tools) {
     server.registerTool(t.name, { description: t.description, inputSchema: t.input, annotations: { readOnlyHint: true } }, async (args) => {
       telemetry.count();
       const t0 = Date.now();
@@ -301,7 +304,7 @@ app.post("/messages", mcpUser, async (req, res) => {
 // `req.key` vient du jeton OAuth du hub au lieu de la clé statique.
 async function mcpHandler(req, res) {
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-  const server = buildServer(req.key);
+  const server = buildServer(req.key, req.oauth === true);
   res.on("close", () => { transport.close(); server.close(); });
   await server.connect(transport);
   await transport.handleRequest(req, res, req.body);

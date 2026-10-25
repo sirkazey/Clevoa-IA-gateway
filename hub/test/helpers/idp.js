@@ -14,7 +14,7 @@ export const USERS = {
 export const SECRET = "secret-de-l-annuaire";
 
 export async function startIdp() {
-  const st = { next: "marie", flaw: "", disabled: new Set(), down: false, refreshes: 0, lastAuthorize: null };
+  const st = { next: "marie", flaw: "", disabled: new Set(), down: false, badSecret: false, refreshes: 0, lastAuthorize: null };
   const codes = new Map();
   const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
   const json = (res, status, body) => { res.writeHead(status, { "Content-Type": "application/json" }); res.end(JSON.stringify(body)); };
@@ -52,7 +52,7 @@ export async function startIdp() {
     }
     if (rest === "/token" && req.method === "POST") {
       if (st.down) return json(res, 503, { error: "temporarily_unavailable" });
-      if (p.get("client_secret") !== SECRET) return json(res, 401, { error: "invalid_client" });
+      if (p.get("client_secret") !== SECRET || st.badSecret) return json(res, 401, { error: "invalid_client" });
       if (p.get("grant_type") === "authorization_code") {
         const c = codes.get(p.get("code")); codes.delete(p.get("code"));
         if (!c || c.issuer !== issuer || c.redirect !== p.get("redirect_uri")) return json(res, 400, { error: "invalid_grant" });
