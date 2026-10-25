@@ -1,4 +1,4 @@
-// Télémétrie Clevoa : payload réduit à des compteurs, planification quotidienne (horloge simulée), essais bornés, délai d'envoi,
+// Télémétrie Clevoa : payload réduit à des compteurs, envoi toutes les 6 heures (horloge simulée), statistiques par connecteur, essais bornés, délai d'envoi,
 // envoi réel du hub vers le mock, identifiant d'installation persistant, hub indifférent à une panne du backend.
 // Le backend (clevoa-backend/handler.js) a ses propres tests : clevoa-backend/test/handler.test.js.
 import { test, mock, before, after } from "node:test";
@@ -17,7 +17,7 @@ const CONNECTORS = [
   { id: "sharepoint", oauth: {} }, { id: "dropbox", oauth: { clientId: "d" } }, { id: "myreport", apiKey: {} },
 ];
 
-test("Module : payload 100 % anonyme (version, date, booléens par connecteur, compteur) et envoi au démarrage puis à 03:00", async (t) => {
+test("Module : payload réduit à des compteurs, envoi au démarrage puis à chaque créneau de 6 heures (03, 09, 15, 21 h)", async (t) => {
   process.env.CLEVOA_KEY = "k-unit"; process.env.CLEVOA_URL = "https://clevoa.test/api/v1/telemetry";
   const tm = await import("../telemetry.js");
   t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
@@ -27,7 +27,9 @@ test("Module : payload 100 % anonyme (version, date, booléens par connecteur, c
   try {
     tm.count(); tm.count(); tm.count();
     const env = process.env.APP_ENV === "production" ? "PRODUCTION" : "PRE-PROD";
-    assert.deepEqual(tm.payload(CONNECTORS), { version: VERSION, env, date: "2026-10-21", connectors: { salesforce: true, sagex3: false, sharepoint: false, dropbox: true, myreport: true }, requests: 3, seats: 0 });
+    const { since, ...rest } = tm.payload(CONNECTORS);
+    assert.deepEqual(rest, { version: VERSION, env, date: "2026-10-21", connectors: { salesforce: true, sagex3: false, sharepoint: false, dropbox: true, myreport: true }, requests: 3, seats: 0, stats: {} });
+    assert.ok(!Number.isNaN(Date.parse(since)), "début de la période");
     assert.equal(tm.payload(CONNECTORS, 0, INSTALL).installation, INSTALL);
 
     tm.start(CONNECTORS, () => 0, () => INSTALL);
@@ -35,7 +37,7 @@ test("Module : payload 100 % anonyme (version, date, booléens par connecteur, c
     assert.equal(calls.length, 1, "envoi immédiat au démarrage");
     assert.equal(calls[0].url, "https://clevoa.test/api/v1/telemetry");
     assert.equal(calls[0].init.headers["X-Clevoa-Key"], "k-unit");
-    assert.deepEqual(Object.keys(calls[0].body).sort(), ["connectors", "date", "env", "installation", "requests", "seats", "version"], "aucun autre champ");
+    assert.deepEqual(Object.keys(calls[0].body).sort(), ["connectors", "date", "env", "installation", "requests", "seats", "since", "stats", "version"], "aucun autre champ");
     assert.ok(!JSON.stringify(calls[0].body).match(/token|email|key|@/i), "rien d'identifiant");
     assert.ok(calls[0].init.signal instanceof AbortSignal, "délai d'envoi borné : un backend muet ne retient pas le hub");
     assert.equal(calls[0].body.requests, 3);
@@ -45,12 +47,11 @@ test("Module : payload 100 % anonyme (version, date, booléens par connecteur, c
     assert.equal(calls.length, 1);
     t.mock.timers.tick(60 * 1000); // 03:00
     await new Promise((r) => setImmediate(r));
-    assert.equal(calls.length, 2, "envoi quotidien à 03:00");
+    assert.equal(calls.length, 2, "envoi au créneau de 03:00");
     assert.equal(calls[1].body.requests, 1, "compteur remis à zéro après chaque envoi réussi");
     assert.equal(calls[1].body.date, "2026-10-22");
-    t.mock.timers.tick(24 * 3600 * 1000);
-    await new Promise((r) => setImmediate(r));
-    assert.equal(calls.length, 3, "puis toutes les 24 h");
+    for (const h of [9, 15, 21]) { t.mock.timers.tick(6 * 3600 * 1000); await new Promise((r) => setImmediate(r)); assert.equal(calls.at(-1).body.since.length > 0, true, `créneau de ${h} h`); }
+    assert.equal(calls.length, 5, "quatre envois par jour");
   } finally { fetchMock.mock.restore(); }
 });
 
@@ -74,7 +75,7 @@ test("Module : Clevoa injoignable au démarrage → nouvel essai à 1 min, 5 min
   } finally { fetchMock.mock.restore(); }
 });
 
-test("Module : après trois nouveaux essais en échec, retour à l'horaire quotidien (aucune boucle d'essais)", async (t) => {
+test("Module : après trois nouveaux essais en échec, retour aux créneaux de 6 heures (aucune boucle d'essais)", async (t) => {
   process.env.CLEVOA_KEY = "k-unit"; process.env.CLEVOA_URL = "https://clevoa.test/api/v1/telemetry";
   const tm = await import("../telemetry.js");
   t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
@@ -87,10 +88,10 @@ test("Module : après trois nouveaux essais en échec, retour à l'horaire quoti
     await settle();
     for (const ms of [60_000, 300_000, 1_800_000]) { t.mock.timers.tick(ms); await settle(); }
     assert.equal(calls.length, 4, "essai immédiat puis 1, 5 et 30 min");
-    t.mock.timers.tick(6 * 3600_000); await settle();
-    assert.equal(calls.length, 4, "plus aucun essai avant 03:00");
-    t.mock.timers.setTime(Date.parse("2026-10-22T03:00:01")); t.mock.timers.tick(1); await settle();
-    assert.equal(calls.length, 5, "un seul essai à l'horaire quotidien");
+    t.mock.timers.tick(4 * 3600_000); await settle();
+    assert.equal(calls.length, 4, "plus aucun essai avant le créneau de 15:00");
+    t.mock.timers.setTime(Date.parse("2026-10-21T15:00:01")); t.mock.timers.tick(1); await settle();
+    assert.equal(calls.length, 5, "un seul essai au créneau suivant");
     t.mock.timers.tick(3600_000); await settle();
     assert.equal(calls.length, 5, "toujours en échec : pas de rafale de nouveaux essais");
   } finally { fetchMock.mock.restore(); }
@@ -129,6 +130,60 @@ test("Module : une réponse du backend ne peut pas injecter de lignes dans les j
   } finally { f.mock.restore(); log.mock.restore(); warn.mock.restore(); }
 });
 
+test("Statistiques : type de chaque erreur d'outil, d'après son statut ou sa forme, sans jamais garder le message", async () => {
+  const { category } = await import("../telemetry.js");
+  const err = (message, extra = {}) => Object.assign(new Error(message), extra);
+  assert.equal(category(err("Sage X3 401: x", { status: 401 })), "auth");
+  assert.equal(category(err("Session Salesforce expirée ou révoquée : reconnectez-vous sur le portail.")), "auth");
+  assert.equal(category(err("MyReport : plafond de 20 appels par minute atteint, réessayez dans un instant.")), "quota");
+  assert.equal(category(err("x", { status: 429 })), "quota");
+  assert.equal(category(err("Sage X3 : pas de réponse en 30 s (/api1)", { status: 504 })), "timeout");
+  assert.equal(category(err("Dropbox injoignable (mcp.dropbox.com) : ENOTFOUND")), "unreachable");
+  assert.equal(category(err("Non connecté à Sage X3. Ouvrez le portail et cliquez « Se connecter à Sage X3 ».")), "user");
+  assert.equal(category(err("Outil x refusé : absent de la liste blanche MYREPORT_TOOLS (lecture seule).")), "user");
+  assert.equal(category(err("Sage X3 500: boom", { status: 500 })), "other");
+});
+
+test("Statistiques : par connecteur, appels, erreurs par type, collaborateurs distincts, latence médiane et 95e centile ; aucune clé ni message", async () => {
+  const { record, summary, ERROR_TYPES } = await import("../telemetry.js");
+  // Connecteur fictif « sagex3-test » : n'interfère pas avec les statistiques des autres tests.
+  for (let i = 1; i <= 100; i++) record("sagex3-test", "cle-alice", i);
+  record("sagex3-test", "cle-bob", 500, Object.assign(new Error("Sage X3 401: secret-dans-le-message"), { status: 401 }));
+  record("sagex3-test", "cle-carol", 20, new Error("Non connecté à Sage X3. Ouvrez le portail."));
+  const s = summary()["sagex3-test"];
+  assert.equal(s.calls, 102); assert.equal(s.users, 3); assert.equal(s.authUsers, 1);
+  assert.deepEqual(Object.keys(s.errors), ERROR_TYPES);
+  assert.equal(s.errors.auth, 1); assert.equal(s.errors.user, 1); assert.equal(s.errors.other, 0);
+  assert.equal(s.p50, 51); assert.ok(s.p95 >= 95 && s.p95 <= 100);
+  const text = JSON.stringify(summary());
+  for (const x of ["cle-alice", "cle-bob", "secret-dans-le-message", "Sage X3 401"]) assert.ok(!text.includes(x), `rien de ${x}`);
+});
+
+test("Statistiques : un envoi échoué les conserve pour le suivant ; un envoi réussi ouvre une nouvelle période", async (t) => {
+  process.env.CLEVOA_KEY = "k-unit"; process.env.CLEVOA_URL = "https://clevoa.test/api/v1/telemetry";
+  const tm = await import("../telemetry.js");
+  let ok = false; const bodies = [];
+  const f = mock.method(globalThis, "fetch", async (_u, init) => { bodies.push(JSON.parse(init.body)); if (!ok) throw new TypeError("fetch failed"); return new Response("{}", { status: 200 }); });
+  try {
+    await tm.send(CONNECTORS); // vide les statistiques des tests précédents
+    ok = true; await tm.send(CONNECTORS); ok = false;
+    tm.record("myreport", "k1", 10); tm.record("myreport", "k2", 30, new Error("MyReport : plafond de 20 appels par minute atteint"));
+    assert.equal(await tm.send(CONNECTORS), null, "échec");
+    tm.record("myreport", "k1", 20);
+    ok = true; await tm.send(CONNECTORS);
+    const last = bodies.at(-1).stats.myreport;
+    assert.equal(last.calls, 3, "rien perdu après l'échec"); assert.equal(last.errors.quota, 1); assert.equal(last.users, 2);
+    await tm.send(CONNECTORS);
+    assert.deepEqual(bodies.at(-1).stats, {}, "nouvelle période vide, rien compté deux fois");
+  } finally { f.mock.restore(); }
+});
+
+test("Créneaux : prochain envoi à 03, 09, 15 ou 21 h, heure locale", async () => {
+  const { nextSlot } = await import("../telemetry.js");
+  const at = (iso) => { const now = Date.parse(iso); return new Date(now + nextSlot(now)).getHours(); };
+  assert.equal(at("2026-10-25T02:59:00"), 3); assert.equal(at("2026-10-25T03:00:00"), 9); assert.equal(at("2026-10-25T14:10:00"), 15); assert.equal(at("2026-10-25T22:00:00"), 3);
+});
+
 let up, hub;
 before(async () => { up = await startUpstream(); hub = await startHub({ upstreamUrl: up.url, users: { [KEY]: connectedUser(up.url) } }); });
 after(async () => { await hub?.stop(); await up?.stop(); });
@@ -140,7 +195,7 @@ test("Hub → Clevoa : POST au démarrage avec la clé et un payload sans aucune
   assert.equal(t.length, 1, "un envoi au démarrage");
   assert.equal(t[0].headers["x-clevoa-key"], "clevoa-key-test");
   const body = JSON.parse(t[0].body);
-  assert.deepEqual(Object.keys(body).sort(), ["connectors", "date", "env", "installation", "requests", "seats", "version"]);
+  assert.deepEqual(Object.keys(body).sort(), ["connectors", "date", "env", "installation", "requests", "seats", "since", "stats", "version"]);
   assert.match(body.installation, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/, "UUID aléatoire");
   assert.ok(hub.rawStore().startsWith("enc1:") && !hub.rawStore().includes(body.installation), "identifiant conservé dans le fichier chiffré, jamais en clair");
   assert.equal(body.seats, 1, "un siège : le collaborateur connecté du test ; aucune identité transmise");

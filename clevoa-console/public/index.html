@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Console Clevoa</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+@font-face { font-family: "Outfit"; src: url("/fonts/outfit-variable-latin.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+/* Charte Clevoa (mêmes jetons que le portail) ; une colonne : synthèse, tableau des installations, détail de celle choisie. */
+:root {
+  --bg: #F6F5FA; --surface: #FFFFFF; --ink: #2B2540; --muted: #625C75; --line: #E3E0EE; --accent: #6B30D9; --accent-soft: #EEE7FC;
+  --ok: #0B7A73; --ok-soft: #E3F3F1; --warn: #9A5B00; --warn-soft: #FBF0DE; --bad: #B42318; --bad-soft: #FCE8E6; --grey-soft: #ECEAF2;
+  --font: "Outfit", ui-sans-serif, system-ui, sans-serif; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --c1: #6B30D9; --c2: #0B7A73; --c3: #C2410C; --c4: #2563EB; --c5: #A21CAF;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #17141F; --surface: #211D2C; --ink: #ECE9F4; --muted: #ABA4BF; --line: #352F45; --accent: #B79CF0; --accent-soft: #2E2645;
+  --ok: #5CC8BE; --ok-soft: #16302E; --warn: #E2A64B; --warn-soft: #33280F; --bad: #F2867A; --bad-soft: #3A1A18; --grey-soft: #2B2638;
+  --c1: #B79CF0; --c2: #5CC8BE; --c3: #F59E5B; --c4: #7DA6F7; --c5: #E07CE8; color-scheme: dark } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font); }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 24px max(16px, env(safe-area-inset-right, 0px)) 56px max(16px, env(safe-area-inset-left, 0px)); display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
+header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand b { font-size: 22px; letter-spacing: -0.02em; }
+.brand span { color: var(--muted); }
+.meta { color: var(--muted); font-size: 13px; }
+.banner { background: var(--warn-soft); color: var(--warn); border-radius: 10px; padding: 10px 14px; font-weight: 500; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 2px; }
+.tile .v { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tile .l { color: var(--muted); font-size: 13px; }
+.tile.alert .v { color: var(--bad); }
+h2 { font-size: 18px; margin: 0 0 10px; }
+.box { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-size: 12px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+tbody tr { cursor: pointer; }
+tbody tr:hover, tbody tr.sel { background: var(--accent-soft); }
+tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+tbody tr:last-child td { border-bottom: none; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.chip.ok { background: var(--ok-soft); color: var(--ok); } .chip.incident { background: var(--bad-soft); color: var(--bad); }
+.chip.silencieuse { background: var(--warn-soft); color: var(--warn); } .chip.perdue { background: var(--grey-soft); color: var(--muted); }
+.old { color: var(--warn); font-size: 12px; margin-left: 6px; }
+.sub { color: var(--muted); font-size: 12px; }
+.detail { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.detail-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px; }
+.incidents { display: grid; gap: 6px; }
+.incidents div { background: var(--bad-soft); color: var(--bad); border-radius: 8px; padding: 8px 12px; font-size: 14px; }
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 16px; }
+.chart { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 8px; min-width: 0; }
+.chart h3 { margin: 0; font-size: 15px; }
+.chart svg { width: 100%; height: auto; display: block; }
+.chart svg text { fill: var(--muted); font: 11px var(--font); }
+.chart svg .grid { stroke: var(--line); stroke-width: 1; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.empty { color: var(--muted); padding: 24px; text-align: center; }
+.err { background: var(--bad-soft); color: var(--bad); border-radius: 10px; padding: 12px 14px; }
+@media (prefers-reduced-motion: no-preference) { tbody tr { transition: background .12s; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><b>clevoa</b><span>Console de suivi des installations</span></div>
+    <div class="meta" id="meta">Chargement…</div>
+  </header>
+  <div class="banner" id="demo" hidden>Données de démonstration : trois installations fictives, générées localement. Aucune donnée réelle.</div>
+  <div class="err" id="error" hidden></div>
+  <section class="tiles" id="tiles" aria-label="Synthèse"></section>
+  <section>
+    <h2>Installations</h2>
+    <div class="box"><table>
+      <thead><tr><th>État</th><th>Client</th><th>Environnement</th><th>Version</th><th>Dernier contact</th><th class="num">Sièges</th><th class="num">Appels (6 h)</th><th class="num">Erreurs</th><th class="num">p95 max</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="9" class="empty">Chargement des installations…</td></tr></tbody>
+    </table></div>
+  </section>
+  <section class="detail" id="detail" hidden>
+    <div class="detail-head"><h2 id="d-title"></h2><span class="sub" id="d-sub"></span></div>
+    <div class="incidents" id="d-incidents"></div>
+    <div class="charts">
+      <div class="chart"><h3>Appels par période de 6 h</h3><div class="legend"><span><i style="background:var(--c1)"></i>appels réussis</span><span><i style="background:var(--bad)"></i>erreurs du système</span><span><i style="background:var(--warn)"></i>erreurs d'usage</span></div><div id="c-calls"></div></div>
+      <div class="chart"><h3>Taux d'erreur par connecteur</h3><div class="legend" id="l-rate"></div><div id="c-rate"></div></div>
+      <div class="chart"><h3>Latence p95 par connecteur</h3><div class="legend" id="l-lat"></div><div id="c-lat"></div></div>
+      <div class="chart"><h3>Sur 30 jours, par connecteur</h3><div class="box" style="border:none"><table><thead><tr><th>Connecteur</th><th class="num">Appels</th><th class="num">Erreurs</th><th class="num">Médiane</th><th class="num">p95</th></tr></thead><tbody id="d-table"></tbody></table></div></div>
+    </div>
+  </section>
+</div>
+<script>
+const LABELS = { salesforce: "Salesforce", sagex3: "Sage X3", sharepoint: "SharePoint", dropbox: "Dropbox", myreport: "MyReport" };
+const COLORS = ["--c1", "--c2", "--c3", "--c4", "--c5"];
+const STATUS = { ok: "OK", incident: "Incident", silencieuse: "Silencieuse", perdue: "Perdue" };
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const fmt = (n) => (n == null ? "–" : Number(n).toLocaleString("fr-FR"));
+const pct = (r) => (r == null ? "–" : `${(r * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %`);
+const ms = (v) => (v == null ? "–" : v >= 1000 ? `${(v / 1000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} s` : `${v} ms`);
+function ago(iso) {
+  const h = (Date.now() - Date.parse(iso)) / 3600000;
+  if (h < 1) return "il y a moins d'une heure";
+  if (h < 48) return `il y a ${Math.round(h)} h`;
+  return `il y a ${Math.round(h / 24)} jours`;
+}
+const sysErr = (s) => Object.entries(s.errors).filter(([t]) => t !== "user").reduce((n, [, v]) => n + v, 0);
+
+let data, selected;
+async function load() {
+  try {
+    const r = await fetch("/api/installations");
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+    data = await r.json();
+  } catch (e) { $("error").hidden = false; $("error").textContent = `Lecture impossible : ${e.message}`; $("meta").textContent = ""; return; }
+  $("demo").hidden = !data.demo;
+  $("meta").textContent = `Mis à jour ${new Date(data.generatedAt).toLocaleString("fr-FR")} · silence au-delà de ${data.silenceHours} h`;
+  const list = data.installations;
+  const count = (st) => list.filter((i) => i.status === st).length;
+  const tiles = [["Installations suivies", list.filter((i) => i.status !== "perdue").length], ["En incident", count("incident"), count("incident") > 0],
+    ["Silencieuses", count("silencieuse"), count("silencieuse") > 0], ["Sièges", list.filter((i) => i.status !== "perdue").reduce((n, i) => n + (i.seats || 0), 0)],
+    ["Appels (dernière période)", list.reduce((n, i) => n + (i.calls || 0), 0)]];
+  $("tiles").innerHTML = tiles.map(([l, v, a]) => `<div class="tile${a ? " alert" : ""}"><span class="v">${fmt(v)}</span><span class="l">${esc(l)}</span></div>`).join("");
+  $("rows").innerHTML = list.length ? list.map((i, n) => `<tr tabindex="0" data-n="${n}"${i.pk === selected ? ' class="sel"' : ""}>
+    <td><span class="chip ${i.status}">${STATUS[i.status]}</span></td><td><b>${esc(i.client)}</b></td><td>${esc(i.env)}</td>
+    <td>${esc(i.version)}${i.outdated ? '<span class="old">ancienne</span>' : ""}</td><td title="${esc(i.lastSeen)}">${ago(i.lastSeen)}</td>
+    <td class="num">${fmt(i.seats)}</td><td class="num">${fmt(i.calls)}</td><td class="num">${pct(i.errorRate)}</td><td class="num">${ms(i.p95)}</td></tr>`).join("")
+    : '<tr><td colspan="9" class="empty">Aucune installation n\'a encore envoyé de télémétrie.</td></tr>';
+  for (const tr of $("rows").querySelectorAll("tr[data-n]")) {
+    const open = () => show(list[tr.dataset.n]);
+    tr.addEventListener("click", open); tr.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+  }
+  const first = list.find((i) => i.pk === selected) || list.find((i) => i.status === "incident") || list[0];
+  if (first) show(first);
+}
+
+// ---------- Graphes SVG (une seule échelle par graphe, valeurs lues sur les axes) ----------
+const W = 640, H = 220, M = { l: 52, r: 12, t: 10, b: 28 };
+const color = (v) => `var(${v})`;
+function axes(maxY, unit, xs) {
+  const ticks = niceTicks(maxY); const top = ticks.at(-1) || 1;
+  const y = (v) => M.t + (H - M.t - M.b) * (1 - v / top);
+  let g = ticks.map((t) => `<line class="grid" x1="${M.l}" x2="${W - M.r}" y1="${y(t)}" y2="${y(t)}"/><text x="${M.l - 6}" y="${y(t) + 4}" text-anchor="end">${unit(t)}</text>`).join("");
+  const n = xs.length, step = Math.max(1, Math.ceil(n / 6));
+  const x = (i) => M.l + ((W - M.l - M.r) * (i + 0.5)) / n;
+  for (let i = 0; i < n; i += step) g += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${new Date(xs[i]).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })}</text>`;
+  return { g, x, y, top };
+}
+function niceTicks(max) {
+  if (!max || max <= 0) return [0, 1];
+  const raw = max / 4, mag = 10 ** Math.floor(Math.log10(raw)), step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw);
+  const out = []; for (let v = 0; v <= max + step * 0.999; v += step) out.push(+v.toFixed(6)); return out;
+}
+const svg = (inner, label) => `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">${inner}</svg>`;
+
+function bars(periods) {
+  const xs = periods.map((p) => p.at);
+  const parts = periods.map((p) => { const all = Object.values(p.stats); const calls = all.reduce((n, s) => n + s.calls, 0), sys = all.reduce((n, s) => n + sysErr(s), 0), usr = all.reduce((n, s) => n + s.errors.user, 0); return { ok: calls - sys - usr, sys, usr, calls }; });
+  const a = axes(Math.max(...parts.map((p) => p.calls), 1), fmt, xs);
+  const bw = Math.max(1, ((W - M.l - M.r) / xs.length) * 0.75);
+  let g = a.g;
+  parts.forEach((p, i) => { let base = 0; for (const [v, c] of [[p.ok, "--c1"], [p.sys, "--bad"], [p.usr, "--warn"]]) { if (!v) continue; const y0 = a.y(base), y1 = a.y(base + v); g += `<rect x="${a.x(i) - bw / 2}" y="${y1}" width="${bw}" height="${Math.max(0.5, y0 - y1)}" fill="${color(c)}"><title>${new Date(xs[i]).toLocaleString("fr-FR")} : ${fmt(p.calls)} appels, ${fmt(p.sys)} erreurs système</title></rect>`; base += v; } });
+  return svg(g, "Appels par période");
+}
+function lines(periods, value, unit, label, legendId) {
+  const xs = periods.map((p) => p.at);
+  const names = [...new Set(periods.flatMap((p) => Object.keys(p.stats)))];
+  const series = names.map((c) => periods.map((p) => (p.stats[c] && p.stats[c].calls ? value(p.stats[c]) : null)));
+  const a = axes(Math.max(...series.flat().filter((v) => v != null), 0), unit, xs);
+  let g = a.g;
+  names.forEach((c, k) => {
+    const col = color(COLORS[k % COLORS.length]);
+    let d = ""; series[k].forEach((v, i) => { if (v == null) { d += " "; return; } d += `${/[\d]$/.test(d.trim()) && !d.endsWith(" ") ? "L" : "M"}${a.x(i).toFixed(1)},${a.y(v).toFixed(1)}`; });
+    g += `<path d="${d.trim()}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const lastI = series[k].findLastIndex((v) => v != null);
+    if (lastI >= 0) g += `<circle cx="${a.x(lastI)}" cy="${a.y(series[k][lastI])}" r="3.5" fill="${col}"><title>${LABELS[c] || c} : ${unit(series[k][lastI])}</title></circle>`;
+  });
+  $(legendId).innerHTML = names.map((c, k) => `<span><i style="background:${color(COLORS[k % COLORS.length])}"></i>${esc(LABELS[c] || c)}</span>`).join("");
+  return svg(g, label);
+}
+
+async function show(i) {
+  selected = i.pk;
+  for (const tr of $("rows").querySelectorAll("tr[data-n]")) tr.classList.toggle("sel", data.installations[tr.dataset.n].pk === i.pk);
+  $("detail").hidden = false;
+  $("d-title").textContent = `${i.client} · ${i.env}`;
+  $("d-sub").textContent = `version ${i.version} · suivie depuis le ${i.firstSeen ? new Date(i.firstSeen).toLocaleDateString("fr-FR") : "?"} · dernier contact le ${new Date(i.lastSeen).toLocaleString("fr-FR")}`;
+  $("d-incidents").innerHTML = i.incidents.map((t) => `<div>${esc(t)}</div>`).join("");
+  const r = await fetch(`/api/history?pk=${encodeURIComponent(i.pk)}&days=30`);
+  const { periods } = await r.json();
+  const withStats = periods.filter((p) => Object.keys(p.stats).length);
+  if (!withStats.length) { for (const id of ["c-calls", "c-rate", "c-lat"]) $(id).innerHTML = '<div class="empty">Pas encore de statistiques (hub antérieur à 1.3.2-rc.2, ou aucun appel).</div>'; $("d-table").innerHTML = ""; return; }
+  $("c-calls").innerHTML = bars(withStats);
+  $("c-rate").innerHTML = lines(withStats, (s) => sysErr(s) / s.calls, (v) => `${Math.round(v * 100)} %`, "Taux d'erreur", "l-rate");
+  $("c-lat").innerHTML = lines(withStats, (s) => s.p95, ms, "Latence p95", "l-lat");
+  const tot = {};
+  for (const p of withStats) for (const [c, s] of Object.entries(p.stats)) { const t = (tot[c] ||= { calls: 0, err: 0, p50: [], p95: [] }); t.calls += s.calls; t.err += sysErr(s); t.p50.push(s.p50); t.p95.push(s.p95); }
+  const median = (a) => { const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+  $("d-table").innerHTML = Object.entries(tot).map(([c, t]) => `<tr><td>${esc(LABELS[c] || c)}</td><td class="num">${fmt(t.calls)}</td><td class="num">${pct(t.calls ? t.err / t.calls : null)}</td><td class="num">${ms(median(t.p50))}</td><td class="num">${ms(median(t.p95))}</td></tr>`).join("");
+}
+load();
+setInterval(load, 5 * 60 * 1000); // rafraîchie toutes les 5 minutes
+</script>
+</body>
+</html>

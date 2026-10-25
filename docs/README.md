@@ -14,6 +14,7 @@ Un dossier par public. Chaque procédure a une seule source de vérité ; les au
 À la racine du dépôt : [`README.md`](../README.md) (présentation), [`CHANGELOG.md`](../CHANGELOG.md) (versions),
 [`LICENSE.md`](../LICENSE.md) (licence propriétaire), [`.env.example`](../.env.example) (toutes les variables, commentées).
 Composants annexes documentés à côté de leur code : [bouchon d'entreprise](../clevoa-mcp-stub/README.md),
-[backend de télémétrie](../clevoa-backend/README.md), [outils de charge](../loadtest/README.md).
+[backend de télémétrie](../clevoa-backend/README.md), [console de suivi Clevoa](../clevoa-console/README.md),
+[outils de charge](../loadtest/README.md).
 
 Conventions de rédaction et contrôle des liens : [`CONTRIBUTING.md`](CONTRIBUTING.md).

@@ -92,10 +92,12 @@ function buildServer(key) {
       const t0 = Date.now();
       try {
         const out = await call(c, key, (tok, schema) => t.run(tok, args, schema));
+        telemetry.record(c.id, key, Date.now() - t0); // nombres seulement : appel, durée, empreinte locale de l'appelant
         debug(`${t.name} ok ${Date.now() - t0} ms`); // jamais les arguments ni les résultats
         const body = out?.$content ? out.$content : [{ type: "text", text: typeof out === "string" ? out : JSON.stringify(out) }]; // $content : contenu MCP relayé tel quel (image, resource)
         return { content: [...body, { type: "text", text: provenance(c) }] }; // traçabilité : d'où vient chaque donnée
       } catch (e) {
+        telemetry.record(c.id, key, Date.now() - t0, e); // type d'erreur seulement, jamais le message
         debug(`${t.name} erreur ${Date.now() - t0} ms : ${e.status ?? "erreur"}`); // jamais le message (il peut citer une clé demandée)
         return { isError: true, content: [{ type: "text", text: e.message }] };
       }
