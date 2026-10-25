@@ -16,6 +16,7 @@ import * as myreport from "./connectors/myreport.js";
 import * as telemetry from "./telemetry.js";
 import * as health from "./health.js";
 import { createHash, timingSafeEqual } from "node:crypto";
+import { rateLimit } from "express-rate-limit"; // déjà fourni par le SDK MCP (même version) ; utilisé pour les routes de supervision
 import { VERSION, APP_ENV, IS_PROD } from "./version.js";
 
 const PORT = process.env.PORT || 8080;
@@ -230,7 +231,9 @@ const metricsDenied = (req, res) => {
 };
 // PRTG : un canal « Santé » par système (0 bon, 1 avertissement si lent, 2 erreur si en erreurs ou injoignable ; seuils posés
 // par le hub), joignabilité, temps de réponse p95, appels et erreurs du système (mode différence : par intervalle de PRTG).
-app.get("/metrics/prtg", limit("metrics", 30), (req, res) => {
+// 30 relevés par minute et par adresse IP pour les deux routes de supervision (PRTG relève toutes les 1 à 5 minutes).
+const metricsLimit = rateLimit({ windowMs: 60_000, limit: 30, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "Trop de requêtes, réessayez dans une minute." } });
+app.get("/metrics/prtg", metricsLimit, (req, res) => {
   if (metricsDenied(req, res)) return;
   const result = [], bad = [];
   for (const c of CONNECTORS) {
@@ -250,7 +253,7 @@ app.get("/metrics/prtg", limit("metrics", 30), (req, res) => {
   result.push({ channel: "Hub · durée de fonctionnement", value: Math.round(process.uptime()), unit: "TimeSeconds" });
   res.json({ prtg: { result, text: bad.length ? bad.join(" · ") : `Clevoa AI Gateway ${VERSION} : systèmes opérationnels` } });
 });
-app.get("/metrics", limit("metrics", 30), (req, res) => {
+app.get("/metrics", metricsLimit, (req, res) => {
   if (metricsDenied(req, res)) return;
   const m = [], g = (name, help, type = "gauge") => m.push(`# HELP ${name} ${help}`, `# TYPE ${name} ${type}`);
   g("clevoa_hub_info", "Version et environnement du hub");

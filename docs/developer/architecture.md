@@ -1,7 +1,7 @@
 # Architecture
 
-Pour le développeur qui reprend le code. Un seul conteneur Node 22, trois dépendances (`@modelcontextprotocol/sdk`,
-`express`, `zod`), environ 1 060 lignes, un seul fichier d'état chiffré, aucune abstraction. Les connecteurs sont des
+Pour le développeur qui reprend le code. Un seul conteneur Node 22, quatre dépendances directes (`@modelcontextprotocol/sdk`,
+`express`, `zod`, et `express-rate-limit`, déjà fournie par le SDK, déclarée en 1.4.0 pour les routes de supervision), un seul fichier d'état chiffré, aucune abstraction. Les connecteurs sont des
 modules, pas des services.
 
 ## 1. Vue d'ensemble
