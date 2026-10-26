@@ -43,9 +43,9 @@ MS_CLIENT_SECRET=<secret client>
 ```
 
 Le hub refuse de démarrer si `MS_TENANT_ID` n'est pas un GUID, si l'application n'est pas renseignée, ou si
-`MS_LOGIN_URL` ne désigne pas `login.microsoftonline.com`. L'`id_token` est vérifié (émetteur, locataire, audience,
-expiration) ; il arrive en direct du point de terminaison token (TLS, code + PKCE + secret), sa signature n'est donc
-pas revérifiée (OIDC Core § 3.1.3.7, règle 6). Ne jamais désactiver la vérification TLS de Node
+`MS_LOGIN_URL` ne désigne pas `login.microsoftonline.com`. L'`id_token` est vérifié par openid-client depuis la 1.5
+(émetteur, audience, expiration et **signature**, avec les clés publiées par Entra), puis par le hub (locataire,
+identifiant `oid`). Ne jamais désactiver la vérification TLS de Node
 (`NODE_TLS_REJECT_UNAUTHORIZED=0`).
 
 Constater que le SSO est actif : la ligne de démarrage contient `· SSO entra`, le portail affiche « via Microsoft
