@@ -205,15 +205,25 @@ app.post("/api/disconnect/:system", limit("portal", 30), sameOrigin, portalUser,
   if (!byId[req.params.system]) return res.sendStatus(404);
   store.clearTokens(req.key, req.params.system); res.sendStatus(204);
 });
-// Jeton personnel (clé d'API Syracuse, jeton MyReport…) saisi par l'utilisateur : remplace son entrée pour ce système.
-app.post("/api/:system/apikey", limit("portal", 30), sameOrigin, portalUser, (req, res) => {
+// Jeton personnel (identifiant et mot de passe Syracuse, clé d'API, jeton MyReport…) saisi par l'utilisateur : vérifié auprès du
+// système par le même appel que « Tester », puis enregistré seulement s'il est accepté. Refusé (401/403) ou système injoignable :
+// rien n'est enregistré et la connexion précédente reste en place.
+app.post("/api/:system/apikey", limit("portal", 30), sameOrigin, portalUser, async (req, res) => {
   const c = byId[req.params.system];
   if (!c?.apiKey) return res.sendStatus(404);
   const apiKey = String(req.body?.apiKey || "").trim(), login = String(req.body?.login || "").trim();
   if (!apiKey) return res.status(400).json({ error: "Jeton vide" });
+  if (c.maxPerMinute && (await upstream.increment(c.id)).totalHits > c.maxPerMinute) return res.status(429).json({ error: `${c.label} : plafond de ${c.maxPerMinute} appels par minute atteint, réessayez dans un instant.` });
+  const tok = { apiKey, ...(login ? { login } : {}) };
+  let checked;
+  try { checked = await c.ping(tok, () => c.schema(tok)); }
+  catch (e) {
+    if (e.status === 401 || e.status === 403) return res.status(400).json({ error: `${c.label} a refusé ${c.apiKey.mode === "basic" ? "cet identifiant ou ce mot de passe" : "ce jeton"} (${e.status}) : rien n'est enregistré.` });
+    return res.status(502).json({ error: `${e.message.slice(0, 300)} · Vérification impossible, rien n'est enregistré : réessayez.` });
+  }
   store.clearTokens(req.key, c.id);
-  store.setTokens(req.key, c.id, { apiKey, ...(login ? { login } : {}) });
-  res.sendStatus(204);
+  store.setTokens(req.key, c.id, tok);
+  res.json({ ok: true, message: checked.message });
 });
 // Diagnostic : un appel minimal au système avec le jeton de l'utilisateur (ou le simulateur).
 app.get("/api/test/:system", limit("diag", 20), portalUser, async (req, res) => {

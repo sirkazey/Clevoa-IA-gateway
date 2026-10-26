@@ -9,7 +9,11 @@ Une section par version, trois lignes au plus par rubrique. La version est celle
 
 ## [1.5.0-rc.2] – 2026-10-26
 
-Correctifs constatés aux premiers tests réels de SharePoint et du SSO Entra, sous Docker Desktop.
+Correctifs constatés aux premiers tests réels de SharePoint et du SSO Entra, sous Docker Desktop, et identifiants vérifiés
+à la saisie.
+
+### Ajouté
+- Identifiants Syracuse, clé d'API ou jeton MyReport vérifiés auprès du système avant l'enregistrement (« Vérifier et enregistrer ») : refusés ou système injoignable, rien n'est enregistré, la connexion précédente reste en place et le motif s'affiche sous le formulaire.
 
 ### Corrigé
 - Résolution des noms en IPv4 d'abord, puis IPv6 : l'image Alpine (musl) garde au plus 48 adresses par nom ; avec un DNS qui renvoie des réponses en double (Docker Desktop), `login.microsoftonline.com` ne donnait plus que de l'IPv6, injoignable sans IPv6 dans le réseau Docker (`ENETUNREACH`).

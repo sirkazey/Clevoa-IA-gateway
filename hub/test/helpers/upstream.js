@@ -235,6 +235,7 @@ export async function startUpstream() {
     // ---- Sage X3 Syracuse ----
     if (path.startsWith("/api1/x3/erp/PROD/")) {
       if (!/^(Bearer|Basic) \S+$/.test(req.headers.authorization || "")) return json(res, 401, { $diagnoses: [{ $severity: "error", $message: "no bearer" }] });
+      if (req.headers.authorization === "Bearer syr-key-refusee") return json(res, 401, { $diagnoses: [{ $severity: "error", $message: "Unauthorized" }] }); // clé refusée par Syracuse
       const rest = path.slice("/api1/x3/erp/PROD/".length);
       let m = rest.match(/^\$prototypes\('(\w+)\.\$details'\)$/);
       if (m) return json(res, 200, { $properties: { [`${m[1]}_NUM`]: { $type: "application/x-string", $title: "{@42}" }, LINES: { $type: "application/x-array", $title: "{@9}", $item: { $properties: { ITMREF: { $type: "application/x-string", $title: "{@1}" } } } } }, $localization: { "@42": "Numéro", "@9": "Lignes", "@1": "Article" } });

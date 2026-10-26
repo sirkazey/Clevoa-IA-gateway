@@ -111,7 +111,7 @@ test("SharePoint silencieux refusé par Entra (consent_required) : retour au por
 test("Identité ↔ clé : la même identité retrouve sa clé depuis un autre navigateur ; une autre identité a une autre clé et ne voit pas ses connexions ; poste partagé sans mélange", async () => {
   // Marie enregistre un jeton Sage X3 ; Paul ne le voit pas
   const r = await fetch(`${hub.url}/api/sagex3/apikey`, { method: "POST", headers: { cookie: `mcp_key=${marie}`, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "SYR-MARIE" }) });
-  assert.equal(r.status, 204);
+  assert.equal(r.status, 200);
   assert.equal((await me(marie)).systems.find((s) => s.id === "sagex3").connected, true);
   assert.equal((await me(paul)).systems.find((s) => s.id === "sagex3").connected, false);
   const diag = await fetch(`${hub.url}/api/test/sagex3`, { headers: { cookie: `mcp_key=${paul}` } }).then((x) => x.json());
