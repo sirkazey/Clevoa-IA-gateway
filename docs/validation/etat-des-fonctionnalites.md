@@ -11,10 +11,10 @@ sur le système réel), **testé sur bouchon** (tests automatisés et simulateur
 | Sage X3 24R1, identifiant et mot de passe Syracuse (`basic`) | disponible | préproduction 4CAD Cloud, 23/10/2026 (S1–S19) | test avec un compte X3 restreint ; production |
 | Sage X3, OAuth2 ou clé d'API `bearer` | testé sur bouchon | tests hub | un vrai IdP Syracuse |
 | Salesforce, serveur MCP hébergé SObject Reads | disponible (sandbox) | sandbox `preprod`, 23/10/2026 (F1–F6) | org de production ; expiration réelle du JWT (durée annoncée par Salesforce, non mesurée) et rotation du refresh token ; compte restreint |
-| SharePoint / OneDrive (Graph délégué) | testé sur bouchon | tests hub, bouchon | application Entra réelle, revue des permissions `Files.Read.All` et `Sites.Read.All` |
+| SharePoint / OneDrive (Graph délégué) | disponible (pré-prod, un compte) | locataire Charlois, 26/10/2026 ([E1–E8](journal-tests-reels.md)) : connexion, liste des sites | lister, chercher, lire un document ; second collaborateur ; revue des permissions `Files.Read.All` et `Sites.Read.All` ; consentement administrateur |
 | Dropbox (serveur MCP officiel) | testé sur bouchon | tests hub, bouchon aligné sur les schémas du serveur officiel (22/10/2026) | acceptation par `mcp.dropbox.com` d'un jeton d'app tierce |
 | MyReport (proxy MCP SSE) | testé sur bouchon | plomberie SSE et liste blanche seulement | serveur MCP de l'éditeur, non livré ; outils réels inconnus |
-| SSO Microsoft Entra ID (`entra`) | testé sur bouchon | `hub/test/sso.test.js`, bouchon | activation sur un vrai locataire |
+| SSO Microsoft Entra ID (`entra`) | disponible (pré-prod, un compte) | locataire Charlois, 26/10/2026 ([E5–E8](journal-tests-reels.md)) ; `hub/test/sso.test.js` | cloisonnement entre deux collaborateurs réels ; compte invité |
 | Portail, diagnostic, blocs de configuration, exemples de questions | disponible | usage quotidien en préproduction ; refonte v1.3.1 validée sur bouchon ([compte rendu](portail-v1.3.1.md)) | revue sur le portail de préproduction réel |
 | Portail 1.4.0 : une ligne par application par domaine, colonne « Service », assistant en colonne, questions par domaine | testé sur bouchon | tests du portail, captures et axe-core sur bouchon ([compte rendu](portail-v1.4.md)) | revue par des collaborateurs sur la préproduction réelle |
 | Comptages exacts : aucun `LIMIT` ajouté aux agrégats SOQL ; listes coupées signalées au modèle (Salesforce, Sage X3) | testé sur bouchon | `mcp.test.js` | « combien de comptes » sur la sandbox (16 610 attendus) ; format réel de la réponse SObject Reads pour l'avertissement ; `$links.$next` de Syracuse sur une longue liste |
@@ -72,9 +72,10 @@ sur le système réel), **testé sur bouchon** (tests automatisés et simulateur
 | Expiration et renouvellement réels du jeton Salesforce (JWT ~ 2 h, rotation du refresh token) | vérifié sur le bouchon seulement | laisser une session ouverte plus de 2 h puis interroger |
 | Révocation : mot de passe Syracuse changé, autorisation Salesforce révoquée | voyant rouge et message de reconnexion attendus | action volontaire sur chaque système |
 | Salesforce production | même procédure, serveurs d'écriture désactivés | confirmation de l'intégrateur |
-| SharePoint, Dropbox sur un vrai compte | jamais branchés | application Entra déléguée ; app Dropbox |
+| Dropbox sur un vrai compte | jamais branché | app Dropbox |
+| SharePoint : lister, chercher, lire un document ; second collaborateur | connexion et liste des sites vérifiées le 26/10 | un collègue de la DSI |
 | MyReport | serveur MCP annoncé, non livré | éditeur |
-| SSO Entra en mode `entra` | jamais exercé contre Microsoft | URI de redirection sur l'application, `MS_TENANT_ID` en GUID |
+| SSO Entra avec deux collaborateurs réels (cloisonnement) | vérifié le 26/10 avec un seul compte | un second compte Charlois |
 | Restauration sur un serveur du client (`sudo ops/restore.sh`) | jouée en CI à chaque commit, pas sur un serveur réel | accès au serveur, `ENCRYPTION_KEY` du coffre |
 | Recette de charge en préproduction réelle (`loadtest/run.js` adapté) | latences et quotas réels, 429 Graph | comptes de test, jamais la production |
 | Exactitude financière sur un jeu de référence (factures, avoirs, signes, devises, dates) | réponses attendues approuvées par la Finance | jeu de référence |

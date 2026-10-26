@@ -14,7 +14,8 @@ du **même compte Microsoft** que l'identité du portail.
 Deux changements s'appliquent même sans SSO : le bouton « régénérer la clé » et une limite de 60 requêtes par minute et
 par adresse IP sur `/auth/…` (derrière un NAT, un premier passage consomme quatre requêtes).
 
-État : exercé contre le bouchon et les tests automatisés seulement ; **jamais contre un vrai locataire Entra**
+État : vérifié contre le locataire Charlois le 26 octobre 2026 avec un seul compte ([journal](../validation/journal-tests-reels.md)) ;
+le cloisonnement entre deux collaborateurs réels reste à vérifier
 ([état des fonctionnalités](../validation/etat-des-fonctionnalites.md)).
 
 ## Mode `entra` : ce qu'il faut dans Entra ID

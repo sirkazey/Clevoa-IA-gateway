@@ -1,8 +1,9 @@
 # Configuration des connecteurs
 
 Procédures de configuration de chaque système, connecteur par connecteur. Sage X3 et Salesforce sont **vérifiés sur
-les vrais systèmes** (préproduction Sage X3 et sandbox Salesforce, 23 octobre 2026) ; SharePoint, Dropbox et MyReport
-n'ont été exercés que contre le bouchon : leurs procédures sont signalées « à vérifier ». État complet :
+les vrais systèmes** (préproduction Sage X3 et sandbox Salesforce, 23 octobre 2026), SharePoint sur le locataire Charlois
+(connexion et liste des sites, 26 octobre 2026) ; Dropbox et MyReport n'ont été exercés que contre le bouchon : leurs
+procédures sont signalées « à vérifier ». État complet :
 [état des fonctionnalités](../validation/etat-des-fonctionnalites.md). Le SSO du portail a son propre guide :
 [SSO Entra ID](sso-entra.md).
 

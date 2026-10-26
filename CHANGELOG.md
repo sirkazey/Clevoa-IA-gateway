@@ -13,8 +13,11 @@ Correctifs constatés aux premiers tests réels de SharePoint et du SSO Entra, s
 
 ### Corrigé
 - Résolution des noms en IPv4 d'abord, puis IPv6 : l'image Alpine (musl) garde au plus 48 adresses par nom ; avec un DNS qui renvoie des réponses en double (Docker Desktop), `login.microsoftonline.com` ne donnait plus que de l'IPv6, injoignable sans IPv6 dans le réseau Docker (`ENETUNREACH`).
-- Diagnostic : l'annuaire de connexion de SharePoint (`MS_LOGIN_URL`) est testé à part de Graph (`reseauConnexion`) ; il passait pour sain quand seul Graph répondait.
 - SSO Entra + SharePoint : la connexion SharePoint échouait toujours (400) une fois le SSO actif ; sans le scope `profile`, Entra n'envoie pas l'`oid` dans l'id_token et le contrôle « même compte que le portail » refusait tout. SharePoint demande désormais `profile` (aucun nouveau consentement : déjà accordé par le SSO).
+- Pré-production : un vrai `SAGE_URL` restait couplé à l'IdP simulé du bouchon (jeton refusé par Syracuse, formulaire identifiant et mot de passe masqué) ; des variables `SAGE_OAUTH_*` présentes et vides dans `.env` désactivent désormais l'OAuth de Sage.
+
+### Modifié
+- Diagnostic : l'annuaire de connexion de SharePoint (`MS_LOGIN_URL`) est testé à part de Graph (`reseauConnexion`) ; il passait pour sain quand seul Graph répondait.
 - Journal du retour de connexion : code d'erreur court (`ENETUNREACH`, `ECONNREFUSED`, `OAUTH_…`, `SSO_AUTRE_COMPTE`…), jamais le message ni l'adresse.
 
 ## [1.5.0-rc.1] – 2026-10-25
