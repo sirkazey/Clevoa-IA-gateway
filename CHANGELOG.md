@@ -24,6 +24,7 @@ Correctifs constatés aux premiers tests réels de SharePoint et du SSO Entra, s
 ### Modifié
 - Diagnostic : l'annuaire de connexion de SharePoint (`MS_LOGIN_URL`) est testé à part de Graph (`reseauConnexion`) ; il passait pour sain quand seul Graph répondait.
 - Journal du retour de connexion : code d'erreur court (`ENETUNREACH`, `ECONNREFUSED`, `OAUTH_…`, `SSO_AUTRE_COMPTE`…), jamais le message ni l'adresse.
+- Journal : `[mcp] clé refusée (401) : N appels depuis <adresse>` (une ligne tout de suite, puis le cumul par minute, jamais la clé), pour l'assistant resté sur une clé périmée ; procédure de bascule vers le SSO dans le guide SSO.
 
 ## [1.5.0-rc.1] – 2026-10-25
 

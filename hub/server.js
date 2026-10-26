@@ -61,11 +61,23 @@ const cookieKey = (req) => req.headers.cookie?.match(/(?:^|;\s*)mcp_key=([^;]+)/
 const mcpKey = (req) => req.headers.authorization?.match(/^Bearer\s+(\S+)$/i)?.[1];
 // Avec le SSO, une clé n'est utilisable qu'une fois liée à une identité Entra (une clé temporaire de navigateur ne l'est pas).
 const user = (key) => { const u = store.get(key); return u && (!sso.MODE || u.sso) ? u : null; };
-const requireKey = (read) => (req, res, next) => {
+const requireKey = (read, onRefused) => (req, res, next) => {
   req.key = read(req);
   if (user(req.key)) return next(); // une clé valide n'est jamais freinée par les échecs d'autres clients de la même IP
+  onRefused?.(req);
   authFailures(req, res, () => res.status(401).json({ error: "Clé MCP inconnue ou absente : utilisez l'en-tête Authorization: Bearer <clé> obtenue sur le portail." }));
 };
+// Clé refusée sur les routes MCP (assistant branché avec une clé périmée : régénération, activation du SSO) : une ligne de journal
+// tout de suite, puis le cumul de la minute ; jamais la clé, seulement le nombre d'appels et les adresses d'origine.
+let mcpRefused = null; // { n, ips } en attente de journal
+const logMcpRefused = (n, ips) => console.error(`[mcp] clé refusée (401) : ${n} appel${n > 1 ? "s" : ""} depuis ${[...ips].slice(0, 5).join(", ")}${sso.MODE
+  ? " ; SSO actif : seule la clé liée à l'identité Entra est acceptée, à recopier depuis le portail (« Brancher mon assistant »)" : " ; clé à recopier depuis le portail (« Brancher mon assistant »)"}`);
+function noteMcpRefused(req) {
+  if (mcpRefused) { mcpRefused.n++; mcpRefused.ips.add(req.ip); return; }
+  logMcpRefused(1, [req.ip]);
+  mcpRefused = { n: 0, ips: new Set() };
+  setTimeout(() => { const r = mcpRefused; mcpRefused = null; if (r.n) logMcpRefused(r.n, r.ips); }, 60_000).unref();
+}
 const portalUser = requireKey(cookieKey);
 // Tout appel MCP authentifié marque l'assistant comme branché ; une écriture impossible (disque plein) ne bloque jamais l'appel.
 const seen = (req, _res, next) => { try { store.assistantSeen(req.key); } catch (e) { console.error(`[store] dernier usage non enregistré : ${e.code ?? e.message}`); } next(); };
@@ -77,7 +89,7 @@ const mcpRate = rateLimit({ windowMs: 60_000, limit: MCP_PER_MIN, standardHeader
   skip: (req) => !user(mcpKey(req)),
   keyGenerator: (req) => createHash("sha256").update(mcpKey(req)).digest("base64url"), // empreinte : jamais la clé en mémoire du limiteur
   message: { error: `Trop de requêtes avec cette clé (${MCP_PER_MIN} par minute) : réessayez dans une minute.` } });
-const mcpAuth = requireKey(mcpKey);
+const mcpAuth = requireKey(mcpKey, noteMcpRefused);
 // Les POST du portail changent l'état du collaborateur : un navigateur qui annonce une autre origine (formulaire d'un site frère sous le
 // même domaine, que SameSite=Lax laisse passer) est refusé. Les clients MCP n'appellent pas ces routes.
 const ORIGIN = new URL(PUBLIC_URL).origin;

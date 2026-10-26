@@ -51,6 +51,11 @@ test("SSO actif : un anonyme n'obtient ni clé ni liste des systèmes ; portail,
   assert.equal((await me(tmp)).key, null);
   assert.equal((await fetch(`${hub.url}/auth/salesforce`, { headers: { cookie: `mcp_key=${tmp}` }, ...noFollow })).status, 400);
   assert.match(hub.logs(), /SSO mock/);
+  // Clés refusées sur /mcp : une ligne tout de suite (assistant branché avec une clé périmée), le reste cumulé par minute, jamais la clé
+  const refused = hub.logs().split("\n").filter((l) => l.startsWith("[mcp] clé refusée"));
+  assert.equal(refused.length, 1, refused.join("\n"));
+  assert.match(refused[0], /^\[mcp\] clé refusée \(401\) : 1 appel depuis \S+ ; SSO actif : seule la clé liée à l'identité Entra est acceptée/);
+  assert.ok(!hub.logs().includes(tmp), "jamais la clé au journal");
 });
 
 let marie, paul;
