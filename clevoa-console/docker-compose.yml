@@ -19,6 +19,7 @@ services:
       CONSOLE_PASSWORD: ${CONSOLE_PASSWORD:?mot de passe de la console (identifiant libre à la saisie)}
       MIN_VERSION: ${MIN_VERSION:-}          # version minimale : les installations en dessous sont marquées « ancienne »
       SILENCE_HOURS: ${SILENCE_HOURS:-14}    # même seuil que le backend
+      SILENCE_MAX_DAYS: ${SILENCE_MAX_DAYS:-30}  # idem : au-delà, installation « perdue »
     user: "node"
     read_only: true
     security_opt:

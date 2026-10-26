@@ -38,7 +38,7 @@ uniquement, chemins validés, délai borné (`AbortSignal.timeout`), erreurs ré
 label }, fn)` ouvre un client MCP du SDK avec le jeton de l'utilisateur, exécute `fn(client)` puis ferme la session.
 `schema` liste les outils distants filtrés par une **liste blanche** de lecture ; `<id>_tools` les expose avec leurs
 schémas, `<id>_call` exécute l'un d'eux (`callRemote`), limité à la liste blanche (Dropbox : liste codée ; MyReport : `MYREPORT_TOOLS`)
-ou, pour Salesforce, refusé si le nom évoque une écriture. Budget : 50 à 80 lignes. C'est le modèle à suivre pour tout outil qui publie un serveur MCP officiel.
+ou, pour Salesforce, refusé si le nom évoque une écriture. Budget : une centaine de lignes. C'est le modèle à suivre pour tout outil qui publie un serveur MCP officiel.
 
 **Simulateur intégré** (`sagex3.js`, `myreport.js` sans URL) : `mock = true`, données inventées et étiquetées comme
 telles, aucun réseau ; sert aux tests sur un poste sans compte.
@@ -61,5 +61,5 @@ telles, aucun réseau ; sert aux tests sur un poste sans compte.
 ## 4. Ce qui est refusé
 
 Écriture sous quelque forme que ce soit ; compte technique ou jeton lu depuis l'environnement ; cache de données
-métier ; dépendance supplémentaire ; connecteur REST sur mesure quand un serveur MCP officiel existe ; couche
+métier ; dépendance non conforme à [dépendances § 1](dependances.md#1-politique-dajout) ; connecteur REST sur mesure quand un serveur MCP officiel existe ; couche
 d'abstraction entre connecteurs avant qu'un quatrième proxy ne la justifie.

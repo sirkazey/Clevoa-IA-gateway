@@ -12,6 +12,7 @@ Clevoa ne veut pas dépendre d'un tiers sans nécessité.
 
 Chaque affirmation porte sa source (documentation officielle, consultée le 25/10/2026) ou sa preuve (essai exécuté).
 Ce qui n'est pas prouvé est marqué **à prouver**. Rien n'est décidé tant que le prototype du § 7 n'a pas réussi.
+Un prototype existe sur la branche `proto/oauth-tunnel` (non fusionné).
 
 ## 1. Réponse courte
 
@@ -140,7 +141,8 @@ page du hub.
 
 ## 7. Prototype avant de développer
 
-Un prototype jetable, sur la préproduction et un nom d'hôte de test, sans toucher au code de production :
+Un prototype jetable, sur la préproduction et un nom d'hôte de test, sans toucher au code de production (réalisé sur la
+branche `proto/oauth-tunnel`, non fusionné) :
 
 1. Hub de préproduction avec un serveur d'autorisation minimal (briques du SDK, jetons en mémoire) et une page de
    choix d'annuaire (un Entra et un Google de test).

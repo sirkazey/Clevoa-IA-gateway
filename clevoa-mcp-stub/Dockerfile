@@ -6,6 +6,6 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY . .
 USER node
-ENV PORT=4000
+ENV PORT=4000 NODE_ENV=production
 EXPOSE 4000
 CMD ["node", "server.js"]

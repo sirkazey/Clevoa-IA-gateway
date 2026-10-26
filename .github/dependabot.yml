@@ -18,13 +18,29 @@ updates:
     schedule: { interval: weekly, day: monday, time: "06:00", timezone: Europe/Paris }
     target-branch: dev
     cooldown: { default-days: 7 }
+    groups:
+      # Une seule PR pour les trois Dockerfile : release.test.js exige la même empreinte partout. docker-compose.yml (sauvegarde)
+      # et ops/backup.sh, ops/restore.sh, ops/test-backup-restore.sh portent aussi l'empreinte : à reporter à la main dans la même PR.
+      node-base: { patterns: ["node"] }
+    ignore:
+      # Changement de version majeure de Node : décision du projet, uniquement vers une version LTS (paire), jamais proposé
+      # automatiquement (Node 25 a été proposé le 26/10/2026). Les correctifs de Node 24 continuent d'arriver.
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
     commit-message: { prefix: "deps" }
 
-  - package-ecosystem: docker-compose  # images des stacks (node, nginx, cloudflared…)
+  - package-ecosystem: docker-compose  # images des stacks (node, nginx)
     directories: ["/"]
     schedule: { interval: weekly, day: monday, time: "06:00", timezone: Europe/Paris }
     target-branch: dev
     cooldown: { default-days: 7 }
+    ignore:
+      - dependency-name: node            # même règle que ci-dessus
+        update-types: ["version-update:semver-major"]
+      # nginx : une version mineure impaire est la branche de développement (mainline, 1.29), la paire la stable (1.28) ;
+      # le passage à la stable suivante se fait à la main, une fois par an. Les correctifs de la 1.28 continuent d'arriver.
+      - dependency-name: nginx
+        update-types: ["version-update:semver-minor"]
     commit-message: { prefix: "deps" }
 
   - package-ecosystem: github-actions  # actions de la CI

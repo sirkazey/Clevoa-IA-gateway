@@ -7,6 +7,7 @@ import { Router } from "express";
 import { randomBytes, createHash } from "node:crypto";
 import * as oidc from "openid-client";
 import { store } from "./store.js";
+import { forget } from "./cache.js";
 import { IS_PROD } from "./version.js";
 
 export const PUBLIC_URL = (process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 8080}`).replace(/\/$/, "");
@@ -22,6 +23,7 @@ async function postToken(c, params) {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
     body: new URLSearchParams({ client_id: c.clientId, ...(c.clientSecret ? { client_secret: c.clientSecret } : {}), ...params }), // secret optionnel (apps PKCE sans secret)
+    signal: AbortSignal.timeout(10_000), // même délai que les annuaires OIDC : un renouvellement bloqué ne fige pas les appels de la clé
   });
   const body = await r.json().catch(() => ({}));
   // L'erreur ne porte ni l'URL du fournisseur, ni son corps brut, ni rien de la configuration : seulement le statut HTTP et un code court validé (ex. invalid_grant).
@@ -84,15 +86,16 @@ const refreshing = new Map(); // "clé:système" -> promesse de refresh en cours
 /** Vrai si l'entrée users.json contient de quoi s'authentifier (jeton OAuth ou clé d'API personnelle). */
 export const hasCredential = (t) => !!(t?.access_token || t?.apiKey);
 
-/** Exécute fn(tokens) avec le jeton de l'utilisateur `key`.
- *  Sur 401 avec un refresh_token : renouvelle l'access_token en arrière-plan, le persiste, puis réessaie une fois.
- *  Transparent pour l'utilisateur : il ne se reconnecte que si le refresh_token lui-même est révoqué. */
 /** Lien du portail qui ouvre la ligne du système et met en avant sa connexion (?connecter=<id>). */
 export const connectLink = (connector) => `${PUBLIC_URL}/?connecter=${encodeURIComponent(connector.id)}`;
 /** Le collaborateur doit (re)connecter le système sur le portail : une démarche, pas une panne. `action` : l'outil répond par une
  *  information (pas isError) qui dit qu'aucune donnée n'a été lue et donne le lien direct. */
 const actionNeeded = (connector, why, extra = {}) => Object.assign(new Error(`${why} : aucune donnée n'a été lue. Action requise : ${extra.status === 401 ? "ressaisir ses identifiants" : "se connecter"} sur ${connectLink(connector)} (une minute), puis reposer la question.`), { action: true, ...extra });
 
+/** Exécute fn(tokens) avec le jeton de l'utilisateur `key`.
+ *  Sur 401 avec un refresh_token : renouvelle l'access_token (un seul renouvellement à la fois par clé et par système), le persiste,
+ *  puis réessaie une fois ; le collaborateur ne se reconnecte que si le refresh_token lui-même est révoqué. Sur 401 avec un
+ *  identifiant personnel : celui-ci est effacé, jamais réessayé (Syracuse bloque le compte après quelques échecs). */
 export async function withToken(connector, key, fn) {
   if (connector.mock) return fn({ access_token: "simulé" });
   const tokens = store.get(key)?.[connector.id];
@@ -164,6 +167,7 @@ export function oauthRouter(connectors, getKey) {
       if (c.silent) byId.sso?.assertSame(p.key, tokens); // même application Entra que le SSO : jetons du même compte Microsoft, ou rien
       const email = c.identity ? await c.identity(tokens).catch(() => null) : null;
       const { id_token: _unused, ...stored } = tokens; // l'id_token ne sert qu'à la vérification ci-dessus, jamais conservé
+      forget(p.key, c.id); // éventuellement un autre compte : la structure de l'ancien n'est plus servie
       store.setTokens(p.key, c.id, stored, email);
       res.redirect("/");
     } catch (e) {

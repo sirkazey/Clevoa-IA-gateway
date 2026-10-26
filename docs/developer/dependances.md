@@ -30,8 +30,7 @@ Avant d'ajouter une dépendance, vérifier :
 | `node:sqlite` (module intégré à Node 24, pas un paquet npm) | — | base d'exploitation `hub.db` : disponibilité, usage, audit (1.5) | domaine public (SQLite) | moteur SQLite embarqué par Node ; aucune dépendance native à compiler. Stabilité « release candidate » dans Node 24 : l'API peut encore évoluer, d'où un seul module (`db.js`) qui l'utilise et des tests sur chaque mise à jour de Node |
 
 Dépendances transitives notables : `jose` et `oauth4webapi` (même auteur qu'openid-client, aucune dépendance propre).
-Inventaire complet : le SBOM produit par la CI (§ 3), 97 composants en production au 25 octobre 2026, tous sous licence
-MIT, ISC ou BSD.
+Inventaire complet : voir le SBOM de la CI (§ 3) ; licences MIT, ISC ou BSD au 25 octobre 2026.
 
 ### Autres composants
 
@@ -68,7 +67,11 @@ apparaître la CI en rouge.
 
 ## 4. Mise à jour
 
-1. Dependabot ouvre la PR vers `dev` (mineures et correctifs groupés, chaque majeure à part).
+1. Dependabot ouvre la PR vers `dev` (mineures et correctifs groupés, chaque majeure à part). Exclus : version majeure de
+   Node et version mineure de nginx, qui proposaient une version non LTS (Node 25) ou la branche de développement de nginx
+   (1.29) ; ces deux montées se décident à la main, vers une LTS de Node ou la stable suivante de nginx.
+   Dependabot regroupe les trois Dockerfile (image Node) en une PR ; l'empreinte se reporte à la main dans
+   `docker-compose.yml`, `ops/backup.sh`, `ops/restore.sh` et `ops/test-backup-restore.sh` (`release.test.js` le vérifie).
 2. La CI complète doit être verte, y compris les tests de bout en bout sur le bouchon.
 3. Mise à jour **majeure** : lire les notes de version, chercher les changements de comportement (sécurité, valeurs par
    défaut), noter la décision si elle change quelque chose.

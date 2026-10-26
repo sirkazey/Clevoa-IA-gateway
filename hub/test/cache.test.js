@@ -2,7 +2,7 @@
 // expiré à la coupure nocturne (03:00), vérifié avec l'horloge simulée de node:test.
 import { test, mock } from "node:test";
 import assert from "node:assert/strict";
-import { cachedSchema } from "../cache.js";
+import { cachedSchema, forget } from "../cache.js";
 
 const at = (t, iso) => t.mock.timers.setTime(Date.parse(iso));
 
@@ -103,4 +103,22 @@ test("Sage X3 : prototypes réels 24R1 de PINVOICE (capture anonymisée) : 6 col
   assert.equal(fiche.find((f) => f.name === "AMTATI").label, "Total including tax");
   assert.ok(fiche.length > 150, `fiche dépliée : ${fiche.length} champs`);
   assert.ok(fiche.every((f) => typeof f.label === "string" && !/\{@/.test(f.label)), "aucun libellé {@n} non résolu");
+});
+
+test("cachedSchema : appels simultanés = un seul chargement ; échec jamais gardé ; forget oublie un collaborateur et un système", async () => {
+  let release; const gate = new Promise((r) => { release = r; });
+  const load = mock.fn(async () => { await gate; return { n: load.mock.callCount() }; });
+  const both = Promise.all([cachedSchema("dan", "sage", load), cachedSchema("dan", "sage", load)]);
+  release();
+  assert.deepEqual(await both, [{ n: 1 }, { n: 1 }]);
+  assert.equal(load.mock.callCount(), 1, "les 8 requêtes $prototypes de Sage ne partent qu'une fois");
+
+  const failing = mock.fn(async () => { throw new Error("Sage X3 injoignable"); });
+  await assert.rejects(cachedSchema("erin", "sage", failing));
+  const ok = mock.fn(async () => ({ ok: true }));
+  assert.deepEqual(await cachedSchema("erin", "sage", ok), { ok: true }, "après un échec, le chargement suivant repart");
+
+  forget("dan", "sage");
+  await cachedSchema("dan", "sage", load);
+  assert.equal(load.mock.callCount(), 2, "après une déconnexion ou un nouvel identifiant, la structure est relue");
 });

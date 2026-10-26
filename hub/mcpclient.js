@@ -1,4 +1,4 @@
-// Client MCP partagé par les connecteurs "proxy" (Dropbox, MyReport) : une session par appel, fermée ensuite.
+// Client MCP partagé par les connecteurs "proxy" (Salesforce, Dropbox, MyReport) : une session par appel, fermée ensuite.
 // `headers` porte l'autorisation de l'utilisateur ; `sse` choisit le transport SSE (sinon Streamable HTTP).
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { VERSION } from "./version.js";

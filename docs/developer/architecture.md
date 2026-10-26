@@ -29,12 +29,12 @@ Assistant IA (Claude Code, Claude Desktop, ChatGPT, Copilot)
 │                secret ni donnée métier (docker exec, lecture seule)  │
 │ crypto.js      AES-256-GCM (enc1:) et pseudonymes HMAC, ENCRYPTION_KEY│
 │ db.js          hub.db (node:sqlite, WAL) : disponibilité, usage,     │
-│                audit ; purge, instantané horaire, migrations         │
+│                audit ; purge, migrations, instantané toutes les 6 h  │
 │ admin.js       lecture de hub.db par l'administrateur (docker exec)  │
 │ resolve.js     noms résolus IPv4 d'abord, puis IPv6 (musl, Docker)   │
 │ connectors/    salesforce · sagex3 · sharepoint · dropbox · myreport │
 │ public/        index.html, le portail                                │
-│ test/          node:test, amont mocké, 147 tests                     │
+│ test/          node:test, amont mocké, 149 tests                     │
 └───┬─────────────┬───────────────┬───────────────┬───────────────┬────┘
     ▼ MCP HTTP    ▼ REST Syracuse ▼ Graph (GET)   ▼ MCP HTTP      ▼ MCP SSE
  Salesforce    Sage X3 24R1    SharePoint      Dropbox (MCP    MyReport Server

@@ -64,17 +64,7 @@ services:
       MYREPORT_TOOLS: ${MYREPORT_TOOLS:-liste_indicateurs,synthese_couts_par_race,valeur_indicateur}
       CLEVOA_URL: ${CLEVOA_URL:-http://mcp-stub:4000/api/v1/telemetry}
       CLEVOA_KEY: ${CLEVOA_KEY:-cle-charlois-dev}
-    user: "node"                               # processus sans privilèges (déjà imposé par l'image, rappelé ici)
-    read_only: true                            # système de fichiers en lecture seule ; seuls /data (volume, droits 700) et /tmp sont inscriptibles
-    tmpfs:
-      - /tmp
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    logging:
-      driver: json-file
-      options: { max-size: "10m", max-file: "5" }   # LOG_LEVEL=debug est bavard : journaux plafonnés comme en prod
+    # Durcissement (utilisateur, lecture seule, capacités, journaux plafonnés) : hérité de docker-compose.yml.
 
   mcp-backup:
     extends:

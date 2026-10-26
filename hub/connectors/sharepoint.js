@@ -38,8 +38,8 @@ function downloadUrl(location) {
 async function get(tok, path, params = {}, raw = false) {
   const u = new URL(GRAPH + path);
   u.search = new URLSearchParams(params);
-  let r = await fetch(u, { headers: { Authorization: `Bearer ${tok.access_token}`, Accept: "application/json" }, redirect: "manual" }).catch((e) => { throw unreachable("SharePoint", u, e); });
-  if (r.status === 302) r = await fetch(downloadUrl(r.headers.get("location"))); // URL de téléchargement pré-authentifiée : jamais le jeton, hôte contrôlé
+  let r = await fetch(u, { headers: { Authorization: `Bearer ${tok.access_token}`, Accept: "application/json" }, redirect: "manual", signal: AbortSignal.timeout(30_000) }).catch((e) => { throw unreachable("SharePoint", u, e); });
+  if (r.status === 302) r = await fetch(downloadUrl(r.headers.get("location")), { signal: AbortSignal.timeout(30_000) }); // URL de téléchargement pré-authentifiée : jamais le jeton, hôte contrôlé
   if (!r.ok) throw Object.assign(new Error(`SharePoint ${r.status}: ${(await r.text()).slice(0, 300)}`), { status: r.status });
   return raw ? r : r.json();
 }
