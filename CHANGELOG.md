@@ -7,10 +7,11 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
-## [1.5.0-rc.2] – 2026-10-26
+## [1.5.0] – 2026-10-26
 
-Correctifs constatés aux premiers tests réels de SharePoint et du SSO Entra, sous Docker Desktop, et identifiants vérifiés
-à la saisie.
+Version 1.5 : contenu de la 1.5.0-rc.1, plus les correctifs constatés aux premiers tests réels de SharePoint et du SSO Entra
+(sous Docker Desktop) et les identifiants vérifiés à la saisie. Tests réels encore à faire avant la production (cloisonnement
+avec un compte non administrateur, serveur de pré-production, restauration) : [état des fonctionnalités](docs/validation/etat-des-fonctionnalites.md).
 
 ### Ajouté
 - Identifiants Syracuse, clé d'API ou jeton MyReport vérifiés auprès du système avant l'enregistrement (« Vérifier et enregistrer ») : refusés ou système injoignable, rien n'est enregistré, la connexion précédente reste en place et le motif s'affiche sous le formulaire.

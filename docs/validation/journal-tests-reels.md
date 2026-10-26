@@ -70,7 +70,7 @@ Les autres systèmes restaient sur le bouchon.
 |---|---|---|---|
 | E1 | Connexion SharePoint depuis le portail (1.5.0-rc.1) | Mire Microsoft puis « Échec de la connexion SharePoint (réseau) » ; diagnostic sans problème signalé | Journal muet sur la cause : code d'erreur ajouté |
 | E2 | `fetch` de la découverte OIDC depuis le conteneur | `ENETUNREACH` ; résolution système : 48 adresses IPv6 en double, aucune IPv4 ; en IPv4 seule : 8 adresses | Hub : résolution IPv4 d'abord (`resolve.js`) ; diagnostic : annuaire de connexion testé |
-| E3 | Même connexion (1.5.0-rc.2), diagnostic | `reseauConnexion` joignable (200) ; portail « Accès vérifié », site DSI | OK |
+| E3 | Même connexion (1.5.0), diagnostic | `reseauConnexion` joignable (200) ; portail « Accès vérifié », site DSI | OK |
 | E4 | Claude : « liste les sites SharePoint auxquels j'ai accès » | 42 sites du locataire | OK |
 | E5 | `SSO_MODE=entra` : ancienne clé (sans identité) sur `/mcp` | 401 | OK |
 | E6 | Fenêtre portant l'ancien cookie | Renvoi vers Microsoft ; SSO réussi ; puis retour SharePoint 400 | Hub : scope `profile` (sans lui, pas d'`oid` dans l'id_token, contrôle « même compte » toujours en échec) |

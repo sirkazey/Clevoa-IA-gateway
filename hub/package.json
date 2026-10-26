@@ -1,6 +1,6 @@
 {
   "name": "clevoa-gateway-hub",
-  "version": "1.5.0-rc.2",
+  "version": "1.5.0",
   "private": true,
   "type": "module",
   "description": "Clevoa AI Gateway : hub MCP en lecture seule vers Salesforce, Sage X3, SharePoint, Dropbox et MyReport, avec les droits de chaque collaborateur",
