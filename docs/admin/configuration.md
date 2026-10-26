@@ -1,8 +1,9 @@
 # Configuration des connecteurs
 
 Procédures de configuration de chaque système, connecteur par connecteur. Sage X3 et Salesforce sont **vérifiés sur
-les vrais systèmes** (préproduction Sage X3 et sandbox Salesforce, 23 octobre 2026) ; SharePoint, Dropbox et MyReport
-n'ont été exercés que contre le bouchon : leurs procédures sont signalées « à vérifier ». État complet :
+les vrais systèmes** (préproduction Sage X3 et sandbox Salesforce, 23 octobre 2026), SharePoint sur le locataire Charlois
+(connexion et liste des sites, 26 octobre 2026) ; Dropbox et MyReport n'ont été exercés que contre le bouchon : leurs
+procédures sont signalées « à vérifier ». État complet :
 [état des fonctionnalités](../validation/etat-des-fonctionnalites.md). Le SSO du portail a son propre guide :
 [SSO Entra ID](sso-entra.md).
 
@@ -84,7 +85,12 @@ Optionnel : `SAGE_LANG` (langue des libellés, défaut `fr-FR`). Délai maximal 
 
 ### Étape 3 : connexion et diagnostic sur le portail
 
-Carte **Sage X3** : « Identifiant » = identifiant Syracuse, « Jeton / clé » = mot de passe Syracuse, puis **Tester**.
+Ligne **Sage X3** : **Saisir mes identifiants**, « Identifiant » = identifiant Syracuse, « Mot de passe » = mot de passe
+Syracuse, puis **Vérifier et enregistrer** : le hub les essaie auprès de Syracuse avant de les enregistrer. Refusés
+(`Sage X3 a refusé cet identifiant ou ce mot de passe (401)`) ou Syracuse injoignable : rien n'est enregistré. Ensuite,
+le bouton de test de la ligne donne le détail. **Syracuse bloque le compte après quelques mots de passe erronés** (3 chez
+Charlois) : le hub n'envoie qu'un essai par vérification, n'en transmet pas plus de deux par quart d'heure et efface des
+identifiants refusés (401) au lieu de les réessayer ; le collaborateur les ressaisit.
 
 * `Connecté à … (dossier X3TST_CHREC) par identifiant et mot de passe Syracuse · 6 représentations` : OK.
 * `absentes de ce dossier (404) : …` : non publiées, ticket intégrateur, le reste fonctionne.

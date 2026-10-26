@@ -7,6 +7,24 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
+## [1.5.0-rc.2] – 2026-10-26
+
+Correctifs constatés aux premiers tests réels de SharePoint et du SSO Entra, sous Docker Desktop, et identifiants vérifiés
+à la saisie.
+
+### Ajouté
+- Identifiants Syracuse, clé d'API ou jeton MyReport vérifiés auprès du système avant l'enregistrement (« Vérifier et enregistrer ») : refusés ou système injoignable, rien n'est enregistré, la connexion précédente reste en place et le motif s'affiche sous le formulaire.
+- Protection contre le blocage du compte Syracuse (3 mots de passe erronés chez Charlois) : un seul essai par vérification (première représentation seule, les autres ensuite), deux refus au plus par quart d'heure, identifiants effacés au premier 401 au lieu d'être réessayés à chaque question de l'assistant.
+
+### Corrigé
+- Résolution des noms en IPv4 d'abord, puis IPv6 : l'image Alpine (musl) garde au plus 48 adresses par nom ; avec un DNS qui renvoie des réponses en double (Docker Desktop), `login.microsoftonline.com` ne donnait plus que de l'IPv6, injoignable sans IPv6 dans le réseau Docker (`ENETUNREACH`).
+- SSO Entra + SharePoint : la connexion SharePoint échouait toujours (400) une fois le SSO actif ; sans le scope `profile`, Entra n'envoie pas l'`oid` dans l'id_token et le contrôle « même compte que le portail » refusait tout. SharePoint demande désormais `profile` (aucun nouveau consentement : déjà accordé par le SSO).
+- Pré-production : un vrai `SAGE_URL` restait couplé à l'IdP simulé du bouchon (jeton refusé par Syracuse, formulaire identifiant et mot de passe masqué) ; des variables `SAGE_OAUTH_*` présentes et vides dans `.env` désactivent désormais l'OAuth de Sage.
+
+### Modifié
+- Diagnostic : l'annuaire de connexion de SharePoint (`MS_LOGIN_URL`) est testé à part de Graph (`reseauConnexion`) ; il passait pour sain quand seul Graph répondait.
+- Journal du retour de connexion : code d'erreur court (`ENETUNREACH`, `ECONNREFUSED`, `OAUTH_…`, `SSO_AUTRE_COMPTE`…), jamais le message ni l'adresse.
+
 ## [1.5.0-rc.1] – 2026-10-25
 
 Version candidate : Node 24, base d'exploitation SQLite (historique de disponibilité, usage, journal d'audit facultatif) et

@@ -19,7 +19,9 @@ import * as db from "./db.js";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { rateLimit, MemoryStore } from "express-rate-limit"; // déjà fourni par le SDK MCP (même version) : toutes les limites de débit du hub
 import { VERSION, APP_ENV, IS_PROD } from "./version.js";
+import * as resolve from "./resolve.js";
 
+resolve.install(); // IPv4 d'abord pour les appels sortants (resolve.js : musl et DNS de Docker Desktop)
 const PORT = process.env.PORT || 8080;
 const debug = process.env.LOG_LEVEL === "debug" ? (...a) => console.log("[debug]", ...a) : () => {};
 // Verrou production : l'URL publique doit être en https (cookie Secure, callbacks OAuth), sauf test local.
@@ -203,15 +205,35 @@ app.post("/api/disconnect/:system", limit("portal", 30), sameOrigin, portalUser,
   if (!byId[req.params.system]) return res.sendStatus(404);
   store.clearTokens(req.key, req.params.system); res.sendStatus(204);
 });
-// Jeton personnel (clé d'API Syracuse, jeton MyReport…) saisi par l'utilisateur : remplace son entrée pour ce système.
-app.post("/api/:system/apikey", limit("portal", 30), sameOrigin, portalUser, (req, res) => {
+// Jeton personnel (identifiant et mot de passe Syracuse, clé d'API, jeton MyReport…) saisi par l'utilisateur : vérifié auprès du
+// système par le même appel que « Tester », puis enregistré seulement s'il est accepté. Refusé (401/403) ou système injoignable :
+// rien n'est enregistré et la connexion précédente reste en place. Deux refus en 15 minutes pour un collaborateur et un système :
+// plus aucun essai transmis jusqu'à la fin du quart d'heure (Syracuse bloque le compte après quelques échecs, 3 chez Charlois).
+const REFUSALS_MAX = 2, REFUSALS_WINDOW = 15 * 60_000;
+const refusals = new Map(); // "clé|système" -> dates des refus récents
+const recentRefusals = (id) => (refusals.get(id) || []).filter((t) => t > Date.now() - REFUSALS_WINDOW);
+app.post("/api/:system/apikey", limit("portal", 30), sameOrigin, portalUser, async (req, res) => {
   const c = byId[req.params.system];
   if (!c?.apiKey) return res.sendStatus(404);
   const apiKey = String(req.body?.apiKey || "").trim(), login = String(req.body?.login || "").trim();
   if (!apiKey) return res.status(400).json({ error: "Jeton vide" });
+  const rid = `${req.key}|${c.id}`;
+  if (recentRefusals(rid).length >= REFUSALS_MAX) return res.status(429).json({ error: `${REFUSALS_MAX} essais refusés par ${c.label} en 15 minutes : rien n'est transmis pour ne pas bloquer votre compte. Vérifiez votre ${c.apiKey.mode === "basic" ? "mot de passe" : "jeton"} directement dans ${c.label}, puis réessayez dans un quart d'heure.` });
+  if (c.maxPerMinute && (await upstream.increment(c.id)).totalHits > c.maxPerMinute) return res.status(429).json({ error: `${c.label} : plafond de ${c.maxPerMinute} appels par minute atteint, réessayez dans un instant.` });
+  const tok = { apiKey, ...(login ? { login } : {}) };
+  let checked;
+  try { checked = await c.ping(tok, () => c.schema(tok)); }
+  catch (e) {
+    if (e.status === 401 || e.status === 403) {
+      refusals.set(rid, [...recentRefusals(rid), Date.now()]);
+      return res.status(400).json({ error: `${c.label} a refusé ${c.apiKey.mode === "basic" ? "cet identifiant ou ce mot de passe" : "ce jeton"} (${e.status}) : rien n'est enregistré.` });
+    }
+    return res.status(502).json({ error: `${e.message.slice(0, 300)} · Vérification impossible, rien n'est enregistré : réessayez.` });
+  }
+  refusals.delete(rid);
   store.clearTokens(req.key, c.id);
-  store.setTokens(req.key, c.id, { apiKey, ...(login ? { login } : {}) });
-  res.sendStatus(204);
+  store.setTokens(req.key, c.id, tok);
+  res.json({ ok: true, message: checked.message });
 });
 // Diagnostic : un appel minimal au système avec le jeton de l'utilisateur (ou le simulateur).
 app.get("/api/test/:system", limit("diag", 20), portalUser, async (req, res) => {

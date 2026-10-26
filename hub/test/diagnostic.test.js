@@ -66,16 +66,21 @@ test("Réseau testé : hôte de chaque système joignable (code HTTP), sans iden
     assert.equal(c.reseau.joignable, true, `${c.id} joignable`);
     assert.equal(typeof c.reseau.http, "number");
   }
+  assert.equal(d.connecteurs.find((c) => c.id === "sharepoint").reseauConnexion.joignable, true, "annuaire de connexion Microsoft testé à part de Graph");
   assert.ok(!out.includes(up.url));
   assert.equal(d.telemetrie.reseau.joignable, true);
 });
 
 test("Système injoignable : code d'erreur réseau et problème signalé", async () => {
   const closed = await freePort();
-  const { json: d } = await diagnose({ SAGE_URL: `http://127.0.0.1:${closed}` }, []);
+  const { json: d } = await diagnose({ SAGE_URL: `http://127.0.0.1:${closed}`, MS_LOGIN_URL: `http://127.0.0.1:${closed}/ms` }, []);
   const sage = d.connecteurs.find((c) => c.id === "sagex3");
   assert.equal(sage.reseau.joignable, false); assert.equal(sage.reseau.erreur, "ECONNREFUSED");
   assert.ok(d.problemes.some((p) => p.startsWith("sagex3 : hôte injoignable")));
+  // Graph joignable mais annuaire de connexion injoignable (cas du retour « Échec de la connexion SharePoint (réseau) ») : signalé.
+  const sp = d.connecteurs.find((c) => c.id === "sharepoint");
+  assert.equal(sp.reseau.joignable, true); assert.equal(sp.reseauConnexion.erreur, "ECONNREFUSED");
+  assert.ok(d.problemes.includes("sharepoint : annuaire de connexion injoignable (ECONNREFUSED)"));
 });
 
 test("Variables piégées : identifiants dans les URL, chemin et paramètres secrets, retour à la ligne, redirection → rien ne fuit", async () => {

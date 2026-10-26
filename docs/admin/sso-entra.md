@@ -14,7 +14,8 @@ du **même compte Microsoft** que l'identité du portail.
 Deux changements s'appliquent même sans SSO : le bouton « régénérer la clé » et une limite de 60 requêtes par minute et
 par adresse IP sur `/auth/…` (derrière un NAT, un premier passage consomme quatre requêtes).
 
-État : exercé contre le bouchon et les tests automatisés seulement ; **jamais contre un vrai locataire Entra**
+État : vérifié contre le locataire Charlois le 26 octobre 2026 avec un seul compte ([journal](../validation/journal-tests-reels.md)) ;
+le cloisonnement entre deux collaborateurs réels reste à vérifier
 ([état des fonctionnalités](../validation/etat-des-fonctionnalites.md)).
 
 ## Mode `entra` : ce qu'il faut dans Entra ID
@@ -43,16 +44,18 @@ MS_CLIENT_SECRET=<secret client>
 ```
 
 Le hub refuse de démarrer si `MS_TENANT_ID` n'est pas un GUID, si l'application n'est pas renseignée, ou si
-`MS_LOGIN_URL` ne désigne pas `login.microsoftonline.com`. L'`id_token` est vérifié (émetteur, locataire, audience,
-expiration) ; il arrive en direct du point de terminaison token (TLS, code + PKCE + secret), sa signature n'est donc
-pas revérifiée (OIDC Core § 3.1.3.7, règle 6). Ne jamais désactiver la vérification TLS de Node
+`MS_LOGIN_URL` ne désigne pas `login.microsoftonline.com`. L'`id_token` est vérifié par openid-client depuis la 1.5
+(émetteur, audience, expiration et **signature**, avec les clés publiées par Entra), puis par le hub (locataire,
+identifiant `oid`). Ne jamais désactiver la vérification TLS de Node
 (`NODE_TLS_REJECT_UNAUTHORIZED=0`).
 
 Constater que le SSO est actif : la ligne de démarrage contient `· SSO entra`, le portail affiche « via Microsoft
 Entra ID » à côté de l'identité, `SSO_MODE` apparaît dans la configuration du conteneur. Lire un échec : « Échec de la
 connexion Microsoft Entra ID (…) » avec une réponse HTTP 400 = `id_token` refusé (locataire ou application inattendus) ;
-la même phrase avec une réponse HTTP 502 et la ligne de journal `[oauth] sso : échec de l'échange de jeton` = échange de
-code refusé par Entra (secret ou URI faux ; le statut d'Entra est entre parenthèses) ; « Système inconnu ou session
+la même phrase avec une réponse HTTP 502 et la ligne de journal `[oauth] sso : échec de l'échange de jeton (HTTP 400)` = échange de
+code refusé par Entra (secret ou URI faux ; le statut d'Entra est entre parenthèses). Codes du journal propres au SSO :
+`SSO_REVENDICATIONS_ABSENTES`, `SSO_LOCATAIRE`, `SSO_AUDIENCE`, `SSO_EXPIRE`, et `SSO_AUTRE_COMPTE` pour SharePoint connecté
+avec un autre compte Microsoft que celui du portail ; « Système inconnu ou session
 absente » = flux lancé sans identité.
 
 ## Mode `mock` : développement et CI, jamais la production

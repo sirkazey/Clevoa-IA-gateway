@@ -31,11 +31,11 @@ const ISSUER = `${LOGIN}/${TENANT}/v2.0`.toLowerCase();
  *  ces contrôles s'y ajoutent (locataire, oid), pour le SSO comme pour SharePoint (même application Entra). */
 export function claims(idToken) {
   let c; try { c = JSON.parse(Buffer.from(String(idToken).split(".")[1], "base64url").toString("utf8")); } catch { c = null; }
-  const bad = (m) => Object.assign(new Error(`SSO : id_token refusé (${m})`), { status: 400, sso: true });
-  if (!c || [c.oid, c.tid, c.iss].some((v) => typeof v !== "string" || !v)) throw bad("revendications absentes");
-  if (c.iss.toLowerCase() !== ISSUER || c.tid.toLowerCase() !== TENANT.toLowerCase()) throw bad("émetteur ou locataire inattendu");
-  if (c.aud !== CLIENT_ID) throw bad("audience inattendue");
-  if (!(c.exp > Date.now() / 1000)) throw bad("expiré");
+  const bad = (m, code) => Object.assign(new Error(`SSO : id_token refusé (${m})`), { status: 400, sso: true, code }); // code : journal du retour (oauth.js)
+  if (!c || [c.oid, c.tid, c.iss].some((v) => typeof v !== "string" || !v)) throw bad("revendications absentes", "SSO_REVENDICATIONS_ABSENTES");
+  if (c.iss.toLowerCase() !== ISSUER || c.tid.toLowerCase() !== TENANT.toLowerCase()) throw bad("émetteur ou locataire inattendu", "SSO_LOCATAIRE");
+  if (c.aud !== CLIENT_ID) throw bad("audience inattendue", "SSO_AUDIENCE");
+  if (!(c.exp > Date.now() / 1000)) throw bad("expiré", "SSO_EXPIRE");
   return { sub: c.oid, tid: c.tid, upn: c.preferred_username || c.email || "", name: c.name || "", email: c.email || c.preferred_username || null };
 }
 
@@ -67,7 +67,7 @@ export const connector = {
   assertSame(key, tokens) {
     const u = store.get(key); if (!u?.sso) return;
     const id = claims(tokens.id_token);
-    if (id.sub !== u.sso.sub || id.tid !== u.sso.tid) throw Object.assign(new Error("SSO : compte Microsoft différent de l'identité du portail"), { status: 400, sso: true });
+    if (id.sub !== u.sso.sub || id.tid !== u.sso.tid) throw Object.assign(new Error("SSO : compte Microsoft différent de l'identité du portail"), { status: 400, sso: true, code: "SSO_AUTRE_COMPTE" });
   },
   /** Après le SSO : connexion SharePoint tentée sans interaction si l'utilisateur n'y est pas encore connecté. */
   next: (key) => (!hasCredential(store.get(key)?.sharepoint) ? "/auth/sharepoint?silent=1" : "/"),

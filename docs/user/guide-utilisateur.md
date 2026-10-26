@@ -16,11 +16,16 @@ l'assistant interroge les outils **avec vos droits, en lecture seule**.
    votre connexion (« À connecter », « Connecté », « Simulé », « Non configuré ») et celui du **service** mesuré par la
    passerelle : « Opérationnel » avec le temps de réponse, « Lent », « Erreurs », « Injoignable », ou « Pas d'appel
    récent ». Un service en erreur pour tout le monde n'est pas un problème de votre compte : inutile de vous
-   reconnecter, votre DSI est prévenue par sa supervision. Cliquer **Se connecter** (ou **Saisir mon jeton**) :
+   reconnecter, votre DSI est prévenue par sa supervision. Cliquer **Se connecter** (ou **Saisir mes identifiants**,
+   **Saisir mon jeton**) :
    * **Salesforce, SharePoint / OneDrive, Dropbox** : page de connexion de l'éditeur, puis autorisation « lecture ».
    * **Sage X3** : selon la configuration de votre DSI, saisir votre identifiant et votre mot de passe Syracuse, ou votre
      clé d'API Syracuse (chiffrés dans le hub, jamais renvoyés au navigateur) ; OAuth si elle l'a configuré.
    * **MyReport** : coller votre jeton personnel MyReport Server.
+
+   **Vérifier et enregistrer** essaie d'abord vos identifiants ou votre jeton auprès du système : s'il les refuse, ou
+   s'il ne répond pas, un message rouge s'affiche sous le formulaire et rien n'est enregistré (votre connexion
+   précédente, s'il y en avait une, reste en place).
 3. Cliquer le bouton de test (flèches circulaires) d'une ligne, ou **Tout tester** : le détail de la ligne s'ouvre avec
    un encadré vert « Accès vérifié » (outils ou tables disponibles) ou rouge avec le message d'erreur. La flèche de
    droite ouvre ce détail, avec **Reconnecter** et **Déconnecter**. Une erreur n'empêche pas les autres outils de fonctionner.

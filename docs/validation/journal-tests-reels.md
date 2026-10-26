@@ -59,7 +59,30 @@ cliente externe « MCP Charlois » créée le jour même (PKCE, JWT, secret exig
 | F5 | Claude Desktop : « 5 derniers comptes modifiés » | 5 comptes, dont modifications par « Interface X3 » (interface ERP active en préprod) | OK ; SOQL sans WHERE accepté → `LIMIT` par défaut ajouté |
 | F6 | Dump complet de `salesforce_tools` | Schémas d'arguments réels (`q`, `objects`, `sobject-name`, `id`, `relationship-path`) | Bouchon et mocks alignés |
 
-## Tests non encore réalisés (état au 24 octobre 2026)
+## 2026-10-26 · SharePoint et SSO Entra ID (locataire Charlois)
+
+Pré-production sur le poste du DSI (Windows, Docker Desktop, `docker-compose.dev.yml`, `PUBLIC_URL=http://localhost:8080`),
+réseau domestique sans VPN. Application Entra « Clevoa AI Gateway » de l'annuaire Charlois (consentement de l'utilisateur
+seul, pas de consentement administrateur), site `charloisgroup.sharepoint.com:/sites/DSI`. Un seul compte : celui du DSI.
+Les autres systèmes restaient sur le bouchon.
+
+| # | Test | Résultat | Suite donnée |
+|---|---|---|---|
+| E1 | Connexion SharePoint depuis le portail (1.5.0-rc.1) | Mire Microsoft puis « Échec de la connexion SharePoint (réseau) » ; diagnostic sans problème signalé | Journal muet sur la cause : code d'erreur ajouté |
+| E2 | `fetch` de la découverte OIDC depuis le conteneur | `ENETUNREACH` ; résolution système : 48 adresses IPv6 en double, aucune IPv4 ; en IPv4 seule : 8 adresses | Hub : résolution IPv4 d'abord (`resolve.js`) ; diagnostic : annuaire de connexion testé |
+| E3 | Même connexion (1.5.0-rc.2), diagnostic | `reseauConnexion` joignable (200) ; portail « Accès vérifié », site DSI | OK |
+| E4 | Claude : « liste les sites SharePoint auxquels j'ai accès » | 42 sites du locataire | OK |
+| E5 | `SSO_MODE=entra` : ancienne clé (sans identité) sur `/mcp` | 401 | OK |
+| E6 | Fenêtre portant l'ancien cookie | Renvoi vers Microsoft ; SSO réussi ; puis retour SharePoint 400 | Hub : scope `profile` (sans lui, pas d'`oid` dans l'id_token, contrôle « même compte » toujours en échec) |
+| E7 | Après correctif : portail, SharePoint, nouvelle clé dans Claude, ancienne clé, déconnexion puis reconnexion | Identité Entra affichée ; SharePoint connecté ; sites listés ; ancienne clé 401 ; même clé retrouvée après reconnexion | OK |
+| E8 | SharePoint avec un autre compte Microsoft que celui du portail | Refusé | OK |
+| E9 | Sage X3 « Se connecter » avec un vrai `SAGE_URL` | Parcours OAuth simulé du bouchon au lieu du formulaire Syracuse | Pré-prod : `SAGE_OAUTH_*` vides désactivent l'OAuth de Sage |
+
+Non vérifié : `sharepoint_list`, `sharepoint_search` et `sharepoint_read` un par un ; cloisonnement entre deux
+collaborateurs réels ; connexion SharePoint transparente pour un collègue (consentement administrateur non accordé) ;
+compte invité.
+
+## Tests non encore réalisés (état au 26 octobre 2026)
 
 | Test | Pourquoi il compte | Prérequis |
 |---|---|---|
@@ -67,8 +90,9 @@ cliente externe « MCP Charlois » créée le jour même (PKCE, JWT, secret exig
 | Expiration et renouvellement réels du jeton Salesforce (JWT ~ 2 h, rotation du refresh token) | Vérifié sur le bouchon, pas sur Salesforce | Laisser une session ouverte plus de 2 h puis interroger |
 | Révocation : mot de passe Syracuse changé, autorisation Salesforce révoquée | Voyant rouge et message de reconnexion attendus | Action volontaire sur chaque système |
 | Salesforce production | Même procédure, org de production, serveurs d'écriture désactivés | Confirmation de l'intégrateur |
-| SharePoint, Dropbox | Jamais branchés sur un vrai compte | App Entra ID déléguée ; app Dropbox |
+| Dropbox | Jamais branché sur un vrai compte | App Dropbox |
+| SharePoint : lister, chercher, lire un document | Connexion et liste des sites seulement vérifiées (26/10) | Aucun |
 | MyReport | Serveur MCP annoncé par l'éditeur, non livré | Absys Cyborg |
 | Restauration sur le serveur de pré-prod (`sudo ops/restore.sh`) | Jouée en CI à chaque commit, pas encore sur un serveur Charlois ; à faire une fois par trimestre ([exploitation § 5](../admin/exploitation.md#5-restauration)) | Accès au serveur, `ENCRYPTION_KEY` du coffre |
-| SSO Entra en mode `entra` | Jamais exercé contre Microsoft, seulement contre le bouchon | URI de redirection sur l'application Entra, `MS_TENANT_ID` en GUID |
+| SSO Entra avec deux collaborateurs réels | Vérifié avec un seul compte (26/10) : le cloisonnement entre deux personnes reste à prouver | Un second compte Charlois, par exemple à la DSI |
 | Comparaison croisée Coppola (Sage + Salesforce dans une même réponse, deux lignes Source) | Vérifie la consigne par défaut du serveur MCP | Redéploiement du 23/10 soir |
