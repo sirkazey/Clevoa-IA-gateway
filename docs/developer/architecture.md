@@ -31,9 +31,10 @@ Assistant IA (Claude Code, Claude Desktop, ChatGPT, Copilot)
 │ db.js          hub.db (node:sqlite, WAL) : disponibilité, usage,     │
 │                audit ; purge, instantané horaire, migrations         │
 │ admin.js       lecture de hub.db par l'administrateur (docker exec)  │
+│ resolve.js     noms résolus IPv4 d'abord, puis IPv6 (musl, Docker)   │
 │ connectors/    salesforce · sagex3 · sharepoint · dropbox · myreport │
 │ public/        index.html, le portail                                │
-│ test/          node:test, amont mocké, 139 tests                     │
+│ test/          node:test, amont mocké, 143 tests                     │
 └───┬─────────────┬───────────────┬───────────────┬───────────────┬────┘
     ▼ MCP HTTP    ▼ REST Syracuse ▼ Graph (GET)   ▼ MCP HTTP      ▼ MCP SSE
  Salesforce    Sage X3 24R1    SharePoint      Dropbox (MCP    MyReport Server

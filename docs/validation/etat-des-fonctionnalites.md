@@ -1,6 +1,6 @@
 # État des fonctionnalités et limites connues
 
-Version 1.5.0-rc.1, candidate (Node 24 ; base d'exploitation SQLite : disponibilité, usage, journal d'audit facultatif ; OpenID Connect et limites de débit par des composants éprouvés). Statuts selon [les conventions](../CONTRIBUTING.md#statut-des-fonctionnalités) : **disponible** (vérifié
+Version 1.5.0-rc.2, candidate (Node 24 ; base d'exploitation SQLite : disponibilité, usage, journal d'audit facultatif ; OpenID Connect et limites de débit par des composants éprouvés). Statuts selon [les conventions](../CONTRIBUTING.md#statut-des-fonctionnalités) : **disponible** (vérifié
 sur le système réel), **testé sur bouchon** (tests automatisés et simulateur seulement), **expérimental**, **prévu**, **non planifié**.
 Évolutions : [roadmap produit](../roadmap-produit.md). Preuves : [journal des tests réels](journal-tests-reels.md), [campagne de charge](charge-v1.2.1.md), CI.
 

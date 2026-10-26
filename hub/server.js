@@ -19,7 +19,9 @@ import * as db from "./db.js";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { rateLimit, MemoryStore } from "express-rate-limit"; // déjà fourni par le SDK MCP (même version) : toutes les limites de débit du hub
 import { VERSION, APP_ENV, IS_PROD } from "./version.js";
+import * as resolve from "./resolve.js";
 
+resolve.install(); // IPv4 d'abord pour les appels sortants (resolve.js : musl et DNS de Docker Desktop)
 const PORT = process.env.PORT || 8080;
 const debug = process.env.LOG_LEVEL === "debug" ? (...a) => console.log("[debug]", ...a) : () => {};
 // Verrou production : l'URL publique doit être en https (cookie Secure, callbacks OAuth), sauf test local.

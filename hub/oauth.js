@@ -53,8 +53,15 @@ const ID_TOKEN_ERRORS = new Set(["OAUTH_JWT_CLAIM_COMPARISON_FAILED", "OAUTH_JWT
 function oidcError(e, during) {
   if (e instanceof oidc.ResponseBodyError) return Object.assign(new Error(`Échange de jeton OAuth refusé (${e.status} ${/^[\w.-]{1,40}$/.test(e.error) ? e.error : "erreur"})`), { status: e.status, code: e.error });
   if (e instanceof oidc.ClientError && ID_TOKEN_ERRORS.has(e.code)) return Object.assign(new Error(`SSO : id_token refusé (${e.code})`), during === "code" ? { status: 400, sso: true } : {});
-  if (e instanceof oidc.ClientError) return new Error(`Annuaire indisponible (${e.cause?.status ?? (e.code === "OAUTH_TIMEOUT" ? "délai dépassé" : "réseau")})`);
+  if (e instanceof oidc.ClientError) return new Error(`Annuaire indisponible (${e.cause?.status ?? (e.code === "OAUTH_TIMEOUT" ? "délai dépassé" : "réseau")})`, { cause: e }); // cause : code court au journal (errorCode)
   return e; // réseau (sans statut) ou défi WWW-Authenticate (statut 401 de l'annuaire)
+}
+/** Code court d'une erreur pour le journal : le plus profond de la chaîne des causes (ENETUNREACH sous l'erreur d'openid-client),
+ *  majuscules, chiffres et soulignés seulement, sinon le statut HTTP ; jamais un message. */
+export function errorCode(e) {
+  let code = null;
+  for (let x = e, i = 0; x && i < 5; x = x.cause, i++) if (typeof x.code === "string" && /^[A-Z][A-Z0-9_]{1,39}$/.test(x.code)) code = x.code;
+  return code ?? (e?.status ? `HTTP ${e.status}` : "sans code");
 }
 /** Échange du code reçu au retour du navigateur. */
 async function codeGrant(c, query, verifier) {
@@ -150,7 +157,7 @@ export function oauthRouter(connectors, getKey) {
       store.setTokens(p.key, c.id, stored, email);
       res.redirect("/");
     } catch (e) {
-      console.error(`[oauth] ${c.id} : échec de l'échange de jeton`); // rien de l'erreur n'est journalisé (le fournisseur peut y glisser des données) ; le statut est rendu au navigateur
+      console.error(`[oauth] ${c.id} : échec de l'échange de jeton (${errorCode(e)})`); // un code court seulement (ENETUNREACH, OAUTH_…), jamais le message : le fournisseur peut y glisser des données ; le statut est rendu au navigateur
       res.status(e.sso ? 400 : 502).send(`Échec de la connexion ${c.label} (${e.status ?? "réseau"}) : réessayez depuis le portail.`);
     }
   });

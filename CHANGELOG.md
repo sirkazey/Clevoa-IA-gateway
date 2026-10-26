@@ -7,6 +7,16 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
+## [1.5.0-rc.2] – 2026-10-26
+
+Correctif constaté au premier test réel de SharePoint, sous Docker Desktop : retour de connexion en échec
+« (réseau) » alors que la mire Microsoft s'affichait.
+
+### Corrigé
+- Résolution des noms en IPv4 d'abord, puis IPv6 : l'image Alpine (musl) garde au plus 48 adresses par nom ; avec un DNS qui renvoie des réponses en double (Docker Desktop), `login.microsoftonline.com` ne donnait plus que de l'IPv6, injoignable sans IPv6 dans le réseau Docker (`ENETUNREACH`).
+- Diagnostic : l'annuaire de connexion de SharePoint (`MS_LOGIN_URL`) est testé à part de Graph (`reseauConnexion`) ; il passait pour sain quand seul Graph répondait.
+- Journal du retour de connexion : code d'erreur court (`ENETUNREACH`, `ECONNREFUSED`, `OAUTH_…`), jamais le message ni l'adresse.
+
 ## [1.5.0-rc.1] – 2026-10-25
 
 Version candidate : Node 24, base d'exploitation SQLite (historique de disponibilité, usage, journal d'audit facultatif) et
