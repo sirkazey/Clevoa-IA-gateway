@@ -88,7 +88,9 @@ Optionnel : `SAGE_LANG` (langue des libellés, défaut `fr-FR`). Délai maximal 
 Ligne **Sage X3** : **Saisir mes identifiants**, « Identifiant » = identifiant Syracuse, « Mot de passe » = mot de passe
 Syracuse, puis **Vérifier et enregistrer** : le hub les essaie auprès de Syracuse avant de les enregistrer. Refusés
 (`Sage X3 a refusé cet identifiant ou ce mot de passe (401)`) ou Syracuse injoignable : rien n'est enregistré. Ensuite,
-le bouton de test de la ligne donne le détail :
+le bouton de test de la ligne donne le détail. **Syracuse bloque le compte après quelques mots de passe erronés** (3 chez
+Charlois) : le hub n'envoie qu'un essai par vérification, n'en transmet pas plus de deux par quart d'heure et efface des
+identifiants refusés (401) au lieu de les réessayer ; le collaborateur les ressaisit.
 
 * `Connecté à … (dossier X3TST_CHREC) par identifiant et mot de passe Syracuse · 6 représentations` : OK.
 * `absentes de ce dossier (404) : …` : non publiées, ticket intégrateur, le reste fonctionne.

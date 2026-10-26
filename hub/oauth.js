@@ -94,6 +94,10 @@ export async function withToken(connector, key, fn) {
   try {
     return await fn(tokens);
   } catch (e) {
+    if (e.status === 401 && tokens.apiKey) { // identifiant, mot de passe ou clé refusés : effacés pour que le hub ne réessaie plus (Syracuse bloque le compte après quelques échecs)
+      store.clearTokens(key, connector.id);
+      throw new Error(`${connector.label} a refusé vos identifiants (401) : ressaisissez-les sur le portail. Le hub ne réessaie pas, pour ne pas bloquer votre compte.`);
+    }
     if (e.status !== 401 || !tokens.refresh_token) throw e;
     const current = store.get(key)?.[connector.id];
     if (current?.access_token && current.access_token !== tokens.access_token) return fn(current); // déjà rafraîchi par un appel concurrent

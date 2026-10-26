@@ -265,14 +265,18 @@ test("Clé d'API Syracuse : POST /api/sagex3/apikey remplace OAuth, l'état pass
   assert.match(d.message, /par clé d'API · /);
   assert.ok(up.requests("$prototypes").every((q) => q.headers.authorization === "Bearer syr-key-alice"));
 
-  // Une clé révoquée : voyant rouge « Sage X3 401 », aucun refresh OAuth tenté (le diagnostic relit la structure, jamais le cache)
+  // Une clé révoquée : voyant rouge, aucun refresh OAuth tenté (le diagnostic relit la structure, jamais le cache) ; la clé est
+  // effacée et le second clic n'interroge plus Sage (Syracuse bloque le compte après quelques échecs)
   up.reset();
   up.failNext("$prototypes", 401);
   const ko = await fetch(`${hub.url}/api/test/sagex3`, { headers: { cookie } }).then((x) => x.json());
-  assert.equal(ko.ok, false, JSON.stringify(ko)); assert.match(ko.error, /Sage X3 401/);
+  assert.equal(ko.ok, false, JSON.stringify(ko)); assert.match(ko.error, /^Sage X3 a refusé vos identifiants \(401\)/);
   assert.equal(up.requests("/oauth/token").length, 0);
+  assert.equal(up.requests("$prototypes").length, 1, "un seul essai, pas un par représentation");
   const again = await fetch(`${hub.url}/api/test/sagex3`, { headers: { cookie } }).then((x) => x.json());
-  assert.equal(again.ok, true); assert.ok(up.requests("$prototypes").length >= 2, "le second clic interroge encore Sage");
+  assert.match(again.error, /Non connecté à Sage X3/); assert.equal(up.requests("$prototypes").length, 1, "le second clic n'interroge plus Sage");
+  // Ressaisie : la clé revient (la suite des tests s'en sert)
+  assert.equal((await fetch(`${hub.url}/api/sagex3/apikey`, { method: "POST", headers: { cookie, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "syr-key-alice" }) })).status, 200);
 });
 
 test("Clé d'API en mode basic (SAGE_APIKEY_MODE=basic) : Authorization: Basic base64(login:clé)", async () => {
@@ -438,6 +442,35 @@ test("Identifiants refusés par Syracuse (401) : 400 explicite, rien n'est enreg
   assert.equal((await post("syr-key-bonne")).status, 200);
   assert.equal((await post("syr-key-refusee")).status, 400);
   assert.equal(hub.readUsers()[k].sagex3.apiKey, "syr-key-bonne", "la clé valide précédente est conservée");
+});
+
+// Syracuse bloque le compte après quelques mots de passe erronés (3 chez Charlois) : chaque refus doit coûter un seul essai.
+const refusedCalls = () => up.requests("/api1/x3/").filter((r) => r.headers.authorization === "Bearer syr-key-refusee").length;
+
+test("Mot de passe refusé : un seul essai transmis à Syracuse par validation ; au-delà de 2 refus en 15 minutes, plus rien n'est transmis", async () => {
+  const c = `mcp_key=${(await fetch(`${hub.url}/api/me`)).headers.get("set-cookie").match(/mcp_key=([^;]+)/)[1]}`;
+  const post = () => fetch(`${hub.url}/api/sagex3/apikey`, { method: "POST", headers: { cookie: c, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "syr-key-refusee" }) });
+  const before = refusedCalls();
+  assert.equal((await post()).status, 400);
+  assert.equal(refusedCalls() - before, 1, "une seule requête, pas une par représentation");
+  assert.equal((await post()).status, 400);
+  const third = await post();
+  assert.equal(third.status, 429); assert.match((await third.json()).error, /^2 essais refusés par Sage X3 en 15 minutes : rien n'est transmis pour ne pas bloquer votre compte/);
+  assert.equal(refusedCalls() - before, 2, "le troisième essai n'a pas atteint Syracuse");
+});
+
+test("Identifiants enregistrés puis refusés (mot de passe changé) : effacés au premier 401, le hub ne réessaie plus", async () => {
+  const K = "test-key-mot-de-passe-change-0123";
+  const h = await startHub({ upstreamUrl: up.url, users: { [K]: { createdAt: "2026-01-01T00:00:00.000Z", email: "alice@example.com", sagex3: { apiKey: "syr-key-refusee" } } } });
+  try {
+    const before = refusedCalls();
+    const d = await fetch(`${h.url}/api/test/sagex3`, { headers: { cookie: `mcp_key=${K}` } }).then((x) => x.json());
+    assert.equal(d.ok, false); assert.equal(d.error, "Sage X3 a refusé vos identifiants (401) : ressaisissez-les sur le portail. Le hub ne réessaie pas, pour ne pas bloquer votre compte.");
+    assert.equal(h.readUsers()[K]?.sagex3, undefined, "identifiants effacés");
+    const again = await fetch(`${h.url}/api/test/sagex3`, { headers: { cookie: `mcp_key=${K}` } }).then((x) => x.json());
+    assert.match(again.error, /Non connecté à Sage X3/);
+    assert.equal(refusedCalls() - before, 1, "un seul essai au total");
+  } finally { await h.stop(); }
 });
 
 test("Sage X3 : une représentation absente du dossier (404) n'empêche pas le diagnostic ; aucune présente = erreur explicite", async () => {

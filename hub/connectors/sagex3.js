@@ -113,12 +113,16 @@ export async function schema(tok) {
   // Représentation inconnue (404) ou interdite à l'utilisateur (403) : absente de la structure, sans bloquer les autres.
   // Toute autre erreur (401 clé révoquée, réseau) remonte : rien n'est mis en cache.
   const denied = [], broken = []; // 403 : interdite à l'utilisateur ; 5xx : la génération échoue côté Sage (constaté sur 24R1 : 500 « Unexpected token < »)
-  const protos = await Promise.all(reps.map((rep) => prototype(tok, rep).catch((e) => {
+  const one = (rep) => prototype(tok, rep).catch((e) => {
     if (e.status === 403) denied.push(rep);
     else if (e.status >= 500 && e.status !== 504) broken.push(rep); // 504 = délai dépassé (lenteur passagère) : bloquant, rien n'est mis en cache
     else if (e.status !== 404) throw e; // 401 / réseau / délai : bloquant
     return undefined;
-  })));
+  });
+  // La première seule, puis les autres en parallèle : un mot de passe refusé (401) ne coûte qu'un essai à Syracuse, qui bloque
+  // le compte après quelques échecs (3 constatés chez Charlois), au lieu d'un essai par représentation.
+  const first = await one(reps[0]);
+  const protos = [first, ...(await Promise.all(reps.slice(1).map(one)))];
   reps.forEach((rep, i) => { fields[rep] = protos[i]; });
   return { representations: reps.filter((r) => fields[r]), missing: reps.filter((r) => !fields[r] && !denied.includes(r) && !broken.includes(r)), denied, broken, fields };
 }

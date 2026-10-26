@@ -493,7 +493,7 @@ function appRow(s) {
         <div class="field"><label for="${id}-apikey">${s.apiKey.mode === "basic" ? "Mot de passe" : "Jeton personnel"}</label><input id="${id}-apikey" name="${id}-apikey" type="password" autocomplete="new-password" required aria-describedby="${id}-hint"></div>
         <button class="btn" type="submit">Vérifier et enregistrer</button>
         <p class="form-err" id="${id}-err" role="alert" hidden></p>
-        <p class="hint" id="${id}-hint">${esc(s.apiKey.label)}, vérifié auprès du système puis chiffré par la passerelle, jamais réaffiché.</p>
+        <p class="hint" id="${id}-hint">${esc(s.apiKey.label)}, vérifié auprès du système puis chiffré par la passerelle, jamais réaffiché.${s.apiKey.mode === "basic" ? ` <strong>${esc(s.label)} peut bloquer votre compte après quelques mots de passe erronés</strong> : chaque validation compte pour un essai, et la passerelle n'en transmet pas plus de deux par quart d'heure.` : ""}</p>
       </form>` : "";
   const links = [s.oauth && !s.mock && s.configured && s.connected ? `<a class="link" href="/auth/${esc(s.id)}">Reconnecter</a>` : "",
     s.connected ? `<button class="link" type="button" onclick="disconnect('${id}')">Déconnecter</button>` : ""].filter(Boolean).join("");
