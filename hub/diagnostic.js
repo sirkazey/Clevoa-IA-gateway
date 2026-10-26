@@ -3,10 +3,13 @@
 // des connecteurs et de la télémétrie. Jamais une valeur de secret, un jeton, une clé, une adresse e-mail, une URL ni une
 // donnée métier : seulement des états (« renseignée », « joignable »), des compteurs et des codes d'erreur.
 // Lecture seule : n'écrit rien, n'ouvre aucun port, ne contacte que le hub local et, sauf --sans-reseau, l'hôte de chaque
-// système configuré (une requête HEAD sans identifiant) pour distinguer une panne réseau d'une erreur d'identifiant.
+// système configuré et l'annuaire de connexion de SharePoint (une requête HEAD sans identifiant) pour distinguer une panne réseau d'une erreur d'identifiant.
 import { readFileSync, statSync, accessSync, statfsSync, constants } from "node:fs";
 import { createHash, createDecipheriv } from "node:crypto";
 import { VERSION, APP_ENV, IS_PROD } from "./version.js";
+import * as resolve from "./resolve.js";
+
+resolve.install(); // même résolution que le hub : le diagnostic voit ce que voit le hub
 
 const offline = process.argv.includes("--sans-reseau");
 const env = process.env;
@@ -25,7 +28,7 @@ const variables = Object.fromEntries(NAMES.map((n) => [n, !set(n) ? "vide" : pla
 const CONNECTORS = [
   { id: "salesforce", vars: ["SF_CLIENT_ID"], url: "SF_MCP_URL" },
   { id: "sagex3", vars: ["SAGE_URL"], url: "SAGE_URL", simulator: true },
-  { id: "sharepoint", vars: ["MS_CLIENT_ID"], url: "GRAPH_URL", defaultUrl: "https://graph.microsoft.com/v1.0" },
+  { id: "sharepoint", vars: ["MS_CLIENT_ID"], url: "GRAPH_URL", defaultUrl: "https://graph.microsoft.com/v1.0", login: "MS_LOGIN_URL", defaultLogin: "https://login.microsoftonline.com" },
   { id: "dropbox", vars: ["DROPBOX_APP_KEY"], url: "DROPBOX_MCP_URL", defaultUrl: "https://mcp.dropbox.com/mcp" },
   { id: "myreport", vars: ["MYREPORT_MCP_URL"], url: "MYREPORT_MCP_URL", simulator: true },
 ];
@@ -91,6 +94,10 @@ async function main() {
     if (configured && !offline) {
       row.reseau = url ? await reach(url) : { joignable: null, erreur: "URL absente" };
       if (row.reseau.joignable === false) problems.push(`${c.id} : hôte injoignable (${row.reseau.erreur})`);
+      if (c.login) { // annuaire de connexion (échange du code au retour du navigateur) : un autre hôte que l'API
+        row.reseauConnexion = await reach(env[c.login] || c.defaultLogin);
+        if (row.reseauConnexion.joignable === false) problems.push(`${c.id} : annuaire de connexion injoignable (${row.reseauConnexion.erreur})`);
+      }
     }
     connectors.push(row);
   }

@@ -190,7 +190,7 @@ test("SharePoint et Dropbox : OAuth utilisateur (Entra avec scopes délégués l
   up.reset();
   const sp = new URL((await fetch(`${hub.url}/auth/sharepoint`, { headers: { cookie }, ...noFollow })).headers.get("location"));
   assert.equal(sp.origin + sp.pathname, `${up.url}/ms/common/oauth2/v2.0/authorize`);
-  assert.equal(sp.searchParams.get("scope"), "openid offline_access User.Read Files.Read.All Sites.Read.All");
+  assert.equal(sp.searchParams.get("scope"), "openid profile offline_access User.Read Files.Read.All Sites.Read.All");
   const spCb = await fetch(`${hub.url}/auth/sharepoint/callback?code=sp1&state=${sp.searchParams.get("state")}`, { headers: { cookie }, ...noFollow });
   assert.equal(spCb.status, 302, await spCb.text());
   assert.equal(up.requests("/v1.0/me")[0].headers.authorization, "Bearer ms-token-sp1");
@@ -241,7 +241,7 @@ test("Clé d'API Syracuse : POST /api/sagex3/apikey remplace OAuth, l'état pass
   assert.equal((await fetch(`${hub.url}/api/sagex3/apikey`, { method: "POST", headers: { cookie, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "  " }) })).status, 400, "clé vide");
 
   const r = await fetch(`${hub.url}/api/sagex3/apikey`, { method: "POST", headers: { cookie, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "syr-key-alice", login: "ALICE" }) });
-  assert.equal(r.status, 204);
+  assert.equal(r.status, 200); assert.match((await r.json()).message, /^Connecté à .* par clé d'API · \d+ représentations/, "vérifiée auprès de Syracuse avant l'enregistrement");
   const u = hub.readUsers()[key];
   assert.deepEqual(Object.keys(u.sagex3).sort(), ["apiKey", "login", "updatedAt"], "la clé remplace les jetons OAuth précédents");
   assert.equal(u.sagex3.apiKey, "syr-key-alice");
@@ -250,7 +250,11 @@ test("Clé d'API Syracuse : POST /api/sagex3/apikey remplace OAuth, l'état pass
   const me = await fetch(`${hub.url}/api/me`, { headers: { cookie } }).then((x) => x.json());
   assert.deepEqual([me.systems[1].connected, me.systems[1].method, me.systems[1].apiKey.mode], [true, "apikey", "bearer"]);
   assert.equal((await fetch(`${hub.url}/api/salesforce/apikey`, { method: "POST", headers: { cookie, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "x" }) })).status, 404, "pas de jeton personnel pour Salesforce");
-  assert.equal((await fetch(`${hub.url}/api/myreport/apikey`, { method: "POST", headers: { cookie, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "mr-token-alice" }) })).status, 204);
+  assert.equal((await fetch(`${hub.url}/api/myreport/apikey`, { method: "POST", headers: { cookie, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "mr-token-alice" }) })).status, 200);
+  // Jeton refusé par le système : rien n'est enregistré, la connexion précédente reste en place
+  const bad = await fetch(`${hub.url}/api/myreport/apikey`, { method: "POST", headers: { cookie, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "mauvais-jeton" }) });
+  assert.equal(bad.status, 400); assert.equal((await bad.json()).error, "MyReport a refusé ce jeton (401) : rien n'est enregistré.");
+  assert.equal(hub.readUsers()[key].myreport.apiKey, "mr-token-alice");
   const t = await fetch(`${hub.url}/api/test/myreport`, { headers: { cookie } }).then((x) => x.json());
   assert.equal(t.ok, true, JSON.stringify(t)); assert.match(t.message, /Proxy SSE connecté/);
   assert.ok(!JSON.stringify(me).includes("syr-key-alice"), "la clé n'est jamais renvoyée au navigateur");
@@ -261,14 +265,18 @@ test("Clé d'API Syracuse : POST /api/sagex3/apikey remplace OAuth, l'état pass
   assert.match(d.message, /par clé d'API · /);
   assert.ok(up.requests("$prototypes").every((q) => q.headers.authorization === "Bearer syr-key-alice"));
 
-  // Une clé révoquée : voyant rouge « Sage X3 401 », aucun refresh OAuth tenté (le diagnostic relit la structure, jamais le cache)
+  // Une clé révoquée : voyant rouge, aucun refresh OAuth tenté (le diagnostic relit la structure, jamais le cache) ; la clé est
+  // effacée et le second clic n'interroge plus Sage (Syracuse bloque le compte après quelques échecs)
   up.reset();
   up.failNext("$prototypes", 401);
   const ko = await fetch(`${hub.url}/api/test/sagex3`, { headers: { cookie } }).then((x) => x.json());
-  assert.equal(ko.ok, false, JSON.stringify(ko)); assert.match(ko.error, /Sage X3 401/);
+  assert.equal(ko.ok, false, JSON.stringify(ko)); assert.match(ko.error, /^Sage X3 a refusé vos identifiants \(401\)/);
   assert.equal(up.requests("/oauth/token").length, 0);
+  assert.equal(up.requests("$prototypes").length, 1, "un seul essai, pas un par représentation");
   const again = await fetch(`${hub.url}/api/test/sagex3`, { headers: { cookie } }).then((x) => x.json());
-  assert.equal(again.ok, true); assert.ok(up.requests("$prototypes").length >= 2, "le second clic interroge encore Sage");
+  assert.match(again.error, /Non connecté à Sage X3/); assert.equal(up.requests("$prototypes").length, 1, "le second clic n'interroge plus Sage");
+  // Ressaisie : la clé revient (la suite des tests s'en sert)
+  assert.equal((await fetch(`${hub.url}/api/sagex3/apikey`, { method: "POST", headers: { cookie, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "syr-key-alice" }) })).status, 200);
 });
 
 test("Clé d'API en mode basic (SAGE_APIKEY_MODE=basic) : Authorization: Basic base64(login:clé)", async () => {
@@ -335,7 +343,7 @@ test("index.html : chaque URL appelée (fetch / href) correspond à une route du
     if (path === "/auth/sso") continue; // n'existe qu'avec SSO_MODE (couvert par sso.test.js) ; ce hub tourne sans SSO
     assert.ok(routes.some((r) => r.re.test(path)), `aucune route déclarée pour ${u}`);
     const method = /disconnect|apikey|logout|rotate/.test(path) ? "POST" : "GET";
-    const body = /apikey/.test(path) ? { headers: { cookie, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "k" }) } : { headers: { cookie } };
+    const body = /apikey/.test(path) ? { headers: { cookie, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "mr-token-k" }) } : { headers: { cookie } }; // jeton accepté par le MyReport simulé
     const r = await fetch(`${hub.url}${u}`, { method, ...body, ...noFollow });
     assert.ok(r.status < 400, `${method} ${u} → ${r.status}`);
     if (/rotate/.test(path)) { key = (await r.json()).key; cookie = `mcp_key=${key}`; } // la rotation révoque l'ancienne clé : la suite du test (et des tests) utilise la nouvelle
@@ -410,15 +418,59 @@ test("Rate-limiting : 429 après 20 diagnostics par minute et après 20 échecs 
 });
 
 // ---------------------------------------------------------------- système injoignable
-test("Système injoignable : le diagnostic nomme le système, l'hôte et la cause réseau", async () => {
+test("Système injoignable : la vérification avant enregistrement nomme le système, l'hôte et la cause réseau ; rien n'est enregistré", async () => {
   const port = await freePort(); // rien n'écoute sur ce port → ECONNREFUSED (le port 1 est refusé par fetch comme « bad port »)
   const dead = await startHub({ upstreamUrl: up.url, env: { SAGE_URL: `http://127.0.0.1:${port}`, SAGE_APIKEY_MODE: "bearer" } });
   try {
     const c = `mcp_key=${(await fetch(`${dead.url}/api/me`).then((x) => x.json())).key}`;
-    await fetch(`${dead.url}/api/sagex3/apikey`, { method: "POST", headers: { cookie: c, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "k" }) });
+    const r = await fetch(`${dead.url}/api/sagex3/apikey`, { method: "POST", headers: { cookie: c, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "k" }) });
+    assert.equal(r.status, 502);
+    const { error } = await r.json();
+    assert.match(error, /^Sage X3 injoignable \(127\.0\.0\.1:\d+\) : ECONNREFUSED.* · Vérification impossible, rien n'est enregistré : réessayez\.$/, error);
     const d = await fetch(`${dead.url}/api/test/sagex3`, { headers: { cookie: c } }).then((x) => x.json());
-    assert.equal(d.ok, false); assert.match(d.error, /^Sage X3 injoignable \(127\.0\.0\.1:\d+\) : ECONNREFUSED/, d.error);
+    assert.equal(d.ok, false); assert.match(d.error, /Non connecté à Sage X3/);
   } finally { await dead.stop(); }
+});
+
+test("Identifiants refusés par Syracuse (401) : 400 explicite, rien n'est enregistré, la connexion précédente reste en place", async () => {
+  const c = `mcp_key=${(await fetch(`${hub.url}/api/me`)).headers.get("set-cookie").match(/mcp_key=([^;]+)/)[1]}`;
+  const post = (apiKey) => fetch(`${hub.url}/api/sagex3/apikey`, { method: "POST", headers: { cookie: c, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey }) });
+  const k = c.slice("mcp_key=".length);
+  const refused = await post("syr-key-refusee");
+  assert.equal(refused.status, 400); assert.equal((await refused.json()).error, "Sage X3 a refusé ce jeton (401) : rien n'est enregistré.");
+  assert.equal(hub.readUsers()[k]?.sagex3, undefined, "rien d'enregistré");
+  assert.equal((await post("syr-key-bonne")).status, 200);
+  assert.equal((await post("syr-key-refusee")).status, 400);
+  assert.equal(hub.readUsers()[k].sagex3.apiKey, "syr-key-bonne", "la clé valide précédente est conservée");
+});
+
+// Syracuse bloque le compte après quelques mots de passe erronés (3 chez Charlois) : chaque refus doit coûter un seul essai.
+const refusedCalls = () => up.requests("/api1/x3/").filter((r) => r.headers.authorization === "Bearer syr-key-refusee").length;
+
+test("Mot de passe refusé : un seul essai transmis à Syracuse par validation ; au-delà de 2 refus en 15 minutes, plus rien n'est transmis", async () => {
+  const c = `mcp_key=${(await fetch(`${hub.url}/api/me`)).headers.get("set-cookie").match(/mcp_key=([^;]+)/)[1]}`;
+  const post = () => fetch(`${hub.url}/api/sagex3/apikey`, { method: "POST", headers: { cookie: c, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "syr-key-refusee" }) });
+  const before = refusedCalls();
+  assert.equal((await post()).status, 400);
+  assert.equal(refusedCalls() - before, 1, "une seule requête, pas une par représentation");
+  assert.equal((await post()).status, 400);
+  const third = await post();
+  assert.equal(third.status, 429); assert.match((await third.json()).error, /^2 essais refusés par Sage X3 en 15 minutes : rien n'est transmis pour ne pas bloquer votre compte/);
+  assert.equal(refusedCalls() - before, 2, "le troisième essai n'a pas atteint Syracuse");
+});
+
+test("Identifiants enregistrés puis refusés (mot de passe changé) : effacés au premier 401, le hub ne réessaie plus", async () => {
+  const K = "test-key-mot-de-passe-change-0123";
+  const h = await startHub({ upstreamUrl: up.url, users: { [K]: { createdAt: "2026-01-01T00:00:00.000Z", email: "alice@example.com", sagex3: { apiKey: "syr-key-refusee" } } } });
+  try {
+    const before = refusedCalls();
+    const d = await fetch(`${h.url}/api/test/sagex3`, { headers: { cookie: `mcp_key=${K}` } }).then((x) => x.json());
+    assert.equal(d.ok, false); assert.equal(d.error, "Sage X3 a refusé vos identifiants (401) : ressaisissez-les sur le portail. Le hub ne réessaie pas, pour ne pas bloquer votre compte.");
+    assert.equal(h.readUsers()[K]?.sagex3, undefined, "identifiants effacés");
+    const again = await fetch(`${h.url}/api/test/sagex3`, { headers: { cookie: `mcp_key=${K}` } }).then((x) => x.json());
+    assert.match(again.error, /Non connecté à Sage X3/);
+    assert.equal(refusedCalls() - before, 1, "un seul essai au total");
+  } finally { await h.stop(); }
 });
 
 test("Sage X3 : une représentation absente du dossier (404) n'empêche pas le diagnostic ; aucune présente = erreur explicite", async () => {
@@ -434,9 +486,8 @@ test("Sage X3 : une représentation absente du dossier (404) n'empêche pas le d
   const none = await startHub({ upstreamUrl: up.url, env: { SAGE_REPRESENTATIONS: "NOPE" } });
   try {
     const cookie = `mcp_key=${(await fetch(`${none.url}/api/me`)).headers.get("set-cookie").match(/mcp_key=([^;]+)/)[1]}`;
-    await fetch(`${none.url}/api/sagex3/apikey`, { method: "POST", headers: { cookie, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "syr-key-alice" }) });
-    const d = await fetch(`${none.url}/api/test/sagex3`, { headers: { cookie } }).then((x) => x.json());
-    assert.equal(d.ok, false); assert.match(d.error, /aucune des représentations configurées \(NOPE\)/);
+    const r = await fetch(`${none.url}/api/sagex3/apikey`, { method: "POST", headers: { cookie, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "syr-key-alice" }) });
+    assert.equal(r.status, 502); assert.match((await r.json()).error, /aucune des représentations configurées \(NOPE\).*rien n'est enregistré/, "configuration à corriger par l'administrateur : signalée dès la saisie");
   } finally { await none.stop(); }
 });
 

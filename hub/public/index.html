@@ -141,6 +141,7 @@
   .field input { font:inherit; font-size:.9rem; min-height:36px; padding:6px 12px; border:1px solid var(--line-strong); border-radius:var(--r-sm); background:var(--bg); color:var(--ink); width:100% }
   .field input:focus-visible { outline:2px solid var(--accent); outline-offset:0; border-color:var(--accent) }
   .hint { font-size:.76rem; color:var(--muted); grid-column:1 / -1 }
+  .form-err { grid-column:1 / -1; margin:0; font-size:.85rem; color:var(--ko); background:var(--ko-soft); padding:var(--s2) var(--s3); border-radius:var(--r-sm) }
   .result:empty { display:none }
   .callout { display:flex; gap:var(--s3); align-items:flex-start; padding:var(--s2) var(--s3); border-radius:var(--r-sm); font-size:.84rem; line-height:1.45; word-break:break-word }
   .callout .icon { margin-top:1px }
@@ -485,13 +486,14 @@ function availability(id) {
 function appRow(s) {
   const t = TOOLS[s.id] || { icon: "plug", desc: "Application connectée" }, [cls, tag, why] = stateOf(s), id = esc(s.id);
   const oauthBtn = s.oauth && !s.mock && s.configured && !s.connected ? `<a class="btn primary" href="/auth/${esc(s.id)}">Se connecter</a>` : "";
-  const tokenBtn = s.apiKey && !s.connected && !oauthBtn ? `<button class="btn primary" type="button" onclick="toggle('${id}', true, true)">Saisir mon jeton</button>` : "";
+  const tokenBtn = s.apiKey && !s.connected && !oauthBtn ? `<button class="btn primary" type="button" onclick="toggle('${id}', true, true)">${s.apiKey.mode === "basic" ? "Saisir mes identifiants" : "Saisir mon jeton"}</button>` : "";
   const form = s.apiKey && !s.connected ? `
       <form class="apikey" autocomplete="off" onsubmit="saveApiKey(event, '${id}')">
         ${s.apiKey.mode === "basic" ? `<div class="field"><label for="${id}-login">Identifiant</label><input id="${id}-login" name="${id}-login" autocomplete="off" required></div>` : ""}
         <div class="field"><label for="${id}-apikey">${s.apiKey.mode === "basic" ? "Mot de passe" : "Jeton personnel"}</label><input id="${id}-apikey" name="${id}-apikey" type="password" autocomplete="new-password" required aria-describedby="${id}-hint"></div>
-        <button class="btn" type="submit">Enregistrer</button>
-        <p class="hint" id="${id}-hint">${esc(s.apiKey.label)}, chiffré par la passerelle et jamais réaffiché.</p>
+        <button class="btn" type="submit">Vérifier et enregistrer</button>
+        <p class="form-err" id="${id}-err" role="alert" hidden></p>
+        <p class="hint" id="${id}-hint">${esc(s.apiKey.label)}, vérifié auprès du système puis chiffré par la passerelle, jamais réaffiché.${s.apiKey.mode === "basic" ? ` <strong>${esc(s.label)} peut bloquer votre compte après quelques mots de passe erronés</strong> : chaque validation compte pour un essai, et la passerelle n'en transmet pas plus de deux par quart d'heure.` : ""}</p>
       </form>` : "";
   const links = [s.oauth && !s.mock && s.configured && s.connected ? `<a class="link" href="/auth/${esc(s.id)}">Reconnecter</a>` : "",
     s.connected ? `<button class="link" type="button" onclick="disconnect('${id}')">Déconnecter</button>` : ""].filter(Boolean).join("");
@@ -622,11 +624,18 @@ async function testAll(btn) { // un test après l'autre : le diagnostic est plaf
   for (const b of document.querySelectorAll("[data-test]")) await test(b.dataset.test, b);
   btn.disabled = false; loadStatus();
 }
-async function saveApiKey(e, id) {
+async function saveApiKey(e, id) { // vérifié par le système avant d'être enregistré : quelques secondes possibles
   e.preventDefault();
+  const btn = e.submitter || e.target.querySelector("button[type=submit]");
+  btn.disabled = true; btn.setAttribute("aria-busy", "true"); btn.textContent = "Vérification…";
   const body = { apiKey: $(`#${id}-apikey`).value, login: $(`#${id}-login`)?.value };
-  const r = await fetch("/api/" + id + "/apikey", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  if (!r.ok) return toast("Jeton refusé"); toast("Jeton enregistré"); open.delete(id); load();
+  const r = await fetch("/api/" + id + "/apikey", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
+  const j = r ? await r.json().catch(() => ({})) : {};
+  btn.disabled = false; btn.removeAttribute("aria-busy"); btn.textContent = "Vérifier et enregistrer";
+  const err = $(`#${id}-err`);
+  if (!r?.ok) { err.textContent = j.error || "Vérification impossible : réessayez."; err.hidden = false; return; } // reste affiché, lu par les lecteurs d'écran
+  err.hidden = true;
+  toast("Accès vérifié et enregistré"); open.delete(id); load();
 }
 async function disconnect(id) { await fetch("/api/disconnect/" + id, { method: "POST" }); load(); }
 async function rotateKey() { if (!confirm("Régénérer votre clé ? Les assistants configurés avec l'ancienne cesseront de fonctionner et devront être reconfigurés.")) return; await fetch("/api/key/rotate", { method: "POST" }); store.set("cfgCopied", ""); toast("Nouvelle clé générée"); load(); }

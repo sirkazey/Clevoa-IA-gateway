@@ -56,7 +56,7 @@ test("Mires OAuth : Marie se connecte à Salesforce, SharePoint, Dropbox et Sage
   assert.equal(me.email, "marie.dupont@charlois.com");
   assert.deepEqual(me.systems.map((s) => s.connected), [true, true, true, true, false]);
   const r = await fetch(`${hub.url}/api/myreport/apikey`, { method: "POST", headers: { cookie: marie.cookie, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "MR-MARIE-2026" }) });
-  assert.equal(r.status, 204);
+  assert.equal(r.status, 200, "jeton vérifié auprès du MyReport simulé avant l'enregistrement");
   for (const s of ["salesforce", "sagex3", "sharepoint", "dropbox", "myreport"]) { const d = await diag(marie, s); assert.equal(d.ok, true, `${s}: ${JSON.stringify(d)}`); }
 });
 
@@ -97,12 +97,14 @@ test("Sage X3 canin : factures Royal Canin Pro, axes analytiques race, YFAC en r
 
   // Paul : clé d'API personnelle en Basic (login:clé), droits restreints côté Sage
   const k = await fetch(`${hub.url}/api/sagex3/apikey`, { method: "POST", headers: { cookie: paul.cookie, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "SYR-PAUL-2026", login: "PMARTIN" }) });
-  assert.equal(k.status, 204);
+  assert.equal(k.status, 200, "vérifiée auprès de Syracuse simulé, malgré la représentation interdite (403) à Paul");
   const ok = text(await paul.mcp.callTool({ name: "sagex3_query", arguments: { representation: "ZVENTE" } })); assert.equal(ok.length, 3);
   const ko = await paul.mcp.callTool({ name: "sagex3_query", arguments: { representation: "PINVOICE" } });
   assert.equal(ko.isError, true); assert.match(ko.content[0].text, /Sage X3 403/);
   const bad = await fetch(`${hub.url}/api/sagex3/apikey`, { method: "POST", headers: { cookie: paul.cookie, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "SYR-FAUSSE", login: "PMARTIN" }) });
-  assert.equal(bad.status, 204); const d = await diag(paul, "sagex3"); assert.equal(d.ok, false); assert.match(d.error, /401/);
+  // Mauvais mot de passe : refusé à la saisie, rien n'est enregistré, la connexion valide de Paul reste en place
+  assert.equal(bad.status, 400); assert.match((await bad.json()).error, /^Sage X3 a refusé .* \(401\) : rien n'est enregistré\.$/);
+  const d = await diag(paul, "sagex3"); assert.equal(d.ok, true, JSON.stringify(d));
 });
 
 test("SharePoint canin : bilans Excel (binaire → métadonnées), CSV lisible, dossier Confidentiel refusé à Paul", async () => {

@@ -19,7 +19,9 @@ import * as db from "./db.js";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { rateLimit, MemoryStore } from "express-rate-limit"; // déjà fourni par le SDK MCP (même version) : toutes les limites de débit du hub
 import { VERSION, APP_ENV, IS_PROD } from "./version.js";
+import * as resolve from "./resolve.js";
 
+resolve.install(); // IPv4 d'abord pour les appels sortants (resolve.js : musl et DNS de Docker Desktop)
 const PORT = process.env.PORT || 8080;
 const debug = process.env.LOG_LEVEL === "debug" ? (...a) => console.log("[debug]", ...a) : () => {};
 // Verrou production : l'URL publique doit être en https (cookie Secure, callbacks OAuth), sauf test local.
@@ -59,11 +61,23 @@ const cookieKey = (req) => req.headers.cookie?.match(/(?:^|;\s*)mcp_key=([^;]+)/
 const mcpKey = (req) => req.headers.authorization?.match(/^Bearer\s+(\S+)$/i)?.[1];
 // Avec le SSO, une clé n'est utilisable qu'une fois liée à une identité Entra (une clé temporaire de navigateur ne l'est pas).
 const user = (key) => { const u = store.get(key); return u && (!sso.MODE || u.sso) ? u : null; };
-const requireKey = (read) => (req, res, next) => {
+const requireKey = (read, onRefused) => (req, res, next) => {
   req.key = read(req);
   if (user(req.key)) return next(); // une clé valide n'est jamais freinée par les échecs d'autres clients de la même IP
+  onRefused?.(req);
   authFailures(req, res, () => res.status(401).json({ error: "Clé MCP inconnue ou absente : utilisez l'en-tête Authorization: Bearer <clé> obtenue sur le portail." }));
 };
+// Clé refusée sur les routes MCP (assistant branché avec une clé périmée : régénération, activation du SSO) : une ligne de journal
+// tout de suite, puis le cumul de la minute ; jamais la clé, seulement le nombre d'appels et les adresses d'origine.
+let mcpRefused = null; // { n, ips } en attente de journal
+const logMcpRefused = (n, ips) => console.error(`[mcp] clé refusée (401) : ${n} appel${n > 1 ? "s" : ""} depuis ${[...ips].slice(0, 5).join(", ")}${sso.MODE
+  ? " ; SSO actif : seule la clé liée à l'identité Entra est acceptée, à recopier depuis le portail (« Brancher mon assistant »)" : " ; clé à recopier depuis le portail (« Brancher mon assistant »)"}`);
+function noteMcpRefused(req) {
+  if (mcpRefused) { mcpRefused.n++; mcpRefused.ips.add(req.ip); return; }
+  logMcpRefused(1, [req.ip]);
+  mcpRefused = { n: 0, ips: new Set() };
+  setTimeout(() => { const r = mcpRefused; mcpRefused = null; if (r.n) logMcpRefused(r.n, r.ips); }, 60_000).unref();
+}
 const portalUser = requireKey(cookieKey);
 // Tout appel MCP authentifié marque l'assistant comme branché ; une écriture impossible (disque plein) ne bloque jamais l'appel.
 const seen = (req, _res, next) => { try { store.assistantSeen(req.key); } catch (e) { console.error(`[store] dernier usage non enregistré : ${e.code ?? e.message}`); } next(); };
@@ -75,7 +89,7 @@ const mcpRate = rateLimit({ windowMs: 60_000, limit: MCP_PER_MIN, standardHeader
   skip: (req) => !user(mcpKey(req)),
   keyGenerator: (req) => createHash("sha256").update(mcpKey(req)).digest("base64url"), // empreinte : jamais la clé en mémoire du limiteur
   message: { error: `Trop de requêtes avec cette clé (${MCP_PER_MIN} par minute) : réessayez dans une minute.` } });
-const mcpAuth = requireKey(mcpKey);
+const mcpAuth = requireKey(mcpKey, noteMcpRefused);
 // Les POST du portail changent l'état du collaborateur : un navigateur qui annonce une autre origine (formulaire d'un site frère sous le
 // même domaine, que SameSite=Lax laisse passer) est refusé. Les clients MCP n'appellent pas ces routes.
 const ORIGIN = new URL(PUBLIC_URL).origin;
@@ -203,15 +217,35 @@ app.post("/api/disconnect/:system", limit("portal", 30), sameOrigin, portalUser,
   if (!byId[req.params.system]) return res.sendStatus(404);
   store.clearTokens(req.key, req.params.system); res.sendStatus(204);
 });
-// Jeton personnel (clé d'API Syracuse, jeton MyReport…) saisi par l'utilisateur : remplace son entrée pour ce système.
-app.post("/api/:system/apikey", limit("portal", 30), sameOrigin, portalUser, (req, res) => {
+// Jeton personnel (identifiant et mot de passe Syracuse, clé d'API, jeton MyReport…) saisi par l'utilisateur : vérifié auprès du
+// système par le même appel que « Tester », puis enregistré seulement s'il est accepté. Refusé (401/403) ou système injoignable :
+// rien n'est enregistré et la connexion précédente reste en place. Deux refus en 15 minutes pour un collaborateur et un système :
+// plus aucun essai transmis jusqu'à la fin du quart d'heure (Syracuse bloque le compte après quelques échecs, 3 chez Charlois).
+const REFUSALS_MAX = 2, REFUSALS_WINDOW = 15 * 60_000;
+const refusals = new Map(); // "clé|système" -> dates des refus récents
+const recentRefusals = (id) => (refusals.get(id) || []).filter((t) => t > Date.now() - REFUSALS_WINDOW);
+app.post("/api/:system/apikey", limit("portal", 30), sameOrigin, portalUser, async (req, res) => {
   const c = byId[req.params.system];
   if (!c?.apiKey) return res.sendStatus(404);
   const apiKey = String(req.body?.apiKey || "").trim(), login = String(req.body?.login || "").trim();
   if (!apiKey) return res.status(400).json({ error: "Jeton vide" });
+  const rid = `${req.key}|${c.id}`;
+  if (recentRefusals(rid).length >= REFUSALS_MAX) return res.status(429).json({ error: `${REFUSALS_MAX} essais refusés par ${c.label} en 15 minutes : rien n'est transmis pour ne pas bloquer votre compte. Vérifiez votre ${c.apiKey.mode === "basic" ? "mot de passe" : "jeton"} directement dans ${c.label}, puis réessayez dans un quart d'heure.` });
+  if (c.maxPerMinute && (await upstream.increment(c.id)).totalHits > c.maxPerMinute) return res.status(429).json({ error: `${c.label} : plafond de ${c.maxPerMinute} appels par minute atteint, réessayez dans un instant.` });
+  const tok = { apiKey, ...(login ? { login } : {}) };
+  let checked;
+  try { checked = await c.ping(tok, () => c.schema(tok)); }
+  catch (e) {
+    if (e.status === 401 || e.status === 403) {
+      refusals.set(rid, [...recentRefusals(rid), Date.now()]);
+      return res.status(400).json({ error: `${c.label} a refusé ${c.apiKey.mode === "basic" ? "cet identifiant ou ce mot de passe" : "ce jeton"} (${e.status}) : rien n'est enregistré.` });
+    }
+    return res.status(502).json({ error: `${e.message.slice(0, 300)} · Vérification impossible, rien n'est enregistré : réessayez.` });
+  }
+  refusals.delete(rid);
   store.clearTokens(req.key, c.id);
-  store.setTokens(req.key, c.id, { apiKey, ...(login ? { login } : {}) });
-  res.sendStatus(204);
+  store.setTokens(req.key, c.id, tok);
+  res.json({ ok: true, message: checked.message });
 });
 // Diagnostic : un appel minimal au système avec le jeton de l'utilisateur (ou le simulateur).
 app.get("/api/test/:system", limit("diag", 20), portalUser, async (req, res) => {

@@ -53,11 +53,13 @@ services:
       SAGE_FOLDER: ${SAGE_FOLDER:-PROD}
       SAGE_REPRESENTATIONS: ${SAGE_REPRESENTATIONS:-YFAC,ZVENTE,BPCUSTOMER,PINVOICE,GACCENTRY}
       SAGE_APIKEY_MODE: ${SAGE_APIKEY_MODE:-basic}
-      SAGE_OAUTH_AUTH_URL: ${SAGE_OAUTH_AUTH_URL:-http://mcp-stub:4000/oauth/authorize}
-      SAGE_OAUTH_TOKEN_URL: ${SAGE_OAUTH_TOKEN_URL:-http://mcp-stub:4000/oauth/token}
-      SAGE_OAUTH_USERINFO_URL: ${SAGE_OAUTH_USERINFO_URL:-http://mcp-stub:4000/oauth/userinfo}
-      SAGE_OAUTH_CLIENT_ID: ${SAGE_OAUTH_CLIENT_ID:-stub}
-      SAGE_OAUTH_CLIENT_SECRET: ${SAGE_OAUTH_CLIENT_SECRET:-stub}
+      # OAuth de Sage : IdP du bouchon seulement si ces variables sont ABSENTES de .env (« - » et non « :- ») ; présentes et vides
+      # = pas d'OAuth, le portail propose l'identifiant et le mot de passe Syracuse (mode vérifié avec un vrai SAGE_URL).
+      SAGE_OAUTH_AUTH_URL: ${SAGE_OAUTH_AUTH_URL-http://mcp-stub:4000/oauth/authorize}
+      SAGE_OAUTH_TOKEN_URL: ${SAGE_OAUTH_TOKEN_URL-http://mcp-stub:4000/oauth/token}
+      SAGE_OAUTH_USERINFO_URL: ${SAGE_OAUTH_USERINFO_URL-http://mcp-stub:4000/oauth/userinfo}
+      SAGE_OAUTH_CLIENT_ID: ${SAGE_OAUTH_CLIENT_ID-stub}
+      SAGE_OAUTH_CLIENT_SECRET: ${SAGE_OAUTH_CLIENT_SECRET-stub}
       MYREPORT_MCP_URL: ${MYREPORT_MCP_URL:-http://mcp-stub:4000/myreport/sse}
       MYREPORT_TOOLS: ${MYREPORT_TOOLS:-liste_indicateurs,synthese_couts_par_race,valeur_indicateur}
       CLEVOA_URL: ${CLEVOA_URL:-http://mcp-stub:4000/api/v1/telemetry}
