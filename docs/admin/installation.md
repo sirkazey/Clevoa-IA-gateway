@@ -149,8 +149,9 @@ Multi-client : chaque installation a sa stack, ses variables (`MCP_SERVER_NAME`,
 secrets (`ENCRYPTION_KEY`, `CLEVOA_KEY`), son volume et son identifiant d'installation. Aucune branche ni fork par
 client ; un connecteur demandé par un client reste désactivé tant qu'il n'est pas configuré.
 
-Tags publiés au 24/10/2026 : `v1.2.0`, `v1.2.1`, `v1.3.0`, `v1.3.1` (la 1.0.0 n'est pas publiée sur GitHub, la 1.1.0 n'a
-pas de tag). Version candidate en cours : `1.3.2-rc.2`, tag à créer par Clevoa. Suivi du backlog : issues GitHub
+Tags publiés au 26/10/2026 : `v1.2.0`, `v1.2.1`, `v1.3.0`, `v1.3.1`, `v1.3.2-rc.1`, `v1.3.2-rc.2`, `v1.4.0-rc.1`,
+`v1.4.0-rc.2`, `v1.5.0-rc.1` (la 1.0.0 n'est pas publiée sur GitHub, la 1.1.0 n'a pas de tag). Version en cours : `1.5.0`,
+tag à créer par Clevoa. Suivi du backlog : issues GitHub
 (modèles « Bug » et « Évolution ») et milestones par version.
 
 ## 7. Première mise en service auprès des collaborateurs
