@@ -20,8 +20,9 @@ le cloisonnement entre deux collaborateurs réels reste à vérifier
 
 ## Mode `entra` : ce qu'il faut dans Entra ID
 
-Une seule application Entra ID sert SharePoint et le SSO ([configuration § 3](configuration.md#3-sharepoint--onedrive-microsoft-graph--à-vérifier-sur-un-vrai-locataire)).
-Les libellés ci-dessous décrivent le portail Entra de mémoire : **à vérifier**. Seuls les URI de redirection, le format
+Une seule application Entra ID sert SharePoint et le SSO ([configuration § 3](configuration.md#3-sharepoint--onedrive-microsoft-graph--vérifié-en-pré-production-un-compte)).
+Les libellés ci-dessous décrivent le portail Entra : **à vérifier** (application créée le 26/10/2026 sur le
+locataire Charlois). Seuls les URI de redirection, le format
 GUID du locataire et les scopes sont imposés par le code.
 
 | Dans le portail Entra (Inscriptions d'applications → l'application) | Valeur |
@@ -81,6 +82,8 @@ verrous) et `clevoa-mcp-stub/test/stub.test.js` (bout en bout).
 * **Activer le SSO sur une instance existante invalide toutes les clés créées sans identité** : chaque collaborateur
   se reconnecte, reçoit une clé neuve, reconnecte ses systèmes et reconfigure son client MCP. Une clé antérieure au
   SSO n'est jamais reprise : elle pourrait porter les jetons de quelqu'un d'autre. Voir la bascule ci-dessous.
+* Tout compte du locataire peut ouvrir le portail et obtenir une clé. Les droits sur les données restent ceux de
+  chaque système, avec les identifiants personnels du collaborateur.
 
 ## Bascule d'une instance existante vers le SSO
 
@@ -93,5 +96,3 @@ et il n'affichait qu'un message générique (« The connector returned an error 
    (« Brancher mon assistant ») dans son assistant et le redémarre complètement.
 4. Suivre le journal : `[mcp] clé refusée (401) : N appels depuis <adresse>` signale un assistant resté sur une ancienne
    clé (une ligne tout de suite, puis le cumul de chaque minute ; jamais la clé).
-* Tout compte du locataire peut ouvrir le portail et obtenir une clé. Les droits sur les données restent ceux de
-  chaque système, avec les identifiants personnels du collaborateur.

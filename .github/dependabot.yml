@@ -20,7 +20,7 @@ updates:
     cooldown: { default-days: 7 }
     groups:
       # Une seule PR pour les trois Dockerfile : release.test.js exige la même empreinte partout. docker-compose.yml (sauvegarde)
-      # et ops/backup.sh / ops/restore.sh portent aussi l'empreinte : à reporter à la main dans la même PR.
+      # et ops/backup.sh, ops/restore.sh, ops/test-backup-restore.sh portent aussi l'empreinte : à reporter à la main dans la même PR.
       node-base: { patterns: ["node"] }
     ignore:
       # Changement de version majeure de Node : décision du projet, uniquement vers une version LTS (paire), jamais proposé

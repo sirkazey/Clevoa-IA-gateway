@@ -1,17 +1,20 @@
 # Roadmap produit
 
-Public : direction, Clevoa, DSI cliente. Objet : ce sur quoi le produit évolue après le gel fonctionnel de la
-version 1.3.1, et ce qu'il ne deviendra pas. Seule roadmap active ; les feuilles de route antérieures sont des archives
+Public : direction, Clevoa, DSI cliente. Objet : ce sur quoi le produit évolue après le gel fonctionnel à la
+version 1.3.1, sauf décisions datées du 2026-10-25 (1.4 : portail et supervision ; 1.5 : base d'exploitation et
+audit), et ce qu'il ne deviendra pas. Seule roadmap active ; les feuilles de route antérieures sont des archives
 ([octobre 2026](history/roadmap-2026-10.md)). Décision : [décisions du 2026-10-24](history/decisions.md).
 
-État au 24 octobre 2026 : **aucune instance n'est déployée chez un client**. Les fonctionnalités sont développées et
-testées automatiquement ; Sage X3 et Salesforce ont été exercés sur la préproduction et la sandbox du Groupe Charlois.
+État au 26 octobre 2026 : **aucune instance n'est déployée chez un client**. Les fonctionnalités sont développées et
+testées automatiquement ; Sage X3 et Salesforce ont été exercés sur la préproduction et la sandbox du Groupe Charlois,
+SharePoint et le SSO Entra ID sur son locataire, avec un seul compte.
 Le statut exact de chaque fonction est dans [l'état des fonctionnalités](validation/etat-des-fonctionnalites.md).
 
 ## 1. Cadre
 
 Le périmètre fonctionnel de la 1.3.1 est **gelé** : connecteurs Salesforce, Sage X3, SharePoint / OneDrive, Dropbox et
-MyReport, portail, SSO Entra ID, sauvegarde et restauration, télémétrie éditeur. Le produit évolue pour :
+MyReport, portail, SSO Entra ID, sauvegarde et restauration, télémétrie éditeur. Exceptions : décisions datées du
+2026-10-25 (1.4 : portail et supervision ; 1.5 : base d'exploitation et audit). Le produit évolue pour :
 
 1. corriger des anomalies ;
 2. améliorer la sécurité ;
@@ -35,7 +38,7 @@ fonction.
 
 | Sujet | Statut | Critère de sortie |
 |---|---|---|
-| Tests réels des connecteurs SharePoint, Dropbox, MyReport | à faire | un appel réussi par outil sur un vrai compte, consigné dans le [journal](validation/journal-tests-reels.md) |
+| Tests réels des connecteurs SharePoint (connexion et sites vérifiés, E1–E8 ; list, search, read restants), Dropbox, MyReport | à faire | un appel réussi par outil sur un vrai compte, consigné dans le [journal](validation/journal-tests-reels.md) |
 | Cloisonnement avec des comptes non administrateurs (Sage X3, Salesforce) | à faire | un compte restreint ne voit que ses données, preuve consignée |
 | Authentification et révocation (expiration du jeton Salesforce, mot de passe Syracuse changé, SSO `entra`) | à faire | voyant rouge et message de reconnexion constatés sur chaque système |
 | Sauvegarde et restauration sur un serveur du client | à faire | une restauration réelle, puis une par trimestre ([exploitation](admin/exploitation.md)) |
@@ -57,7 +60,7 @@ l'administrateur du client garde la main sur son déploiement. Aucun accès de C
 | Statistiques par connecteur toutes les 6 h, e-mails d'incident seulement (ouverture, fermeture), console de suivi en lecture seule sur le NAS de Clevoa ([décision du 2026-10-25](history/decisions.md)) | fait (tests sans AWS, console en démonstration et en conteneur) ; redéploiement du backend et installation de la console à faire | [console](../clevoa-console/README.md), [backend](../clevoa-backend/README.md) ; premier incident réel reçu par e-mail et visible dans la console |
 | État des systèmes sur le portail (appels réels et vérification de joignabilité sans identifiant, en semaine de 7 h à 19 h) et supervision du hub par `/metrics` ([décision du 2026-10-25](history/decisions.md)) | fait en 1.4.0-rc.1 (tests sur bouchon) ; à brancher sur la supervision de Charlois | [exploitation § 11](admin/exploitation.md#11-supervision-du-hub) ; un incident réel vu sur le portail et dans la supervision |
 | Diagnostic exportable, relu par l'administrateur avant envoi | fait | [exploitation § 9](admin/exploitation.md#9-diagnostic-et-support) ; test automatisé de l'absence de valeur sensible |
-| Publication de versions figées (tag Git, image de base par empreinte) et déploiement d'une version choisie | fait (procédure) ; tag `v1.3.2-rc.2` et protection des tags `v*` à poser | [installation § 6](admin/installation.md#6-cycle-de-livraison-et-versions), `hub/test/release.test.js` |
+| Publication de versions figées (tag Git, image de base par empreinte) et déploiement d'une version choisie | fait (procédure) ; protection des tags `v*` à poser | [installation § 6](admin/installation.md#6-cycle-de-livraison-et-versions), `hub/test/release.test.js` |
 | Retour arrière à la version précédente | fait (testé en local et en CI) | [exploitation § 10](admin/exploitation.md#10-mise-à-jour-et-retour-arrière), `ops/test-rollback.sh` |
 | Suivi des versions du SDK MCP et des dépendances | à faire, à chaque version | `npm audit` et Trivy sans vulnérabilité haute ou critique corrigeable |
 

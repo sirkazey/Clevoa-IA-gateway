@@ -107,8 +107,8 @@ ces composants pris isolément.
 | `mcp-remote` (exécuté sur le poste du collaborateur via `npx`, non distribué dans le dépôt) | pont pour Claude Desktop | à vérifier sur le registre npm |
 | Outils d'analyse exécutés en intégration continue (Semgrep, CodeQL, Gitleaks, Trivy, ZAP) | contrôle qualité, non distribués | licences propres à chaque outil, soumises à leurs conditions d'usage |
 
-Inventaire effectué le 24 octobre 2026 sur les dépendances de production de `hub/package-lock.json` (91 paquets : MIT,
-ISC, BSD-2-Clause, BSD-3-Clause ; aucune licence copyleft). Le bouchon d'entreprise utilise les mêmes bibliothèques ; le
+Inventaire des dépendances de production de `hub/package-lock.json` : voir le SBOM de la CI (licences MIT, ISC,
+BSD-2-Clause, BSD-3-Clause au 24 octobre 2026 ; aucune licence copyleft). Le bouchon d'entreprise utilise les mêmes bibliothèques ; le
 backend de télémétrie n'a aucune dépendance. Les fichiers `package-lock.json` font foi pour les versions exactes.
 
 ## 9. Garantie et responsabilité

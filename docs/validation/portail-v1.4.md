@@ -63,7 +63,7 @@ Téléphone :
 
 ![Téléphone](portail-v1.4/3-mobile.png)
 
-Avant, pour comparaison : [portail 1.3.1](portail-v1.3.1/2-outils-connectes-desktop.png).
+Avant, pour comparaison : [portail 1.3.1](../history/portail-v1.3.1/2-outils-connectes-desktop.png).
 
 ## Revues indépendantes
 

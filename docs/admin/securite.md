@@ -84,7 +84,7 @@ hub : journal `[telemetry] échec`, rien d'autre.
 de plus de 8 Ko) :
 
 ```json
-{ "installation": "3f1c2a4e-8b7d-4c1e-9a2b-5d6e7f8a9b0c", "version": "1.3.2", "env": "PRODUCTION", "date": "2026-10-24",
+{ "installation": "3f1c2a4e-8b7d-4c1e-9a2b-5d6e7f8a9b0c", "version": "1.5.0", "env": "PRODUCTION", "date": "2026-10-24",
   "connectors": { "salesforce": true, "sagex3": false, "sharepoint": true, "dropbox": true, "myreport": false },
   "requests": 137, "seats": 9, "since": "2026-10-24T03:00:00.000Z",
   "stats": { "salesforce": { "calls": 120, "errors": { "auth": 0, "quota": 0, "timeout": 1, "unreachable": 0, "other": 0, "user": 3 },

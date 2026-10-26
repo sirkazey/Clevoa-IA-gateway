@@ -1,6 +1,6 @@
 # État des fonctionnalités et limites connues
 
-Version 1.5.0, publiée le 26/10/2026 sans avoir passé le cloisonnement avec un compte non administrateur, le déploiement sur un serveur de pré-production ni une restauration réelle : à faire avant toute production (Node 24 ; base d'exploitation SQLite : disponibilité, usage, journal d'audit facultatif ; OpenID Connect et limites de débit par des composants éprouvés). Statuts selon [les conventions](../CONTRIBUTING.md#statut-des-fonctionnalités) : **disponible** (vérifié
+Version 1.5.1 (correctifs d'audit de la 1.5.0 du 26/10/2026), toujours sans avoir passé le cloisonnement avec un compte non administrateur, le déploiement sur un serveur de pré-production ni une restauration réelle : à faire avant toute production (Node 24 ; base d'exploitation SQLite : disponibilité, usage, journal d'audit facultatif ; OpenID Connect et limites de débit par des composants éprouvés). Statuts selon [les conventions](../CONTRIBUTING.md#statut-des-fonctionnalités) : **disponible** (vérifié
 sur le système réel), **testé sur bouchon** (tests automatisés et simulateur seulement), **expérimental**, **prévu**, **non planifié**.
 Évolutions : [roadmap produit](../roadmap-produit.md). Preuves : [journal des tests réels](journal-tests-reels.md), [campagne de charge](charge-v1.2.1.md), CI.
 
@@ -15,7 +15,7 @@ sur le système réel), **testé sur bouchon** (tests automatisés et simulateur
 | Dropbox (serveur MCP officiel) | testé sur bouchon | tests hub, bouchon aligné sur les schémas du serveur officiel (22/10/2026) | acceptation par `mcp.dropbox.com` d'un jeton d'app tierce |
 | MyReport (proxy MCP SSE) | testé sur bouchon | plomberie SSE et liste blanche seulement | serveur MCP de l'éditeur, non livré ; outils réels inconnus |
 | SSO Microsoft Entra ID (`entra`) | disponible (pré-prod, un compte) | locataire Charlois, 26/10/2026 ([E5–E8](journal-tests-reels.md)) ; `hub/test/sso.test.js` | cloisonnement entre deux collaborateurs réels ; compte invité |
-| Portail, diagnostic, blocs de configuration, exemples de questions | disponible | usage quotidien en préproduction ; refonte v1.3.1 validée sur bouchon ([compte rendu](portail-v1.3.1.md)) | revue sur le portail de préproduction réel |
+| Portail, diagnostic, blocs de configuration, exemples de questions | disponible | usage quotidien en préproduction ; refonte v1.3.1 validée sur bouchon ([compte rendu](../history/portail-v1.3.1.md)) | revue sur le portail de préproduction réel |
 | Portail 1.4.0 : une ligne par application par domaine, colonne « Service », assistant en colonne, questions par domaine | testé sur bouchon | tests du portail, captures et axe-core sur bouchon ([compte rendu](portail-v1.4.md)) | revue par des collaborateurs sur la préproduction réelle |
 | Comptages exacts : aucun `LIMIT` ajouté aux agrégats SOQL ; listes coupées signalées au modèle (Salesforce, Sage X3) | testé sur bouchon | `mcp.test.js` | « combien de comptes » sur la sandbox (16 610 attendus) ; format réel de la réponse SObject Reads pour l'avertissement ; `$links.$next` de Syracuse sur une longue liste |
 | Base d'exploitation `hub.db` : disponibilité sur 30 jours (portail, supervision), usage mensuel, outil `admin.js` | testé sur bouchon | `db.test.js` | quelques semaines de fonctionnement en pré-production ; chiffres de disponibilité comparés à la supervision de Charlois |
@@ -38,7 +38,7 @@ sur le système réel), **testé sur bouchon** (tests automatisés et simulateur
 | Incidents et e-mails (erreurs du système, authentification refusée pour tous, silence de 14 h), à l'ouverture et à la fermeture seulement | testé sur bouchon | tests backend avec un envoi SNS simulé | sujet SNS abonné, premier incident réel reçu |
 | Console de suivi Clevoa (installations, incidents, graphiques sur 30 jours), en lecture seule | testé sur bouchon | tests sur données de démonstration ; image Docker construite et lancée en démonstration, refus propre avec de faux identifiants AWS | table réelle, utilisateur IAM de lecture, installation sur le NAS |
 | Capacité 50 collaborateurs | démontrée sur bouchons | [campagne de charge](charge-v1.2.1.md) | recette de charge sur la préproduction réelle |
-| Mini-portail d'administration, santé des connecteurs, tableau de bord graphique, connecteurs MCP déclaratifs | non planifié | gel fonctionnel de la 1.3.1 ([roadmap](../roadmap-produit.md#5-hors-roadmap)) | |
+| Mini-portail d'administration, connecteurs MCP déclaratifs | non planifié | gel fonctionnel de la 1.3.1 ([roadmap](../roadmap-produit.md#5-hors-roadmap)) | |
 
 ## 2. Limites connues
 
@@ -58,7 +58,8 @@ sur le système réel), **testé sur bouchon** (tests automatisés et simulateur
 * **Délais d'attente amont** : explicite pour Sage X3 seulement (30 s par requête) ; SharePoint (Graph) et les proxys
   MCP (Salesforce, Dropbox, MyReport) s'en remettent aux délais par défaut de Node et du client du SDK MCP ; non mesurés
   sur les systèmes réels.
-* **Routes MCP non plafonnées** par clé : un client emballé peut saturer un backend réel.
+* **Routes MCP** : plafond de 300 requêtes par minute et par clé (1.5) ; plafond par système seulement pour MyReport
+  et Salesforce.
 * **Mémoire** : stable sur 27 minutes de charge (RSS ≤ 132 Mo), non démontrée sur une journée.
 * **Capacité réelle** : latences et quotas des systèmes réels non mesurés ; throttling Graph 429 non testé.
 * **Claude.ai web et mobile** non pris en charge (pas d'en-tête d'autorisation possible, hub interne).
@@ -83,5 +84,5 @@ sur le système réel), **testé sur bouchon** (tests automatisés et simulateur
 | Comparaison croisée Sage + Salesforce dans une même réponse | vérifie la consigne par défaut du serveur MCP | |
 | Claude Code, ChatGPT, Copilot : une session réelle chacun, consignée au journal | seul Claude Desktop est prouvé ; les autres ne sont testés qu'au niveau du protocole | poste avec l'assistant, clé MCP |
 | Backend de télémétrie déployé sur AWS (DynamoDB, SNS, rapport horaire) et `clevoa.fr`, console sur le NAS de Clevoa | testé localement sans AWS | compte AWS Clevoa, nom de domaine, validation juridique |
-| Mise à jour puis retour arrière sur la pré-production du client, depuis Portainer (référence de tag) | testé en CI et en local, jamais sous Portainer | tag `v1.3.2-rc.2` créé, stack reconfigurée sur un tag |
+| Mise à jour puis retour arrière sur la pré-production du client, depuis Portainer (référence de tag) | testé en CI et en local, jamais sous Portainer | tag de la version à recetter, stack reconfigurée sur un tag |
 | Diagnostic exporté depuis l'installation du client et relu | exécuté sur la stack pré-prod locale seulement | accès administrateur au serveur |

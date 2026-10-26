@@ -7,6 +7,21 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
+## [1.5.1] – 2026-10-26
+
+Version corrective issue de l'audit complet du dépôt (code, scripts, CI, documentation) : aucune fonction nouvelle, aucune
+variable à ajouter ; une base `hub.db` créée par la 1.5.0 est convertie au premier démarrage (une seule fois, quelques secondes).
+
+### Corrigé
+- Base d'exploitation : `auto_vacuum` fixé avant le mode WAL, sinon jamais appliqué (base qui ne rétrécissait pas) ; les lectures en échec ne comptent plus comme des écritures en échec dans la supervision.
+- Cache de structure : deux questions simultanées ne lancent plus deux chargements, un échec n'est plus gardé jusqu'à la coupure nocturne, et une nouvelle connexion ou de nouveaux identifiants l'invalident.
+- Appels sortants sans délai maximal (échange de jeton, profil Salesforce et Sage, Graph) bornés ; deux vérifications d'identifiants simultanées ne peuvent plus dépasser le plafond de deux refus par quart d'heure.
+
+### Modifié
+- Clés anonymes jamais connectées (visiteurs, robots) oubliées de la mémoire du hub après 24 h ; message clair quand la session du portail a expiré.
+- Durcissement du conteneur (utilisateur, système de fichiers en lecture seule, capacités) porté par la base Compose : la démonstration et le scan ZAP l'ont aussi ; bouchon : `redirect_uri` limitée à http(s).
+- Documentation alignée sur le code (tests réels du 26/10, instantané toutes les 6 h, plafonds, messages « Action requise ») ; comptes rendus clos déplacés dans `docs/history/`.
+
 ## [1.5.0] – 2026-10-26
 
 Version 1.5 : contenu de la 1.5.0-rc.1, plus les correctifs constatés aux premiers tests réels de SharePoint et du SSO Entra
@@ -91,7 +106,7 @@ d'outil MCP, de connecteur ni de portail côté client. Les hubs en 1.3.2-rc.1 r
 ## [1.3.2-rc.1] – 2026-10-24
 
 Version candidate (non qualifiée pour la production) : socle de maintenance, sans nouvelle fonction métier (périmètre
-gelé à la 1.3.1). La 1.3.2 sera publiée après la recette sur l'installation du premier client. Compte rendu : `docs/validation/stabilisation-2026-10.md`.
+gelé à la 1.3.1). La 1.3.2 sera publiée après la recette sur l'installation du premier client. Compte rendu : `docs/history/stabilisation-2026-10.md`.
 
 ### Ajouté
 - Télémétrie : identifiant aléatoire d'installation (conservé dans `users.json` chiffré), délai de 10 s par envoi, avertissement dans les journaux quand Clevoa annonce une version minimale supérieure.
@@ -109,7 +124,7 @@ gelé à la 1.3.1). La 1.3.2 sera publiée après la recette sur l'installation 
 ## [1.3.1] – 2026-10-24
 
 Refonte graphique et ergonomique du portail aux couleurs Clevoa. Aucun changement de route, d'API, de SSO, de logique MCP
-ni de connecteur. Validation et captures avant/après : `docs/validation/portail-v1.3.1.md`.
+ni de connecteur. Validation et captures avant/après : `docs/history/portail-v1.3.1.md`.
 
 ### Modifié
 - Portail : charte du kit officiel Clevoa (logos SVG fond clair et sombre, favicons, police Outfit servie par le hub), dans l'esprit du site SOCLE.SI ; progression en trois étapes avec la prochaine action ; une carte par outil (état, connexion, jeton, test et résultat) et « Tout tester » ; configuration de l'assistant en onglets, clé masquée à l'écran et copiée en entier ; écrans dédiés « connexion Microsoft » (SSO) et « passerelle injoignable » ; configuration de l'instance repliable ; thème sombre avec le logo adapté.
@@ -211,5 +226,3 @@ Première version déployable de Charlois AI Gateway.
 - **Sécurité** : `users.json` chiffré AES-256-GCM (`ENCRYPTION_KEY`), clé MCP acceptée uniquement en `Authorization: Bearer`, limitation de débit par IP, anti login-CSRF, conteneur non root en lecture seule.
 - **Exploitation** : stacks Portainer pré-prod (`dev`) et prod (`main`) par `extends`, télémétrie Clevoa anonyme quotidienne, backend AWS Lambda `clevoa-backend/`.
 - **Tests** : 48 tests `node:test` contre des mocks, verts en pré-prod et en production.
-
-[1.0.0]: https://github.com/sirkazey/Clevoa-IA-gateway/releases/tag/v1.0.0
