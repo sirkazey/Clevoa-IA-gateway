@@ -228,8 +228,9 @@ app.post("/api/logout", limit("portal", 30), sameOrigin, portalUser, (_req, res)
   res.json({ next: sso.MODE ? sso.logoutUrl : "/" });
 });
 app.post("/api/disconnect/:system", limit("portal", 30), sameOrigin, portalUser, (req, res) => {
-  if (!byId[req.params.system]) return res.sendStatus(404);
-  store.clearTokens(req.key, req.params.system); res.sendStatus(204);
+  const c = byId[req.params.system]; // liste blanche sans prototype : seul l'identifiant du connecteur atteint le store
+  if (!c) return res.sendStatus(404);
+  store.clearTokens(req.key, c.id); res.sendStatus(204);
 });
 // Jeton personnel (identifiant et mot de passe Syracuse, clé d'API, jeton MyReport…) saisi par l'utilisateur : vérifié auprès du
 // système par le même appel que « Tester », puis enregistré seulement s'il est accepté. Refusé (401/403) ou système injoignable :
