@@ -80,6 +80,18 @@ verrous) et `clevoa-mcp-stub/test/stub.test.js` (bout en bout).
   cessent de se renouveler. Au départ d'un collaborateur : [exploitation § 8](exploitation.md#8-départ-dun-collaborateur-clé-compromise).
 * **Activer le SSO sur une instance existante invalide toutes les clés créées sans identité** : chaque collaborateur
   se reconnecte, reçoit une clé neuve, reconnecte ses systèmes et reconfigure son client MCP. Une clé antérieure au
-  SSO n'est jamais reprise : elle pourrait porter les jetons de quelqu'un d'autre.
+  SSO n'est jamais reprise : elle pourrait porter les jetons de quelqu'un d'autre. Voir la bascule ci-dessous.
+
+## Bascule d'une instance existante vers le SSO
+
+Constaté au premier essai réel (26/10/2026) : l'assistant gardait la clé d'avant le SSO, tous ses appels étaient refusés
+et il n'affichait qu'un message générique (« The connector returned an error »). À l'activation :
+
+1. Prévenir les collaborateurs avant : leurs assistants cesseront de répondre jusqu'à l'étape 3.
+2. Activer `SSO_MODE=entra`, redéployer, constater `· SSO entra` sur la ligne de démarrage.
+3. Chaque collaborateur ouvre le portail (connexion Microsoft), reconnecte ses systèmes, puis copie sa **nouvelle** clé
+   (« Brancher mon assistant ») dans son assistant et le redémarre complètement.
+4. Suivre le journal : `[mcp] clé refusée (401) : N appels depuis <adresse>` signale un assistant resté sur une ancienne
+   clé (une ligne tout de suite, puis le cumul de chaque minute ; jamais la clé).
 * Tout compte du locataire peut ouvrir le portail et obtenir une clé. Les droits sur les données restent ceux de
   chaque système, avec les identifiants personnels du collaborateur.
