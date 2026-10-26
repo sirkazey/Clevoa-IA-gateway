@@ -52,11 +52,11 @@ const MOCK = {
     rows: [{ SOHNUM: "ZV-000123", BPCORD: "C0001", ORDDAT: "2025-10-15", ORDINVATI: 4300 }] },
 };
 /** Réponse $prototypes au format réel Syracuse (structure vérifiée sur une instance 24R1). */
-const syracusePrototype = (rep, fields, title = rep) => ({
+const syracusePrototype = (rep, fields) => ({
   $representation: rep, $title: "{@1}", $itemsPerPage: 300,
   $properties: { $resources: { $type: "application/x-array", $item: { $properties: Object.fromEntries(
-    fields.map(([n, type, lab], i) => [n, { $title: `{@${i + 2}}`, $type: `application/x-${type}`, $isReadOnly: true }])) } } },
-  $localization: Object.fromEntries([["@1", title], ...fields.map(([, , lab], i) => [`@${i + 2}`, lab])]),
+    fields.map(([n, type], i) => [n, { $title: `{@${i + 2}}`, $type: `application/x-${type}`, $isReadOnly: true }])) } } },
+  $localization: Object.fromEntries([["@1", rep], ...fields.map(([, , lab], i) => [`@${i + 2}`, lab])]),
 });
 function mockGet(path) {
   const rep = path.match(/^\$prototypes\('(\w+)/)?.[1] ?? path.match(/^(\w+)/)?.[1];
@@ -81,7 +81,7 @@ async function get(tok, path, params = {}) {
 /** Identité : via l'endpoint userinfo du serveur OAuth2 s'il est renseigné. */
 export const identity = async (tok) => {
   if (!process.env.SAGE_OAUTH_USERINFO_URL) return null;
-  const r = await fetch(process.env.SAGE_OAUTH_USERINFO_URL, { headers: { Authorization: `Bearer ${tok.access_token}` } });
+  const r = await fetch(process.env.SAGE_OAUTH_USERINFO_URL, { headers: { Authorization: `Bearer ${tok.access_token}` }, signal: AbortSignal.timeout(10_000) });
   return (await r.json()).email ?? null;
 };
 

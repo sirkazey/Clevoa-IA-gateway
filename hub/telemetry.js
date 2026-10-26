@@ -42,6 +42,7 @@ export function category(e) {
 
 /** Enregistre un appel d'outil : connecteur, clé de l'appelant (empreinte locale), durée, erreur éventuelle. */
 export function record(connector, key, ms, error) {
+  if (!KEY) return; // télémétrie désactivée : rien ne serait envoyé
   let s = stats.get(connector);
   if (!s) stats.set(connector, (s = fresh()));
   const u = who(key);

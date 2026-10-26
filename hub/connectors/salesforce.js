@@ -35,7 +35,7 @@ const mcp = (tok, fn) => withMcp({ url: MCP_URL, headers: { Authorization: `Bear
 
 /** Email de l'utilisateur si le scope openid est accordé ; sinon null (sans conséquence). */
 export const identity = async (tok) => {
-  const r = await fetch(`${LOGIN}/services/oauth2/userinfo`, { headers: { Authorization: `Bearer ${tok.access_token}` } }).catch(() => null);
+  const r = await fetch(`${LOGIN}/services/oauth2/userinfo`, { headers: { Authorization: `Bearer ${tok.access_token}` }, signal: AbortSignal.timeout(10_000) }).catch(() => null);
   if (r?.ok) return (await r.json()).email ?? null; // nécessite l'étendue openid
   // Sans openid : l'outil getUserInfo du serveur SObject Reads (présent sur la sandbox) ; l'email est extrait de sa réponse.
   // Champ "email" en priorité : le username d'une sandbox porte un suffixe (.preprod) et n'est pas une adresse valide.

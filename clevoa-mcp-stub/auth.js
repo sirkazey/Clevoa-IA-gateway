@@ -68,7 +68,9 @@ function issueCode(res, sys, user, redirect_uri, state, challenge) {
 export function approve(req, res) {
   const { sys, user, redirect_uri, state, code_challenge } = req.query;
   if (!USERS[user]) return res.status(400).send("utilisateur inconnu");
-  issueCode(res, sys, user, redirect_uri, state, code_challenge);
+  let back; try { back = new URL(String(redirect_uri)); } catch { back = null; } // même contrôle que la mire : URL http(s) seulement
+  if (!back || !/^https?:$/.test(back.protocol)) return res.status(400).send("redirect_uri invalide (URL http(s) attendue)");
+  issueCode(res, sys, user, back.href, state, code_challenge);
 }
 
 /** Endpoint /token : échange d'un code ou d'un refresh_token. */

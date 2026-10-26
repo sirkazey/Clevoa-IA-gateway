@@ -105,6 +105,19 @@ test("Export d'audit : formules de tableur neutralisées, option vide refusée, 
   assert.equal(version, db.MIGRATIONS.length);
 });
 
+test("auto_vacuum incrémental effectif : base neuve, et base créée en 1.5.0 (WAL avant auto_vacuum) convertie à l'ouverture", () => {
+  db.close();
+  const fresh = join(DIR, "neuve.db");
+  assert.equal(db.open(fresh), true); db.close();
+  assert.equal(new DatabaseSync(fresh).prepare("pragma auto_vacuum").get().auto_vacuum, 2, "pages libérées rendues au disque");
+  const old = join(DIR, "ancienne.db");
+  const o = new DatabaseSync(old); o.exec("pragma journal_mode = wal; pragma auto_vacuum = incremental; create table t (x)"); // ordre de la 1.5.0 : sans effet
+  assert.equal(o.prepare("pragma auto_vacuum").get().auto_vacuum, 0); o.close();
+  assert.equal(db.open(old), true); db.close();
+  assert.equal(new DatabaseSync(old).prepare("pragma auto_vacuum").get().auto_vacuum, 2, "convertie une fois par VACUUM");
+  db.open(); // retour à la base du test
+});
+
 test("Base illisible : le hub continue sans historique ni compteurs, sans jamais faire échouer un appel", () => {
   db.close();
   const bad = join(DIR, "abime.db"); writeFileSync(bad, "ceci n'est pas une base SQLite".repeat(200));
@@ -112,7 +125,6 @@ test("Base illisible : le hub continue sans historique ni compteurs, sans jamais
   const torn = join(DIR, "dechiree.db"); writeFileSync(torn, Buffer.concat([Buffer.from("SQLite format 3\0"), Buffer.alloc(4000, 7)])); // en-tête correct, contenu abîmé
   assert.equal(db.open(torn), false);
   assert.equal(db.health().up, false, "visible par la supervision (clevoa_hub_db_up 0)");
-  assert.equal(db.ready(), false);
   assert.equal(db.count("sagex3", "u1", false), undefined);
   assert.deepEqual(db.availability("sagex3"), { pct: null, samples: 0, days: 30 });
   assert.deepEqual(db.usage("2026-10"), { month: "2026-10", systems: [], activeUsers: 0 });

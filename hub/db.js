@@ -29,12 +29,14 @@ export const MIGRATIONS = [
 ];
 
 let db = null, q = null, failures = 0;
-/** Exécute une écriture sans jamais faire échouer l'appelant (un outil MCP, une mesure) : chaque échec est compté (supervision,
- *  health()) et journalisé au plus une fois par heure, avec le message de SQLite. */
+/** Exécute une opération sans jamais faire échouer l'appelant (un outil MCP, une mesure, le portail). Une écriture en échec est
+ *  comptée (supervision, health()) et journalisée au plus une fois par heure, avec le message de SQLite ; une lecture en échec
+ *  rend seulement « rien » (elle ne gonfle pas le compteur des écritures). */
 let warnedAt = 0;
-function safely(fn) {
+function safely(fn, write = true) {
   if (!db) return undefined;
   try { return fn(); } catch (e) {
+    if (!write) return undefined;
     failures++;
     if (Date.now() - warnedAt > 3_600_000) { warnedAt = Date.now(); console.error(`[db] écriture impossible dans hub.db (${failures} depuis le démarrage) : ${e.errstr ?? e.code ?? e.message}`); }
     return undefined;
@@ -51,10 +53,12 @@ export function open(file = FILE, { readOnly = false } = {}) {
     if (readOnly) { db = new DatabaseSync(file, { readOnly: true }); prepare(); return true; } // outil d'administration : aucune écriture, aucune migration
     db = new DatabaseSync(file);
     try { chmodSync(file, 0o600); } catch { /* volume en lecture seule : sans objet */ } // base créée par une version antérieure en 644
+    // auto_vacuum avant le passage en WAL : sur une base neuve, SQLite l'ignore une fois l'en-tête écrit. Les pages libérées par la
+    // purge sont alors rendues au disque (incremental_vacuum). Base créée sans (1.5.0) : convertie une fois par un VACUUM.
+    db.exec("pragma auto_vacuum = incremental");
+    if (db.prepare("pragma auto_vacuum").get().auto_vacuum !== 2) db.exec("vacuum");
     // secure_delete : une ligne purgée est effacée du fichier (et donc des instantanés), pas seulement marquée libre.
     db.exec("pragma journal_mode = wal; pragma synchronous = normal; pragma busy_timeout = 1000; pragma secure_delete = on; pragma journal_size_limit = 8388608;");
-    // Base neuve : les pages libérées par la purge sont rendues au disque (pragma incremental_vacuum), le fichier ne grossit pas sans fin.
-    if (db.prepare("pragma user_version").get().user_version === 0) db.exec("pragma auto_vacuum = incremental");
     if (db.prepare("pragma quick_check").get().quick_check !== "ok") throw Object.assign(new Error("base corrompue (quick_check)"), { code: "SQLITE_CORRUPT" });
     const from = db.prepare("pragma user_version").get().user_version;
     if (from > MIGRATIONS.length) console.error(`[db] base d'une version plus récente (schéma ${from}, ce hub connaît ${MIGRATIONS.length}) : utilisée telle quelle`);
@@ -83,7 +87,6 @@ function prepare() {
     auditRows: db.prepare("select at, user, who, system, tool, outcome, ms from audit where at >= ? and at < ? order by at"),
   };
 }
-export const ready = () => !!db;
 export function close() { try { db?.close(); } catch { /* déjà fermée */ } db = null; q = null; }
 
 // ---------- Disponibilité ----------
@@ -91,7 +94,7 @@ export function close() { try { db?.close(); } catch { /* déjà fermée */ } db
 export const sample = (system, state, p95, at = Date.now()) => safely(() => (UP.includes(state) || DOWN.includes(state)) && q.sample.run(system, Math.floor(at / SLOT) * SLOT, state, p95 ?? null));
 /** Disponibilité sur `days` jours : part des mesures « opérationnel » ou « lent » parmi les mesures significatives. */
 export function availability(system, days = 30, now = Date.now()) {
-  const r = safely(() => q.availability.get(system, now - days * DAY));
+  const r = safely(() => q.availability.get(system, now - days * DAY), false);
   return r && r.n ? { pct: Math.round((1000 * r.up) / r.n) / 10, samples: r.n, days } : { pct: null, samples: 0, days };
 }
 
@@ -100,7 +103,7 @@ export function availability(system, days = 30, now = Date.now()) {
 export const count = (system, user, failed, at = Date.now()) => safely(() => { q.count.run(month(at), system, failed ? 1 : 0); if (user) q.user.run(month(at), user); });
 /** Usage d'un mois (AAAA-MM) : appels et erreurs par système, collaborateurs actifs. */
 export function usage(m = month(Date.now())) {
-  return safely(() => ({ month: m, systems: q.usage.all(m).map((r) => ({ ...r })), activeUsers: q.active.get(m).n })) ?? { month: m, systems: [], activeUsers: 0 };
+  return safely(() => ({ month: m, systems: q.usage.all(m).map((r) => ({ ...r })), activeUsers: q.active.get(m).n }), false) ?? { month: m, systems: [], activeUsers: 0 };
 }
 
 // ---------- Audit ----------
@@ -108,7 +111,7 @@ export function usage(m = month(Date.now())) {
 export const audit = ({ user, who, system, tool, outcome, ms, at = Date.now() }) =>
   AUDIT && safely(() => q.audit.run(at, user, who ? encrypt(who) : null, system, tool, outcome, Math.round(ms)));
 /** Lignes du journal d'audit entre deux dates, e-mails déchiffrés (outil d'administration). */
-export const auditRows = (from, to) => (safely(() => q.auditRows.all(from, to)) ?? []).map((r) => {
+export const auditRows = (from, to) => (safely(() => q.auditRows.all(from, to), false) ?? []).map((r) => {
   let who = null;
   try { who = r.who ? decrypt(r.who) : null; } catch { who = "(indéchiffrable)"; } // autre ENCRYPTION_KEY ou ligne abîmée : l'export continue
   return { ...r, who };

@@ -11,6 +11,8 @@ import { randomBytes, createHash } from "node:crypto";
 import { category } from "./telemetry.js";
 
 const EVERY = 10 * 60_000, TIMEOUT = 5_000, WINDOW = 3600_000, FRESH = 25 * 60_000, MAX = 5000;
+/** Sonde de moins de 25 minutes : hors des heures de vérification, une sonde ancienne ne maintient pas une alerte. */
+export const freshProbe = (probe, now = Date.now()) => !!probe && probe.at >= now - FRESH;
 const SLOW_MS = Number(process.env.SLOW_MS) > 0 ? Number(process.env.SLOW_MS) : 10_000; // p95 au-delà duquel un système est « lent »
 const HOURS_LABEL = "du lundi au vendredi, de 7 h à 19 h";
 /** Libellé des heures de vérification selon PROBE. */
@@ -30,10 +32,8 @@ export const inProbeHours = (d = new Date()) => d.getDay() >= 1 && d.getDay() <=
 /** Un système est sondé s'il est réel, configuré et a une adresse : jamais un simulateur. */
 export const probeable = (c) => !c.mock && !!c.probeUrl && !!(c.apiKey || c.oauth?.clientId);
 
-/** Erreur imputable au système (et non au collaborateur) : ni erreur d'usage, ni refus d'authentification, ni requête refusée (4xx
- *  hors 429), ni plafond d'appels du hub lui-même (l'appel n'a pas atteint le système). */
-/** Erreur imputable au système (ni au collaborateur, ni à son jeton, ni au plafond du hub) : même définition pour le portail, la
- *  supervision et les compteurs d'usage (db.js). */
+/** Erreur imputable au système (ni au collaborateur, ni à son jeton, ni à une requête refusée en 4xx hors 429, ni au plafond du hub,
+ *  l'appel n'ayant alors pas atteint le système) : même définition pour le portail, la supervision et les compteurs d'usage (db.js). */
 export const systemFault = (type, e) => !!type && type !== "user" && type !== "auth" && !(type === "other" && e?.status >= 400 && e?.status < 500)
   && !(type === "quota" && /plafond de \d+ appels/.test(String(e?.message)));
 
@@ -89,7 +89,7 @@ export function status(c, now = Date.now()) {
   if (c.mock) return { state: "simule" };
   const calls = (recent.get(c.id) ?? []).filter((x) => x.at >= now - WINDOW && x.type !== "user"); // erreurs d'usage : ni au numérateur ni au dénominateur
   const ok = calls.filter((x) => !x.type), sys = calls.filter((x) => x.sys);
-  const pr = probes.get(c.id), fresh = pr && pr.at >= now - FRESH;
+  const pr = probes.get(c.id), fresh = freshProbe(pr, now);
   const out = { p95: ok.length >= MIN_CALLS ? p95(ok.map((x) => x.ms)) : null,
     probe: fresh ? { at: new Date(pr.at).toISOString(), ok: pr.ok, ms: pr.ms, reason: pr.reason } : null };
   if (fresh && !pr.ok && !ok.some((x) => x.at > pr.at)) return { state: "injoignable", ...out }; // un appel réussi depuis la sonde l'emporte

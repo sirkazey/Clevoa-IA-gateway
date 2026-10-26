@@ -11,7 +11,16 @@ WORK=$(mktemp -d); trap 'sudo rm -rf "$WORK"' EXIT   # des fichiers y sont cré�
 say() { printf '\n=== %s\n' "$*"; }
 count() { ls "$BACKUP_DIR"/users-*.json 2>/dev/null | wc -l; }
 vol() { docker volume ls -q --filter name=mcp-data; }
-sidecar() { $COMPOSE restart mcp-backup >/dev/null 2>&1; sleep 4; $COMPOSE logs --no-log-prefix --since 20s mcp-backup | tail -n 3; }
+IMAGE=node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53   # même empreinte que le hub (release.test.js)
+# Relance le conteneur de sauvegarde et attend (20 s au plus) sa ligne sur users.json, écrite depuis la relance seulement.
+sidecar() {
+  since=$(date -u +%Y-%m-%dT%H:%M:%SZ); $COMPOSE restart mcp-backup >/dev/null 2>&1; out=""
+  for i in $(seq 1 20); do
+    out=$($COMPOSE logs --no-log-prefix --since "$since" mcp-backup 2>/dev/null)
+    echo "$out" | grep -qE "users\.json (inchangé|invalide|absent)|sauvegarde users-|copie échouée" && break; sleep 1
+  done
+  sleep 1; $COMPOSE logs --no-log-prefix --since "$since" mcp-backup 2>/dev/null | tail -n 3
+}
 health() { for i in $(seq 1 30); do curl -fsS "$HUB_URL/health" >/dev/null 2>&1 && return 0; sleep 1; done; echo "hub injoignable" >&2; return 1; }
 me() { curl -fsS -b "$1" "$HUB_URL/api/me"; }
 newuser() { curl -fsS -c "$1" "$HUB_URL/api/me" >/dev/null; curl -fsS -b "$1" -X POST -H 'Content-Type: application/json' -d "{\"apiKey\":\"$2\"}" "$HUB_URL/api/myreport/apikey"; }
@@ -22,16 +31,16 @@ health; newuser "$WORK/jar1" MR-MARIE-2026; connected "$WORK/jar1"
 say "B. première sauvegarde automatique"
 sidecar; [ "$(count)" -eq 1 ]; f1=$(ls "$BACKUP_DIR"/users-*.json); [ "$(sudo head -c 5 "$f1")" = "enc1:" ]; echo "ok : $f1"
 say "C. sidecar relancé sans changement : pas de doublon le même jour"
-sidecar | grep -q "inchangé"; [ "$(count)" -eq 1 ]; echo "ok : toujours 1 fichier"
+sidecar | grep -q "users.json inchangé"; [ "$(count)" -eq 1 ]; echo "ok : toujours 1 fichier"
 say "D. second collaborateur puis sidecar relancé : deuxième sauvegarde horodatée, la première conservée"
 newuser "$WORK/jar2" MR-PAUL-2026; sidecar; [ "$(count)" -eq 2 ]; [ -f "$f1" ]; f2=$(ls -t "$BACKUP_DIR"/users-*.json | head -n 1); [ "$f2" != "$f1" ]; echo "ok : $f2"
 say "E. users.json corrompu dans le volume : la sauvegarde est refusée, les deux précédentes intactes"
 sum_before=$(sudo cat "$f1" "$f2" | md5sum)
-docker run --rm -v "$(vol):/data" node:24-alpine sh -c 'printf "{\"users\":{}}" > /data/users.json'
-sidecar | grep -q "invalide"; [ "$(count)" -eq 2 ]; [ "$(sudo cat "$f1" "$f2" | md5sum)" = "$sum_before" ]; ls "$BACKUP_DIR" | grep -q '\.tmp$' && { echo "fichier temporaire resté"; exit 1; }; echo "ok"
+docker run --rm -v "$(vol):/data" "$IMAGE" sh -c 'printf "{\"users\":{}}" > /data/users.json'
+sidecar | grep -q "users.json invalide"; [ "$(count)" -eq 2 ]; [ "$(sudo cat "$f1" "$f2" | md5sum)" = "$sum_before" ]; ls "$BACKUP_DIR" | grep -q '\.tmp$' && { echo "fichier temporaire resté"; exit 1; }; echo "ok"
 say "F. users.json perdu : rien n'est écrit, rien n'est supprimé"
-docker run --rm -v "$(vol):/data" node:24-alpine rm -f /data/users.json
-sidecar | grep -q "absent"; [ "$(count)" -eq 2 ]; echo "ok"
+docker run --rm -v "$(vol):/data" "$IMAGE" rm -f /data/users.json
+sidecar | grep -q "users.json absent"; [ "$(count)" -eq 2 ]; echo "ok"
 say "G. le hub redémarre sans données : perte confirmée"
 $COMPOSE restart mcp-hub >/dev/null 2>&1; health
 connected "$WORK/jar1" && { echo "les données auraient dû être perdues"; exit 1; }; echo "ok : perte confirmée"
@@ -54,12 +63,12 @@ if sudo ops/restore.sh "$m" 2>"$WORK/err"; then echo "l'erreur de clé aurait d�
 grep -q "ENCRYPTION_KEY différente" "$WORK/err"; cp "$WORK/env.bak" .env; echo "ok : erreur de clé signalée"
 say "M. base d'exploitation : l'instantané du hub (une minute après le démarrage) est sauvegardé en hub-*.db"
 $COMPOSE up -d mcp-hub >/dev/null 2>&1; health; connected "$WORK/jar1"   # hub relancé avec la bonne clé après L
-snap=; for i in $(seq 1 90); do docker run --rm -v "$(vol):/data:ro" node:24-alpine test -f /data/hub-instantane.db && { snap=1; break; }; sleep 1; done
+snap=; for i in $(seq 1 90); do docker run --rm -v "$(vol):/data:ro" "$IMAGE" test -f /data/hub-instantane.db && { snap=1; break; }; sleep 1; done
 [ -n "$snap" ] || { echo "aucun instantané hub-instantane.db après 90 s" >&2; $COMPOSE logs --no-log-prefix --tail 20 mcp-hub >&2; exit 1; }
 sidecar >/dev/null; db=$(ls -t "$BACKUP_DIR"/hub-*.db | head -n 1); [ "$(sudo head -c 15 "$db")" = "SQLite format 3" ]; echo "ok : $db"
 say "N. restauration de la base d'exploitation seule : l'ancienne conservée, les collaborateurs intacts"
 sudo ops/restore.sh "$db"; health; connected "$WORK/jar1"
-docker run --rm -v "$(vol):/data:ro" node:24-alpine test -f /data/hub.db.avant-restauration; echo "ok"
+docker run --rm -v "$(vol):/data:ro" "$IMAGE" test -f /data/hub.db.avant-restauration; echo "ok"
 say "O. base abîmée restaurée : échec signalé, le hub sert quand même les collaborateurs ; la bonne base se restaure ensuite"
 printf 'SQLite format 3\000' > "$WORK/hub-abimee.db"; head -c 8192 /dev/urandom >> "$WORK/hub-abimee.db"
 if sudo ops/restore.sh "$WORK/hub-abimee.db" 2>"$WORK/err"; then echo "la base abîmée aurait dû être signalée"; exit 1; fi

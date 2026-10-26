@@ -18,6 +18,10 @@ updates:
     schedule: { interval: weekly, day: monday, time: "06:00", timezone: Europe/Paris }
     target-branch: dev
     cooldown: { default-days: 7 }
+    groups:
+      # Une seule PR pour les trois Dockerfile : release.test.js exige la même empreinte partout. docker-compose.yml (sauvegarde)
+      # et ops/backup.sh / ops/restore.sh portent aussi l'empreinte : à reporter à la main dans la même PR.
+      node-base: { patterns: ["node"] }
     ignore:
       # Changement de version majeure de Node : décision du projet, uniquement vers une version LTS (paire), jamais proposé
       # automatiquement (Node 25 a été proposé le 26/10/2026). Les correctifs de Node 24 continuent d'arriver.
@@ -25,7 +29,7 @@ updates:
         update-types: ["version-update:semver-major"]
     commit-message: { prefix: "deps" }
 
-  - package-ecosystem: docker-compose  # images des stacks (node, nginx, cloudflared…)
+  - package-ecosystem: docker-compose  # images des stacks (node, nginx)
     directories: ["/"]
     schedule: { interval: weekly, day: monday, time: "06:00", timezone: Europe/Paris }
     target-branch: dev

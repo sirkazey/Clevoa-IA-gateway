@@ -38,7 +38,7 @@ const domainOverride = Object.fromEntries((process.env.CONNECTOR_DOMAINS || "").
 const domainOf = (c) => (Object.hasOwn(domainOverride, c.id) ? domainOverride[c.id] : DOMAINS.includes(c.domain) ? c.domain : "autre");
 const byId = Object.assign(Object.create(null), Object.fromEntries(CONNECTORS.map((c) => [c.id, c]))); // sans prototype : « constructor », « __proto__ »… ne désignent aucun système
 // Variables visibles dans le portail : toutes celles des connecteurs et du hub présentes dans l'environnement (jamais la valeur des secrets).
-const ENV = Object.keys(process.env).filter((n) => /^(PUBLIC_URL|APP_ENV|LOG_LEVEL|TRUST_PROXY|ENCRYPTION_KEY|SSO_MODE|MCP_SERVER_NAME|INSTANCE_LABEL|SF_|SAGE_|MS_|SP_|GRAPH_URL|DROPBOX_|MYREPORT_|CLEVOA_|PROBE$|SLOW_MS$|METRICS_TOKEN$|CONNECTOR_DOMAINS$)/.test(n)).sort();
+const ENV = Object.keys(process.env).filter((n) => /^(PUBLIC_URL|APP_ENV|LOG_LEVEL|TRUST_PROXY|ENCRYPTION_KEY|SSO_MODE|MCP_SERVER_NAME|INSTANCE_LABEL|SF_|SAGE_|MS_|SP_|GRAPH_URL|DROPBOX_|MYREPORT_|CLEVOA_|PROBE$|SLOW_MS$|METRICS_TOKEN$|CONNECTOR_DOMAINS$|AUDIT$|AUDIT_DAYS$)/.test(n)).sort();
 const masked = (n) => (/SECRET|CLEVOA_KEY|ENCRYPTION_KEY|METRICS_TOKEN/.test(n) ? "••••••••" : process.env[n]); // CLEVOA_KEY est une clé de licence, masquée comme les secrets
 
 // ---------- Limitation de débit (express-rate-limit, mémoire, par adresse IP, fenêtre d'une minute) ----------
@@ -61,11 +61,11 @@ const cookieKey = (req) => req.headers.cookie?.match(/(?:^|;\s*)mcp_key=([^;]+)/
 const mcpKey = (req) => req.headers.authorization?.match(/^Bearer\s+(\S+)$/i)?.[1];
 // Avec le SSO, une clé n'est utilisable qu'une fois liée à une identité Entra (une clé temporaire de navigateur ne l'est pas).
 const user = (key) => { const u = store.get(key); return u && (!sso.MODE || u.sso) ? u : null; };
-const requireKey = (read, onRefused) => (req, res, next) => {
+const requireKey = (read, error, onRefused) => (req, res, next) => {
   req.key = read(req);
   if (user(req.key)) return next(); // une clé valide n'est jamais freinée par les échecs d'autres clients de la même IP
   onRefused?.(req);
-  authFailures(req, res, () => res.status(401).json({ error: "Clé MCP inconnue ou absente : utilisez l'en-tête Authorization: Bearer <clé> obtenue sur le portail." }));
+  authFailures(req, res, () => res.status(401).json({ error }));
 };
 // Clé refusée sur les routes MCP (assistant branché avec une clé périmée : régénération, activation du SSO) : une ligne de journal
 // tout de suite, puis le cumul de la minute ; jamais la clé, seulement le nombre d'appels et les adresses d'origine.
@@ -78,7 +78,7 @@ function noteMcpRefused(req) {
   mcpRefused = { n: 0, ips: new Set() };
   setTimeout(() => { const r = mcpRefused; mcpRefused = null; if (r.n) logMcpRefused(r.n, r.ips); }, 60_000).unref();
 }
-const portalUser = requireKey(cookieKey);
+const portalUser = requireKey(cookieKey, "Session du portail absente ou expirée : rechargez la page.");
 // Tout appel MCP authentifié marque l'assistant comme branché ; une écriture impossible (disque plein) ne bloque jamais l'appel.
 const seen = (req, _res, next) => { try { store.assistantSeen(req.key); } catch (e) { console.error(`[store] dernier usage non enregistré : ${e.code ?? e.message}`); } next(); };
 // Débit par clé MCP authentifiée (et non par IP : tout un bureau sort par la même adresse) : 300 requêtes par minute, très au-dessus
@@ -89,19 +89,22 @@ const mcpRate = rateLimit({ windowMs: 60_000, limit: MCP_PER_MIN, standardHeader
   skip: (req) => !user(mcpKey(req)),
   keyGenerator: (req) => createHash("sha256").update(mcpKey(req)).digest("base64url"), // empreinte : jamais la clé en mémoire du limiteur
   message: { error: `Trop de requêtes avec cette clé (${MCP_PER_MIN} par minute) : réessayez dans une minute.` } });
-const mcpAuth = requireKey(mcpKey, noteMcpRefused);
+const mcpAuth = requireKey(mcpKey, "Clé MCP inconnue ou absente : utilisez l'en-tête Authorization: Bearer <clé> obtenue sur le portail.", noteMcpRefused);
 // Les POST du portail changent l'état du collaborateur : un navigateur qui annonce une autre origine (formulaire d'un site frère sous le
 // même domaine, que SameSite=Lax laisse passer) est refusé. Les clients MCP n'appellent pas ces routes.
 const ORIGIN = new URL(PUBLIC_URL).origin;
 const sameOrigin = (req, res, next) => (req.headers.origin && req.headers.origin !== ORIGIN ? res.status(403).json({ error: "Origine refusée" }) : next());
 
-/** Exécute un outil/ping d'un connecteur avec le jeton de l'utilisateur et sa structure en cache.
- *  Un connecteur peut plafonner ses appels sortants (maxPerMinute, tous utilisateurs confondus) pour ménager un système de production. */
+// Un connecteur peut plafonner ses appels sortants (maxPerMinute, tous utilisateurs confondus) pour ménager un système de production.
 const upstream = new MemoryStore(); // compteur d'express-rate-limit, hors HTTP : un par connecteur, tous utilisateurs confondus
 upstream.init({ windowMs: 60_000 });
-const capped = async (c, key) => !!c.maxPerMinute && hasCredential(store.get(key)?.[c.id]) && (await upstream.increment(c.id)).totalHits > c.maxPerMinute; // 1 appel d'outil ou de diagnostic = 1 unité
+/** Compte un appel sortant (outil, test, vérification d'un identifiant) et dit s'il dépasse le plafond du connecteur. */
+const overCap = async (c) => !!c.maxPerMinute && (await upstream.increment(c.id)).totalHits > c.maxPerMinute;
+const capped = async (c, key) => hasCredential(store.get(key)?.[c.id]) && overCap(c);
+const capMessage = (c) => `${c.label} : plafond de ${c.maxPerMinute} appels par minute atteint, réessayez dans un instant.`;
+/** Exécute un outil d'un connecteur avec le jeton de l'utilisateur et sa structure en cache. */
 const call = async (c, key, fn) => {
-  if (await capped(c, key)) throw new Error(`${c.label} : plafond de ${c.maxPerMinute} appels par minute atteint, réessayez dans un instant.`);
+  if (await capped(c, key)) throw new Error(capMessage(c));
   return withToken(c, key, (tok) => fn(tok, () => cachedSchema(key, c.id, () => c.schema(tok))));
 };
 
@@ -167,7 +170,7 @@ const app = express();
 app.disable("x-powered-by"); // pas d'annonce « Express » dans les réponses
 app.set("trust proxy", Number(process.env.TRUST_PROXY ?? 1)); // adresse IP réelle derrière un reverse-proxy (1 saut)
 // En-têtes de sécurité HTTP (signalés par ZAP). Le portail est un fichier unique avec scripts et styles en ligne, d'où 'unsafe-inline' ;
-// aucune ressource externe, jamais d'iframe, pas de capteur. Le proxy MCP (/mcp, /sse) n'en est pas affecté.
+// aucune ressource externe, jamais d'iframe, pas de capteur. Posés sur toutes les réponses, y compris /mcp et /sse (sans effet pour un client MCP).
 const SECURITY_HEADERS = {
   "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
   "X-Content-Type-Options": "nosniff",
@@ -188,6 +191,7 @@ app.get("/api/me", limit("me", 60), (req, res) => {
   let key = cookieKey(req);
   if (!user(key)) {
     if (sso.MODE) return res.json({ version: VERSION, env: APP_ENV, instance: INSTANCE_LABEL, sso: sso.MODE, email: null, key: null, systems: [] });
+    store.purge(24 * 3_600_000); // clés anonymes de visiteurs (ou de robots) jamais connectés : oubliées après 24 h, jamais écrites
     key = store.create();
     res.setHeader("Set-Cookie", keyCookie(key));
   }
@@ -234,34 +238,38 @@ app.post("/api/disconnect/:system", limit("portal", 30), sameOrigin, portalUser,
 const REFUSALS_MAX = 2, REFUSALS_WINDOW = 15 * 60_000;
 const refusals = new Map(); // "clé|système" -> dates des refus récents
 const recentRefusals = (id) => (refusals.get(id) || []).filter((t) => t > Date.now() - REFUSALS_WINDOW);
+const pruneRefusals = () => { for (const [id] of refusals) if (!recentRefusals(id).length) refusals.delete(id); };
 app.post("/api/:system/apikey", limit("portal", 30), sameOrigin, portalUser, async (req, res) => {
   const c = byId[req.params.system];
   if (!c?.apiKey) return res.sendStatus(404);
   const apiKey = String(req.body?.apiKey || "").trim(), login = String(req.body?.login || "").trim();
   if (!apiKey) return res.status(400).json({ error: "Jeton vide" });
   const rid = `${req.key}|${c.id}`;
+  pruneRefusals();
   if (recentRefusals(rid).length >= REFUSALS_MAX) return res.status(429).json({ error: `${REFUSALS_MAX} essais refusés par ${c.label} en 15 minutes : rien n'est transmis pour ne pas bloquer votre compte. Vérifiez votre ${c.apiKey.mode === "basic" ? "mot de passe" : "jeton"} directement dans ${c.label}, puis réessayez dans un quart d'heure.` });
-  if (c.maxPerMinute && (await upstream.increment(c.id)).totalHits > c.maxPerMinute) return res.status(429).json({ error: `${c.label} : plafond de ${c.maxPerMinute} appels par minute atteint, réessayez dans un instant.` });
+  if (await overCap(c)) return res.status(429).json({ error: capMessage(c) });
   const tok = { apiKey, ...(login ? { login } : {}) };
+  const attempt = Date.now();
+  refusals.set(rid, [...recentRefusals(rid), attempt]); // compté comme un refus dès l'envoi : deux validations simultanées ne font pas trois essais
+  const release = () => refusals.set(rid, recentRefusals(rid).filter((t) => t !== attempt));
   let checked;
   try { checked = await c.ping(tok, () => c.schema(tok)); }
   catch (e) {
     if (e.status === 401 || e.status === 403) {
-      refusals.set(rid, [...recentRefusals(rid), Date.now()]);
       return res.status(400).json({ error: `${c.label} a refusé ${c.apiKey.mode === "basic" ? "cet identifiant ou ce mot de passe" : "ce jeton"} (${e.status}) : rien n'est enregistré.` });
     }
+    release(); // injoignable ou configuration : pas un refus de l'identifiant
     return res.status(502).json({ error: `${e.message.slice(0, 300)} · Vérification impossible, rien n'est enregistré : réessayez.` });
   }
   refusals.delete(rid);
-  store.clearTokens(req.key, c.id);
-  store.setTokens(req.key, c.id, tok);
+  store.replaceTokens(req.key, c.id, tok);
   res.json({ ok: true, message: checked.message });
 });
 // Diagnostic : un appel minimal au système avec le jeton de l'utilisateur (ou le simulateur).
 app.get("/api/test/:system", limit("diag", 20), portalUser, async (req, res) => {
   const c = byId[req.params.system];
   if (!c) return res.sendStatus(404);
-  if (await capped(c, req.key)) return res.json({ ok: false, error: `${c.label} : plafond de ${c.maxPerMinute} appels par minute atteint, réessayez dans un instant.` });
+  if (await capped(c, req.key)) return res.json({ ok: false, error: capMessage(c) });
   try { res.json({ ok: true, ...(await withToken(c, req.key, (tok) => c.ping(tok, () => c.schema(tok)))) }); } // structure relue, pas le cache
   catch (e) { res.json({ ok: false, error: e.message.slice(0, 300) }); }
 });
@@ -299,7 +307,7 @@ const metricsAuthorized = (req, res, next) => {
 // PRTG : un canal « Santé » par système (0 bon, 1 avertissement si lent, 2 erreur si en erreurs ou injoignable ; seuils posés
 // par le hub), joignabilité, temps de réponse p95, appels et erreurs du système (mode différence : par intervalle de PRTG).
 // 30 relevés par minute et par adresse IP pour les deux routes de supervision (PRTG relève toutes les 1 à 5 minutes).
-const metricsLimit = rateLimit({ windowMs: 60_000, limit: 30, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "Trop de requêtes, réessayez dans une minute." } });
+const metricsLimit = limit("metrics", 30);
 app.get("/metrics/prtg", metricsLimit, metricsAuthorized, (_req, res) => {
   const result = [], bad = [];
   for (const c of CONNECTORS) {
@@ -309,7 +317,7 @@ app.get("/metrics/prtg", metricsLimit, metricsAuthorized, (_req, res) => {
     if (level) bad.push(`${c.label} : ${s.state}${s.probe?.reason ? ` (${s.probe.reason})` : ""}`);
     result.push({ channel: `${c.label} · santé`, value: level, unit: "Custom", customunit: "", limitmode: 1, limitmaxwarning: 0.5, limitmaxerror: 1.5,
       limitwarningmsg: `${c.label} lent`, limiterrormsg: `${c.label} en erreurs ou injoignable` });
-    if (n.probe && n.probe.at >= Date.now() - 25 * 60_000) result.push({ channel: `${c.label} · joignable`, value: n.probe.ok ? 1 : 0, unit: "Custom", customunit: "", limitmode: 1, limitminerror: 0.5, limiterrormsg: `${c.label} injoignable` });
+    if (health.freshProbe(n.probe)) result.push({ channel: `${c.label} · joignable`, value: n.probe.ok ? 1 : 0, unit: "Custom", customunit: "", limitmode: 1, limitminerror: 0.5, limiterrormsg: `${c.label} injoignable` });
     if (s.p95 != null) result.push({ channel: `${c.label} · p95`, value: s.p95, unit: "TimeResponse" });
     result.push({ channel: `${c.label} · appels`, value: n.calls, unit: "Count", mode: "Difference" });
     result.push({ channel: `${c.label} · erreurs système`, value: n.sys, unit: "Count", mode: "Difference" });
@@ -337,12 +345,10 @@ app.get("/metrics", metricsLimit, metricsAuthorized, (_req, res) => {
   const rows = CONNECTORS.map((c) => ({ c, s: health.status(c), n: health.counters(c.id) }));
   g("clevoa_system_state", "État du système (1 pour l'état courant)");
   for (const { c, s } of rows) for (const st of STATES) m.push(`clevoa_system_state{system="${promLabel(c.id)}",state="${st}"} ${s.state === st ? 1 : 0}`);
-  // Sonde de moins de 25 minutes seulement : hors des heures de vérification, une sonde ancienne ne maintient pas une alerte.
-  const freshProbe = (n) => n.probe && n.probe.at >= Date.now() - 25 * 60_000;
   g("clevoa_system_up", "Sonde HEAD de moins de 25 minutes : 1 joignable, 0 injoignable (absente sinon)");
-  for (const { c, n } of rows) if (freshProbe(n)) m.push(`clevoa_system_up{system="${promLabel(c.id)}"} ${n.probe.ok ? 1 : 0}`);
+  for (const { c, n } of rows) if (health.freshProbe(n.probe)) m.push(`clevoa_system_up{system="${promLabel(c.id)}"} ${n.probe.ok ? 1 : 0}`);
   g("clevoa_system_probe_seconds", "Durée de la sonde HEAD de moins de 25 minutes");
-  for (const { c, n } of rows) if (freshProbe(n)) m.push(`clevoa_system_probe_seconds{system="${promLabel(c.id)}"} ${(n.probe.ms / 1000).toFixed(3)}`);
+  for (const { c, n } of rows) if (health.freshProbe(n.probe)) m.push(`clevoa_system_probe_seconds{system="${promLabel(c.id)}"} ${(n.probe.ms / 1000).toFixed(3)}`);
   g("clevoa_system_calls_total", "Appels d'outils depuis le démarrage", "counter");
   for (const { c, n } of rows) m.push(`clevoa_system_calls_total{system="${promLabel(c.id)}"} ${n.calls}`);
   g("clevoa_system_errors_total", "Erreurs d'outils par type depuis le démarrage", "counter");
