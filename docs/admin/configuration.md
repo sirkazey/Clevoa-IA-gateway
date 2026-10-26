@@ -83,6 +83,9 @@ SAGE_REPRESENTATIONS=BPCUSTOMER,BPSUPPLIER,SINVOICE,PINVOICE,SORDER,PORDER,GACCE
 
 Optionnel : `SAGE_LANG` (langue des libellés, défaut `fr-FR`). Délai maximal par requête Syracuse : 30 s, fixe.
 
+En pré-production (`docker-compose.dev.yml`), garder dans `.env` les lignes `SAGE_OAUTH_*` présentes et vides ; sinon
+le portail propose l'IdP simulé du bouchon au lieu du formulaire Syracuse.
+
 ### Étape 3 : connexion et diagnostic sur le portail
 
 Ligne **Sage X3** : **Saisir mes identifiants**, « Identifiant » = identifiant Syracuse, « Mot de passe » = mot de passe
@@ -188,15 +191,16 @@ production, `SF_MCP_URL` = URL de SObject Reads de production (forme `…/d/<org
 « Serveurs MCP », laisser actif **SObject Reads** seul et désactiver les serveurs d'écriture après confirmation de
 l'intégrateur Salesforce. Fixer `SF_MAX_PER_MIN`.
 
-## 3. SharePoint / OneDrive (Microsoft Graph) — à vérifier sur un vrai locataire
+## 3. SharePoint / OneDrive (Microsoft Graph) — vérifié en pré-production (un compte)
 
-Application Entra ID avec **permissions déléguées** `User.Read`, `Files.Read.All`, `Sites.Read.All` (plus `openid`,
-`offline_access`), URI de redirection `<PUBLIC_URL>/auth/sharepoint/callback`. Graph répond avec les droits du
-collaborateur connecté : un dossier qu'il ne voit pas dans SharePoint renvoie 403. Outils : `sharepoint_sites`,
-`sharepoint_list`, `sharepoint_search`, `sharepoint_read` (texte, csv, json ; les binaires renvoient leurs métadonnées
-et leur lien). Seules les redirections de téléchargement vers des hôtes Microsoft en https sont suivies.
+Application Entra ID avec **permissions déléguées** : le hub demande pour SharePoint
+`openid profile offline_access User.Read Files.Read.All Sites.Read.All` (`email` n'est demandé que par le SSO). URI de
+redirection `<PUBLIC_URL>/auth/sharepoint/callback`. Graph répond avec les droits du collaborateur connecté : un
+dossier qu'il ne voit pas dans SharePoint renvoie 403. Outils : `sharepoint_sites`, `sharepoint_list`,
+`sharepoint_search`, `sharepoint_read` (texte, csv, json ; les binaires renvoient leurs métadonnées et leur lien).
+Seules les redirections de téléchargement vers des hôtes Microsoft en https sont suivies.
 
-Création (libellés du portail Entra de mémoire, **à vérifier**) : portail Entra → Identité → Applications →
+Création (libellés du portail Entra **à vérifier** ; application créée le 26/10/2026 sur le locataire Charlois) : portail Entra → Identité → Applications →
 Inscriptions d'applications → Nouvelle inscription : nom, comptes de cet annuaire uniquement, plateforme Web avec
 l'URI ci-dessus ; Certificats et secrets → nouveau secret client (valeur visible une seule fois) ; API autorisées →
 Microsoft Graph → permissions déléguées ci-dessus → Accorder le consentement d'administrateur. La même application

@@ -11,9 +11,10 @@ plus ; chaque ajout se juge à cette aune.
   `v*` à poser sur GitHub), que les installations déploient
   ([installation § 6](admin/installation.md#6-cycle-de-livraison-et-versions)). Jamais de branche permanente par client.
 * Toute correction s'accompagne d'un test de régression (`hub/test/`, `node:test`, aucun réseau). Un connecteur reste
-  un module d'environ 50 à 190 lignes ; au-delà, on revoit la copie ([écrire un connecteur](developer/connecteurs.md)).
-* La CI doit être verte avant fusion : tests, scénario de sauvegarde et restauration, Semgrep, CodeQL, Gitleaks,
-  Trivy, contrôle des liens de la documentation ([tests et analyses](developer/tests.md)).
+  un module court (50 à 200 lignes aujourd'hui) ; au-delà, on revoit la copie ([écrire un connecteur](developer/connecteurs.md)).
+* La CI doit être verte avant fusion : tests, scénario de sauvegarde et restauration, retour arrière (`rollback`),
+  Semgrep, CodeQL, Gitleaks, Trivy sur le dépôt et sur l'image (`trivy`, `trivy-image`), contrôle des liens de la
+  documentation ([tests et analyses](developer/tests.md)).
 * Jamais de secret, de jeton, d'identifiant personnel ni de donnée métier dans le code, les tests, les fixtures, les
   issues ou les commits. Les constantes de test sont inventées et listées dans `.gitleaks.toml` avec leur raison.
 * Version : `hub/version.js`, `hub/package.json` et `hub/package-lock.json` portent le même numéro, incrémenté à chaque
@@ -33,7 +34,7 @@ plus ; chaque ajout se juge à cette aune.
 | `docs/roadmap-produit.md` | tous | la seule roadmap active : axes, statuts, critères de sortie |
 
 Fichiers en minuscules avec tirets (`guide-utilisateur.md`), un sujet par fichier, pas de fichier de moins de vingt
-lignes (on fusionne). Un composant annexe (`clevoa-mcp-stub/`, `clevoa-backend/`, `loadtest/`) garde son `README.md`
+lignes (on fusionne). Un composant annexe (`clevoa-mcp-stub/`, `clevoa-backend/`, `clevoa-console/`, `loadtest/`) garde son `README.md`
 à côté de son code. Les seuls fichiers de documentation à la racine sont `README.md`, `CHANGELOG.md`, `LICENSE.md` et `.env.example`.
 
 ### Rédaction

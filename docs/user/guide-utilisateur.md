@@ -121,8 +121,8 @@ Outils exposés à l'assistant : `salesforce_tools`, `salesforce_call` · `sagex
 
 | Ce que vous voyez | Cause probable | Que faire |
 |---|---|---|
-| L'assistant répond « Non connecté à … » | Outil jamais connecté, ou jetons retirés | Portail → Se connecter → Tester |
-| « Session … expirée ou révoquée : reconnectez-vous sur le portail » | Autorisation révoquée côté éditeur, mot de passe changé | Se reconnecter sur le portail |
+| L'assistant répond « Non connecté à … : aucune donnée n'a été lue. Action requise : se connecter sur <lien> » | Outil jamais connecté, ou jetons retirés | Ouvrir le lien : il ouvre le portail sur la ligne de cet outil ; Se connecter, puis reposer la question |
+| « Session … expirée ou révoquée : aucune donnée n'a été lue. Action requise : se connecter sur <lien> » | Autorisation révoquée côté éditeur, mot de passe changé | Ouvrir le lien, se reconnecter, puis reposer la question |
 | Claude Desktop : erreur `401` | Clé régénérée ou révoquée | Recopier le bloc du portail dans la configuration |
 | Voyant rouge « Sage X3 401 » | Mot de passe Syracuse changé ou compte désactivé | Ressaisir identifiant et mot de passe |
 | « absentes de ce dossier (404) : … » dans le diagnostic Sage | Représentations non publiées par l'intégrateur | Signaler à la DSI ; le reste fonctionne |

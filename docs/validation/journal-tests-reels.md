@@ -6,7 +6,7 @@ Document de validation : il consigne ce qui a été **réellement exécuté** co
 Chaque entrée dit ce qui a été exécuté contre les systèmes Charlois, avec quel résultat, et ce que le hub a dû corriger. Les tests automatisés (hub, bouchon, backend Clevoa, scénario CI de sauvegarde et restauration ; [inventaire](../developer/tests.md))
 tournent à chaque commit ; ils ne sont pas listés ici.
 
-Compte utilisé pour tous les tests : le DSI du Groupe Charlois, profil **administrateur** sur les deux systèmes.
+Compte utilisé pour tous les tests : le DSI du Groupe Charlois, profil **administrateur** sur chaque système testé.
 Conséquence : le cloisonnement (un utilisateur restreint ne voit que ses données) n'est pas encore prouvé sur les vrais
 systèmes. C'est le test manquant prioritaire.
 
@@ -28,7 +28,7 @@ Salesforce PàP », copie fidèle des données), utilisateur X3 administrateur.
 | S9 | curl where `(FCY eq 'TO219')` encodé `%20` | 3 factures du site, identiques à l'écran Sage | OK |
 | S10 | curl where `(AMTATI gt 400)` (champ hors liste) | 200, filtre appliqué, AMTATI non renvoyé | Limite documentée |
 | S11 | curl `select=NUM,AMTATI` | Ignoré, mêmes colonnes ; enregistrements techniques `00000`, `001` en tête | Limite documentée, consigne de tri |
-| S12 | Capture `capture-sage.ps1` : prototypes liste et fiche de 6 représentations | Structures obtenues ; libellés en anglais (Accept-Language) | Fixtures de test anonymisées, `SAGE_LANG` |
+| S12 | Capture `capture-sage.ps1` (script non versionné) : prototypes liste et fiche de 6 représentations | Structures obtenues ; libellés en anglais (Accept-Language) | Fixtures de test anonymisées, `SAGE_LANG` |
 | S13 | Claude Desktop : « Quelles représentations ? » | 6 noms, conteneur à jour | OK |
 | S14 | Claude Desktop : « Décris PINVOICE » | 4 champs puis 6, libellés vides sur FCY/BPR, fiche en anglais | 3 corrections (exclus conservés, libellé `_REF`, langue) ; validé ensuite en français |
 | S15 | Claude Desktop : « 3 dernières factures d'achat TO219 » | ENGIE, KOESIO, EDF, conformes | OK |
@@ -82,17 +82,6 @@ Non vérifié : `sharepoint_list`, `sharepoint_search` et `sharepoint_read` un p
 collaborateurs réels ; connexion SharePoint transparente pour un collègue (consentement administrateur non accordé) ;
 compte invité.
 
-## Tests non encore réalisés (état au 26 octobre 2026)
+## Tests non encore réalisés
 
-| Test | Pourquoi il compte | Prérequis |
-|---|---|---|
-| Cloisonnement avec un compte **non administrateur** (Sage et Salesforce) | Seule preuve que le hub n'élargit pas les droits | Un compte de test restreint sur chaque système |
-| Expiration et renouvellement réels du jeton Salesforce (JWT ~ 2 h, rotation du refresh token) | Vérifié sur le bouchon, pas sur Salesforce | Laisser une session ouverte plus de 2 h puis interroger |
-| Révocation : mot de passe Syracuse changé, autorisation Salesforce révoquée | Voyant rouge et message de reconnexion attendus | Action volontaire sur chaque système |
-| Salesforce production | Même procédure, org de production, serveurs d'écriture désactivés | Confirmation de l'intégrateur |
-| Dropbox | Jamais branché sur un vrai compte | App Dropbox |
-| SharePoint : lister, chercher, lire un document | Connexion et liste des sites seulement vérifiées (26/10) | Aucun |
-| MyReport | Serveur MCP annoncé par l'éditeur, non livré | Absys Cyborg |
-| Restauration sur le serveur de pré-prod (`sudo ops/restore.sh`) | Jouée en CI à chaque commit, pas encore sur un serveur Charlois ; à faire une fois par trimestre ([exploitation § 5](../admin/exploitation.md#5-restauration)) | Accès au serveur, `ENCRYPTION_KEY` du coffre |
-| SSO Entra avec deux collaborateurs réels | Vérifié avec un seul compte (26/10) : le cloisonnement entre deux personnes reste à prouver | Un second compte Charlois, par exemple à la DSI |
-| Comparaison croisée Coppola (Sage + Salesforce dans une même réponse, deux lignes Source) | Vérifie la consigne par défaut du serveur MCP | Redéploiement du 23/10 soir |
+Liste tenue à jour dans [l'état des fonctionnalités § 3](etat-des-fonctionnalites.md#3-tests-restant-à-réaliser).

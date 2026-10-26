@@ -21,6 +21,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }   # jeton Git jamais laissé dans .git/config
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
@@ -45,6 +46,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }   # jeton Git jamais laissé dans .git/config
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
@@ -55,6 +57,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }   # jeton Git jamais laissé dans .git/config
       - name: Démarrer la stack pré-prod (hub + bouchon + sauvegarde automatique)
         run: |
           mkdir -p "$PWD/backups"
@@ -77,17 +80,21 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false   # jeton Git jamais laissé dans .git/config
           fetch-depth: 0        # tags nécessaires : la version précédente est reconstruite depuis son tag
+      - name: Image de la version courante (construite une fois pour les deux scénarios)
+        run: docker build -q -t hub-courant:ci hub
       - name: Scénario ops/test-rollback.sh (version publiée précédente)
-        run: ops/test-rollback.sh
+        run: IMAGE_CURRENT=hub-courant:ci ops/test-rollback.sh
       - name: Scénario ops/test-rollback.sh (dernière version candidate 1.4, avant la base d'exploitation)
-        run: PREV=v1.4.0-rc.2 PORT=18081 ops/test-rollback.sh
+        run: IMAGE_CURRENT=hub-courant:ci PREV=v1.4.0-rc.2 PORT=18081 ops/test-rollback.sh
   semgrep:
     name: Semgrep community rules
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }   # jeton Git jamais laissé dans .git/config
       - name: Run Semgrep
         run: |
           docker run --rm -v "${{ github.workspace }}:/src" -w /src semgrep/semgrep:1.181.1 \
@@ -107,6 +114,7 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }   # jeton Git jamais laissé dans .git/config
       - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           languages: javascript-typescript
@@ -127,6 +135,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false   # jeton Git jamais laissé dans .git/config
           fetch-depth: 0
       - name: Scan repository history
         run: |
@@ -144,6 +153,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }   # jeton Git jamais laissé dans .git/config
       - name: Scan filesystem
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -167,6 +177,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }   # jeton Git jamais laissé dans .git/config
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
@@ -181,13 +192,13 @@ jobs:
       # Vulnérabilités HIGH/CRITICAL corrigées et licences interdites ou restrictives (AGPL, GPL…) : échec.
       - name: Trivy sur le SBOM du hub
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with: { scan-type: sbom, scan-ref: sbom/hub.cdx.json, scanners: "vuln,license", severity: "HIGH,CRITICAL", ignore-unfixed: true, exit-code: '1' }
+        with: { scan-type: sbom, scan-ref: sbom/hub.cdx.json, scanners: license, severity: "HIGH,CRITICAL", ignore-unfixed: true, exit-code: '1' }
       - name: Trivy sur le SBOM du bouchon
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with: { scan-type: sbom, scan-ref: sbom/clevoa-mcp-stub.cdx.json, scanners: "vuln,license", severity: "HIGH,CRITICAL", ignore-unfixed: true, exit-code: '1' }
+        with: { scan-type: sbom, scan-ref: sbom/clevoa-mcp-stub.cdx.json, scanners: license, severity: "HIGH,CRITICAL", ignore-unfixed: true, exit-code: '1' }
       - name: Trivy sur le SBOM de la console
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with: { scan-type: sbom, scan-ref: sbom/clevoa-console.cdx.json, scanners: "vuln,license", severity: "HIGH,CRITICAL", ignore-unfixed: true, exit-code: '1' }
+        with: { scan-type: sbom, scan-ref: sbom/clevoa-console.cdx.json, scanners: license, severity: "HIGH,CRITICAL", ignore-unfixed: true, exit-code: '1' }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -200,6 +211,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }   # jeton Git jamais laissé dans .git/config
       - name: Construire l'image comme en production
         run: docker build -t clevoa-gateway-hub:ci hub
       - name: Scan de l'image

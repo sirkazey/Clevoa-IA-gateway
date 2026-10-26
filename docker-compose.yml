@@ -75,6 +75,18 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    # Durcissement commun à toutes les stacks (démonstration et scan ZAP compris) : pré-prod et production l'héritent par extends.
+    user: "node"                               # processus sans privilèges (déjà imposé par l'image, rappelé ici)
+    read_only: true                            # système de fichiers en lecture seule ; seuls /data (volume, droits 700) et /tmp sont inscriptibles
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }   # LOG_LEVEL=debug est bavard : journaux plafonnés partout
 
   # Sauvegarde automatique : copie quotidienne de users.json (chiffré) et de l'instantané de la base d'exploitation (hub-*.db, 1.5)
   # dans BACKUP_DIR sur la machine hôte (chemin ABSOLU sous Portainer,

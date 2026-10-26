@@ -1,5 +1,5 @@
 // Console de suivi Clevoa : un serveur HTTP sans framework, à lancer sur un poste ou un NAS de Clevoa (jamais exposé sur internet).
-// Il lit la table DynamoDB de télémétrie en LECTURE SEULE (identifiants IAM limités à Scan, Query, GetItem) et sert une page :
+// Il lit la table DynamoDB de télémétrie en LECTURE SEULE (identifiants IAM limités à Query, GetItem et DescribeTable) et sert une page :
 // état de chaque installation, incidents en cours, et historique sur 30 jours (appels, erreurs, latence par connecteur).
 // Aucune écriture, aucune commande vers les hubs : la console ne fait que lire ce que les hubs ont envoyé.
 import { createServer } from "node:http";

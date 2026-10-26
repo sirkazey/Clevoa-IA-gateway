@@ -82,7 +82,7 @@ SSE abandonnées sans délai propre ; aucun outil de retrait d'une entrée de `u
 fonctions du backend et pas de limitation de débit par route ; image nginx optionnelle non figée ; actions GitHub
 référencées par version ; image `node:22-alpine` non figée dans les scripts `ops/backup.sh`, `ops/restore.sh` et
 `ops/test-backup-restore.sh` (conteneurs utilitaires éphémères) ; reconstruction de l'image par Portainer au changement de
-référence Git non vérifiée (le contrôle de la ligne de démarrage le détecte). Détail : [état des fonctionnalités § 2](etat-des-fonctionnalites.md#2-limites-connues).
+référence Git non vérifiée (le contrôle de la ligne de démarrage le détecte). Détail : [état des fonctionnalités § 2](../validation/etat-des-fonctionnalites.md#2-limites-connues).
 
 **Dépendances externes** : backend AWS et nom de domaine `clevoa.fr` à mettre en place par Clevoa ; publication par
 4CAD des représentations Sage X3 demandées ; serveur MCP de MyReport non livré ; validation juridique de la télémétrie.
@@ -91,7 +91,7 @@ référence Git non vérifiée (le contrôle de la ligne de démarrage le détec
 jetons ; Salesforce production ; SharePoint, Dropbox et MyReport sur de vrais comptes ; SSO `entra` ; restauration sur
 le serveur du client ; charge en préproduction réelle ; exactitude financière ; injection de prompts ; Claude Code,
 ChatGPT et Copilot en réel ; mise à jour et retour arrière sous Portainer ; diagnostic chez le client
-([§ 3](etat-des-fonctionnalites.md#3-tests-restant-à-réaliser)).
+([§ 3](../validation/etat-des-fonctionnalites.md#3-tests-restant-à-réaliser)).
 
 **Risques résiduels** : un défaut de cloisonnement propre à un système réel ne serait vu qu'en recette ; tags non
 protégés tant que la règle `v*` n'est pas posée ; correctifs de l'image de base dépendants de la discipline de
@@ -375,7 +375,7 @@ injection de propriété — nom de système validé par une table des connecteu
 depuis la liste des fichiers du portail).
 
 **Tests réels impossibles depuis cet environnement**, consignés dans
-[l'état des fonctionnalités § 3](etat-des-fonctionnalites.md#3-tests-restant-à-réaliser) : comptes restreints et
+[l'état des fonctionnalités § 3](../validation/etat-des-fonctionnalites.md#3-tests-restant-à-réaliser) : comptes restreints et
 révocation sur Sage X3 et Salesforce, Salesforce production, SharePoint, Dropbox, MyReport, SSO `entra`, restauration
 sur le serveur du client, charge en préproduction réelle, exactitude financière, injection de prompts, sessions
 réelles avec Claude Code, ChatGPT et Copilot, backend AWS déployé, mise à jour et retour arrière sous Portainer,

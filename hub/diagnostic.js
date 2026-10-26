@@ -5,7 +5,7 @@
 // Lecture seule : n'écrit rien, n'ouvre aucun port, ne contacte que le hub local et, sauf --sans-reseau, l'hôte de chaque
 // système configuré et l'annuaire de connexion de SharePoint (une requête HEAD sans identifiant) pour distinguer une panne réseau d'une erreur d'identifiant.
 import { readFileSync, statSync, accessSync, statfsSync, constants } from "node:fs";
-import { createHash, createDecipheriv } from "node:crypto";
+import { decrypt } from "./crypto.js";
 import { VERSION, APP_ENV, IS_PROD } from "./version.js";
 import * as resolve from "./resolve.js";
 
@@ -18,8 +18,8 @@ const problems = [];
 const set = (n) => !!(env[n] && env[n].trim());
 
 // Variables lues par le hub : seulement « renseignée » ou « vide ». Quelques réglages sans secret sont donnés en clair.
-const NAMES = Object.keys(env).filter((n) => /^(PUBLIC_URL|APP_ENV|LOG_LEVEL|TRUST_PROXY|ENCRYPTION_KEY|SSO_MODE|MCP_SERVER_NAME|INSTANCE_LABEL|SF_|SAGE_|MS_|SP_|GRAPH_URL|DROPBOX_|MYREPORT_|CLEVOA_|TZ$)/.test(n)).sort();
-const PLAIN = new Set(["APP_ENV", "LOG_LEVEL", "TRUST_PROXY", "SSO_MODE", "SAGE_APIKEY_MODE", "TZ", "MYREPORT_MAX_PER_MIN", "SF_MAX_PER_MIN", "SF_DEFAULT_LIMIT"]);
+const NAMES = Object.keys(env).filter((n) => /^(PUBLIC_URL|APP_ENV|LOG_LEVEL|TRUST_PROXY|ENCRYPTION_KEY|SSO_MODE|MCP_SERVER_NAME|INSTANCE_LABEL|SF_|SAGE_|MS_|SP_|GRAPH_URL|DROPBOX_|MYREPORT_|CLEVOA_|TZ$|PROBE$|SLOW_MS$|METRICS_TOKEN$|CONNECTOR_DOMAINS$|AUDIT$|AUDIT_DAYS$)/.test(n)).sort();
+const PLAIN = new Set(["APP_ENV", "LOG_LEVEL", "TRUST_PROXY", "SSO_MODE", "SAGE_APIKEY_MODE", "TZ", "MYREPORT_MAX_PER_MIN", "SF_MAX_PER_MIN", "SF_DEFAULT_LIMIT", "PROBE", "SLOW_MS", "AUDIT", "AUDIT_DAYS"]);
 const plain = (n) => PLAIN.has(n) && (n === "TRUST_PROXY" ? /^\d{1,2}$/ : /^[\w./+:-]{1,40}$/).test(env[n]); // TRUST_PROXY : un nombre de sauts, jamais une adresse
 const variables = Object.fromEntries(NAMES.map((n) => [n, !set(n) ? "vide" : plain(n) ? env[n] : "renseignée"]));
 
@@ -57,12 +57,7 @@ function storeState() {
   out.chiffre = raw.startsWith("enc1:");
   let db;
   try {
-    if (out.chiffre) {
-      const master = createHash("sha256").update(env.ENCRYPTION_KEY || "").digest();
-      const [, iv, tag, data] = raw.split(":").map((p, i) => (i ? Buffer.from(p, "base64") : p));
-      const d = createDecipheriv("aes-256-gcm", master, iv, { authTagLength: 16 }); d.setAuthTag(tag);
-      db = JSON.parse(Buffer.concat([d.update(data), d.final()]).toString("utf8"));
-    } else db = JSON.parse(raw);
+    db = JSON.parse(out.chiffre ? decrypt(raw) : raw); // même déchiffrement que le hub (crypto.js, sans effet de bord à l'import)
     out.dechiffrable = true;
   } catch { out.dechiffrable = false; problems.push("users.json non déchiffrable avec ENCRYPTION_KEY (mauvaise clé ou fichier corrompu)"); return out; }
   const users = Object.values(db.users || {});

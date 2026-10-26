@@ -61,7 +61,7 @@ Une fois par environnement, **depuis Git uniquement** : les fichiers `ops/` doiv
 un compose collé à la main laisse `mcp-backup` sans script.
 
 1. **Stacks → Add stack → Repository** : URL du dépôt (identifiants Git s'il est privé), *Repository reference* =
-   le tag de la version choisie, par exemple `refs/tags/v1.3.2` (§ 6), *Compose path* = le fichier du tableau ci-dessus.
+   le tag de la version choisie, par exemple `refs/tags/v1.5.0` (§ 6), *Compose path* = le fichier du tableau ci-dessus.
 2. **GitOps updates** : **désactivé** pour une installation client. La stack ne change que lorsque l'administrateur
    choisit une autre version ([exploitation § 10](exploitation.md#10-mise-à-jour-et-retour-arrière)). Seule la
    plateforme d'intégration de Clevoa suit la branche `dev` en continu (polling ou webhook GitHub).
@@ -74,26 +74,29 @@ un compose collé à la main laisse `mcp-backup` sans script.
 4. **https** : le nginx fourni (profil `proxy`, `HUB_PORT=127.0.0.1:8080`, `CERTS_DIR`, `COMPOSE_PROFILES=proxy`) ou un
    reverse proxy existant : [exploitation § 6](exploitation.md#6-reverse-proxy-nginx-https). La prise en compte de
    `COMPOSE_PROFILES` comme variable de stack est à vérifier sur votre Portainer.
-5. Premier démarrage : la ligne de journal `Hub MCP v1.3.2 · ENV: PRE-PROD · https://…` confirme la version et
+5. Premier démarrage : la ligne de journal `Hub MCP v1.5.0 · ENV: PRE-PROD · https://…` confirme la version et
    l'environnement ; le portail affiche le badge correspondant ; le hub passe « healthy » dans Portainer.
 
 **Pré-production avec des systèmes réels** : une variable **vide** garde le défaut vers le bouchon. Pour brancher un vrai
 système, renseigner explicitement : Microsoft (SharePoint et SSO) → `MS_LOGIN_URL=https://login.microsoftonline.com`,
 `GRAPH_URL=https://graph.microsoft.com/v1.0` ; Dropbox → `DROPBOX_AUTH_URL=https://www.dropbox.com`,
 `DROPBOX_API_URL=https://api.dropboxapi.com`, `DROPBOX_MCP_URL=https://mcp.dropbox.com/mcp` ; Clevoa → `CLEVOA_URL`.
-Sage X3 réel sans OAuth : la carte garde un bouton « Se connecter » menant à l'IdP du bouchon, sans effet sur la
-connexion par identifiant et mot de passe.
+Sage X3 réel : garder dans `.env` les lignes `SAGE_OAUTH_*` présentes et vides ; sinon le portail propose l'IdP simulé
+du bouchon au lieu du formulaire Syracuse.
 
 ## 5. Déploiement manuel (Docker Compose)
 
 Depuis un clone du dépôt positionné sur le tag de la version choisie, avec un fichier `.env` à côté :
 
 ```bash
-git fetch --tags && git checkout v1.3.2                          # une version publiée, jamais une branche
+git fetch --tags && git checkout v1.5.0                          # une version publiée, jamais une branche
 docker compose -f docker-compose.prod.yml up -d --build          # production
 docker compose --profile proxy -f docker-compose.prod.yml up -d  # avec le nginx fourni
 docker compose -f docker-compose.prod.yml config                 # configuration résolue, sans rien déployer
 ```
+
+Avec le nginx fourni (profil `proxy`) devant le hub : `HUB_PORT=127.0.0.1:8080` dans `.env`, pour que seul nginx
+joigne le hub ([exploitation § 6](exploitation.md#6-reverse-proxy-nginx-https)).
 
 Après toute modification de `.env`, relancer `up -d` : les connexions des collaborateurs sont conservées (volume).
 
@@ -150,9 +153,9 @@ secrets (`ENCRYPTION_KEY`, `CLEVOA_KEY`), son volume et son identifiant d'instal
 client ; un connecteur demandé par un client reste désactivé tant qu'il n'est pas configuré.
 
 Tags publiés au 26/10/2026 : `v1.2.0`, `v1.2.1`, `v1.3.0`, `v1.3.1`, `v1.3.2-rc.1`, `v1.3.2-rc.2`, `v1.4.0-rc.1`,
-`v1.4.0-rc.2`, `v1.5.0-rc.1` (la 1.0.0 n'est pas publiée sur GitHub, la 1.1.0 n'a pas de tag). Version en cours : `1.5.0`,
-tag à créer par Clevoa. Suivi du backlog : issues GitHub
-(modèles « Bug » et « Évolution ») et milestones par version.
+`v1.4.0-rc.2`, `v1.5.0-rc.1`, `v1.5.0` (la 1.0.0 n'est pas publiée sur GitHub, la 1.1.0 n'a pas de tag ; aucune 1.3.2
+finale). Version courante : `1.5.1` (tag à créer). Suivi du backlog : issues GitHub (modèles « Bug » et « Évolution ») et milestones
+par version.
 
 ## 7. Première mise en service auprès des collaborateurs
 

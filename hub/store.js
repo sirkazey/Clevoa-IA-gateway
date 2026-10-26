@@ -4,6 +4,7 @@
 import { readFileSync, writeFileSync, mkdirSync, renameSync } from "node:fs";
 import { randomBytes, randomUUID } from "node:crypto";
 import { keyOk, encrypt, decrypt, pseudonym } from "./crypto.js";
+import { forget } from "./cache.js";
 
 const DIR = process.env.DATA_DIR || "./data";
 const FILE = `${DIR}/users.json`;
@@ -16,8 +17,10 @@ try {
   db = JSON.parse(raw.startsWith("enc1:") ? decrypt(raw) : raw); // un ancien fichier en clair est rechiffré à la première écriture
 } catch (e) { if (e.code !== "ENOENT") { console.error(`[store] users.json illisible (mauvaise ENCRYPTION_KEY ?) : ${e.message}`); process.exit(1); } }
 
+/** Vrai si l'entrée a connecté au moins un système (jeton OAuth ou identifiant personnel). */
+const anyCredential = (u) => Object.values(u).some((v) => v && typeof v === "object" && (v.access_token || v.apiKey));
 /** Vrai pour une entrée qui vaut d'être conservée : identité SSO ou au moins un identifiant ; une clé anonyme sans rien n'est jamais persistée. */
-const worthKeeping = (u) => !!u.sso || Object.values(u).some((v) => v && typeof v === "object" && (v.access_token || v.apiKey));
+const worthKeeping = (u) => !!u.sso || anyCredential(u);
 function save() {
   const users = Object.fromEntries(Object.entries(db.users).filter(([, u]) => worthKeeping(u)));
   writeFileSync(FILE + ".tmp", encrypt(JSON.stringify({ ...db, users })), { mode: 0o600 });
@@ -39,10 +42,16 @@ export const store = {
     save();
   },
   /** Sièges : collaborateurs ayant connecté au moins un outil (jeton OAuth ou identifiant personnel), qu'ils s'en servent ou non. Un simple visiteur du portail ne compte pas. */
-  seats: () => Object.values(db.users).filter((u) => Object.values(u).some((v) => v && typeof v === "object" && (v.access_token || v.apiKey))).length,
+  seats: () => Object.values(db.users).filter(anyCredential).length,
+  /** Remplace l'entrée d'un système (nouvel identifiant, autre compte) en une seule écriture ; la structure en cache est oubliée. */
+  replaceTokens(key, system, tokens) {
+    const u = store.get(key); if (!u) return;
+    u[system] = { ...tokens, updatedAt: new Date().toISOString() };
+    forget(key, system); save();
+  },
   clearTokens(key, system) {
     const u = store.get(key); if (!u) return;
-    delete u[system]; save();
+    delete u[system]; forget(key, system); save();
   },
   // ---- SSO : une identité Entra (oid + locataire) ↔ une clé ----
   findSso: (sub, tid) => Object.keys(db.users).find((k) => db.users[k].sso?.sub === sub && db.users[k].sso?.tid === tid) ?? null,

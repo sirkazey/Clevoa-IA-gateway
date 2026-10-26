@@ -12,8 +12,8 @@ propre nom de serveur MCP et son libellé (`MCP_SERVER_NAME`, `INSTANCE_LABEL`).
 ## Ce que fait la passerelle
 
 * **Un seul conteneur Node 24**, sans framework ni serveur de base de données (SQLite intégré à Node pour l'historique
-  et les compteurs) : `@modelcontextprotocol/sdk`, `express`, `zod`,
-  environ 1 060 lignes. Chaque connecteur est un module d'environ 50 à 190 lignes.
+  et les compteurs). Modules : [architecture](docs/developer/architecture.md) ; dépendances :
+  [dépendances](docs/developer/dependances.md).
 * **Droits de chaque collaborateur** : jetons OAuth ou identifiants individuels, chiffrés (AES-256-GCM) dans un seul
   fichier, transmis tels quels aux outils. Le cache de structure (objets, champs) est lui aussi par utilisateur.
 * **Lecture seule par construction** : serveurs MCP et facettes d'API de lecture uniquement, listes blanches d'outils,
@@ -26,8 +26,9 @@ propre nom de serveur MCP et son libellé (`MCP_SERVER_NAME`, `INSTANCE_LABEL`).
   joignabilité sans identifiant, en semaine aux heures ouvrées), exposé à la supervision : PRTG (`/metrics/prtg`) ou
   format Prometheus pour Zabbix, Centreon… (`/metrics`), jeton dédié.
 * **Traçabilité** : chaque résultat se termine par `Source : <système>` que l'assistant est instruit de citer.
-* **Exploitation simple** : deux stacks Docker Compose (pré-production, production), sauvegarde quotidienne chiffrée,
-  restauration scriptée, reverse proxy nginx fourni, télémétrie de licence réduite à des compteurs.
+* **Exploitation simple** : deux stacks Docker Compose (pré-production, production), sauvegarde quotidienne
+  (`users.json` chiffré, base d'exploitation pseudonymisée), restauration scriptée, reverse proxy nginx fourni,
+  télémétrie de licence réduite à des compteurs.
 
 ## Architecture
 
@@ -53,7 +54,7 @@ Détail des modules et des flux : [architecture](docs/developer/architecture.md)
 |---|---|---|---|---|
 | Salesforce | serveur MCP hébergé « SObject Reads » | OAuth2 + PKCE, refresh géré | `salesforce_tools`, `salesforce_call` | vérifié sur sandbox |
 | Sage X3 24R1 | API REST Syracuse (`$query`, `$details`, `$prototypes`) | identifiant et mot de passe Syracuse, ou OAuth2 | `sagex3_representations`, `sagex3_describe`, `sagex3_query`, `sagex3_get` | vérifié en préproduction |
-| SharePoint / OneDrive | Microsoft Graph (GET) | OAuth2 délégué Entra ID | `sharepoint_sites`, `sharepoint_list`, `sharepoint_search`, `sharepoint_read` | bouchon seulement |
+| SharePoint / OneDrive | Microsoft Graph (GET) | OAuth2 délégué Entra ID | `sharepoint_sites`, `sharepoint_list`, `sharepoint_search`, `sharepoint_read` | vérifié en pré-production (un compte : connexion et liste des sites) |
 | Dropbox | serveur MCP officiel | OAuth2 | `dropbox_tools`, `dropbox_call` | bouchon seulement |
 | MyReport | serveur MCP SSE de MyReport Server | jeton personnel | `myreport_tools`, `myreport_call` | bouchon seulement, serveur éditeur non livré |
 
@@ -74,8 +75,10 @@ Sur le portail : « Se connecter » à chaque outil (mires du bouchon sur `http:
 vérifier les voyants du diagnostic, copier le bloc de configuration dans l'assistant. Sans Docker :
 
 ```bash
-cd hub && npm install && npm test                      # 112 tests, aucun réseau
+cd hub && npm install && npm test                      # aucun réseau
 ```
+
+Nombre de tests et suites : [tests et analyses](docs/developer/tests.md).
 
 Suite détaillée : [installation](docs/admin/installation.md).
 
@@ -105,7 +108,7 @@ Composants annexes : [bouchon d'entreprise](clevoa-mcp-stub/README.md), [backend
   connecteurs configurés et des compteurs (appels, sièges, erreurs par type et latences par connecteur) ; aucun e-mail,
   jeton, requête, message d'erreur ni résultat ne quitte le hub ([sécurité § 4](docs/admin/securite.md#4-télémétrie-clevoa)).
 * Limites actuelles : seul Claude Desktop est vérifié en réel, Claude Code, ChatGPT et Copilot sont testés au niveau du
-  protocole MCP seulement ; SharePoint, Dropbox et MyReport non vérifiés sur un vrai compte ; cloisonnement observé sur les
+  protocole MCP seulement ; Dropbox et MyReport non vérifiés sur un vrai compte ; cloisonnement observé sur les
   systèmes réels avec un compte administrateur seulement ; capacité démontrée sur bouchons (50 collaborateurs), pas
   encore sur les systèmes réels. Détail : [sécurité](docs/admin/securite.md), [état des fonctionnalités](docs/validation/etat-des-fonctionnalites.md).
 
@@ -113,5 +116,5 @@ Composants annexes : [bouchon d'entreprise](clevoa-mcp-stub/README.md), [backend
 
 Logiciel propriétaire de Clevoa SASU : [LICENSE.md](LICENSE.md). Les dépendances open source conservent leurs licences
 (MIT, ISC, BSD). Versions : [CHANGELOG.md](CHANGELOG.md) et
-[releases GitHub](https://github.com/sirkazey/Clevoa-IA-gateway/releases) ; version courante **1.5.0** (tests réels restants avant la production : [état des fonctionnalités](docs/validation/etat-des-fonctionnalites.md))
-(`hub/version.js`), affichée sur le portail et dans les journaux de démarrage.
+[releases GitHub](https://github.com/sirkazey/Clevoa-IA-gateway/releases) ; version courante **1.5.1** (`hub/version.js`), affichée sur le portail et dans les journaux de démarrage. Tests réels
+restants avant la production : [état des fonctionnalités](docs/validation/etat-des-fonctionnalites.md).

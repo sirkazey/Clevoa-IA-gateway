@@ -237,7 +237,8 @@ test("GET /api/test/:system : voyant vert avec le jeton de l'utilisateur, rouge 
 });
 
 test("Clé d'API Syracuse : POST /api/sagex3/apikey remplace OAuth, l'état passe à connecté (apikey), la clé part en Bearer", async () => {
-  assert.equal((await fetch(`${hub.url}/api/sagex3/apikey`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).status, 401, "sans cookie");
+  const anon = await fetch(`${hub.url}/api/sagex3/apikey`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  assert.equal(anon.status, 401, "sans cookie"); assert.equal((await anon.json()).error, "Session du portail absente ou expirée : rechargez la page.");
   assert.equal((await fetch(`${hub.url}/api/sagex3/apikey`, { method: "POST", headers: { cookie, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "  " }) })).status, 400, "clé vide");
 
   const r = await fetch(`${hub.url}/api/sagex3/apikey`, { method: "POST", headers: { cookie, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "syr-key-alice", login: "ALICE" }) });
@@ -453,9 +454,11 @@ test("Mot de passe refusé : un seul essai transmis à Syracuse par validation ;
   const before = refusedCalls();
   assert.equal((await post()).status, 400);
   assert.equal(refusedCalls() - before, 1, "une seule requête, pas une par représentation");
-  assert.equal((await post()).status, 400);
-  const third = await post();
-  assert.equal(third.status, 429); assert.match((await third.json()).error, /^2 essais refusés par Sage X3 en 15 minutes : rien n'est transmis pour ne pas bloquer votre compte/);
+  // Deux validations simultanées après un refus : une seule part (le refus est compté dès l'envoi), jamais trois essais en tout
+  const [a, b] = await Promise.all([post(), post()]);
+  assert.deepEqual([a.status, b.status].sort(), [400, 429]);
+  const third = a.status === 429 ? a : b;
+  assert.match((await third.json()).error, /^2 essais refusés par Sage X3 en 15 minutes : rien n'est transmis pour ne pas bloquer votre compte/);
   assert.equal(refusedCalls() - before, 2, "le troisième essai n'a pas atteint Syracuse");
 });
 
