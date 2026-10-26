@@ -270,7 +270,7 @@ test("Clé d'API Syracuse : POST /api/sagex3/apikey remplace OAuth, l'état pass
   up.reset();
   up.failNext("$prototypes", 401);
   const ko = await fetch(`${hub.url}/api/test/sagex3`, { headers: { cookie } }).then((x) => x.json());
-  assert.equal(ko.ok, false, JSON.stringify(ko)); assert.match(ko.error, /^Sage X3 a refusé vos identifiants \(401\)/);
+  assert.equal(ko.ok, false, JSON.stringify(ko)); assert.match(ko.error, /^Sage X3 a refusé vos identifiants \(401\), effacés pour ne pas bloquer votre compte : aucune donnée n'a été lue\. Action requise : ressaisir ses identifiants sur .*\/\?connecter=sagex3 /);
   assert.equal(up.requests("/oauth/token").length, 0);
   assert.equal(up.requests("$prototypes").length, 1, "un seul essai, pas un par représentation");
   const again = await fetch(`${hub.url}/api/test/sagex3`, { headers: { cookie } }).then((x) => x.json());
@@ -465,7 +465,7 @@ test("Identifiants enregistrés puis refusés (mot de passe changé) : effacés 
   try {
     const before = refusedCalls();
     const d = await fetch(`${h.url}/api/test/sagex3`, { headers: { cookie: `mcp_key=${K}` } }).then((x) => x.json());
-    assert.equal(d.ok, false); assert.equal(d.error, "Sage X3 a refusé vos identifiants (401) : ressaisissez-les sur le portail. Le hub ne réessaie pas, pour ne pas bloquer votre compte.");
+    assert.equal(d.ok, false); assert.match(d.error, /^Sage X3 a refusé vos identifiants \(401\), effacés pour ne pas bloquer votre compte : aucune donnée n'a été lue\. Action requise : ressaisir ses identifiants sur http:\/\/127\.0\.0\.1:\d+\/\?connecter=sagex3 \(une minute\), puis reposer la question\.$/);
     assert.equal(h.readUsers()[K]?.sagex3, undefined, "identifiants effacés");
     const again = await fetch(`${h.url}/api/test/sagex3`, { headers: { cookie: `mcp_key=${K}` } }).then((x) => x.json());
     assert.match(again.error, /Non connecté à Sage X3/);

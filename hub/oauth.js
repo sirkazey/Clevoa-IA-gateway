@@ -87,16 +87,22 @@ export const hasCredential = (t) => !!(t?.access_token || t?.apiKey);
 /** Exécute fn(tokens) avec le jeton de l'utilisateur `key`.
  *  Sur 401 avec un refresh_token : renouvelle l'access_token en arrière-plan, le persiste, puis réessaie une fois.
  *  Transparent pour l'utilisateur : il ne se reconnecte que si le refresh_token lui-même est révoqué. */
+/** Lien du portail qui ouvre la ligne du système et met en avant sa connexion (?connecter=<id>). */
+export const connectLink = (connector) => `${PUBLIC_URL}/?connecter=${encodeURIComponent(connector.id)}`;
+/** Le collaborateur doit (re)connecter le système sur le portail : une démarche, pas une panne. `action` : l'outil répond par une
+ *  information (pas isError) qui dit qu'aucune donnée n'a été lue et donne le lien direct. */
+const actionNeeded = (connector, why, extra = {}) => Object.assign(new Error(`${why} : aucune donnée n'a été lue. Action requise : ${extra.status === 401 ? "ressaisir ses identifiants" : "se connecter"} sur ${connectLink(connector)} (une minute), puis reposer la question.`), { action: true, ...extra });
+
 export async function withToken(connector, key, fn) {
   if (connector.mock) return fn({ access_token: "simulé" });
   const tokens = store.get(key)?.[connector.id];
-  if (!hasCredential(tokens)) throw new Error(`Non connecté à ${connector.label}. Ouvrez le portail et cliquez « Se connecter à ${connector.label} ».`);
+  if (!hasCredential(tokens)) throw actionNeeded(connector, `Non connecté à ${connector.label}`);
   try {
     return await fn(tokens);
   } catch (e) {
     if (e.status === 401 && tokens.apiKey) { // identifiant, mot de passe ou clé refusés : effacés pour que le hub ne réessaie plus (Syracuse bloque le compte après quelques échecs)
       store.clearTokens(key, connector.id);
-      throw new Error(`${connector.label} a refusé vos identifiants (401) : ressaisissez-les sur le portail. Le hub ne réessaie pas, pour ne pas bloquer votre compte.`);
+      throw actionNeeded(connector, `${connector.label} a refusé vos identifiants (401), effacés pour ne pas bloquer votre compte`, { status: 401 });
     }
     if (e.status !== 401 || !tokens.refresh_token) throw e;
     const current = store.get(key)?.[connector.id];
@@ -107,7 +113,7 @@ export async function withToken(connector, key, fn) {
       .catch((re) => {
         if (re.status !== 400 && re.status !== 401) throw re;
         store.clearTokens(key, connector.id); // refresh_token révoqué : l'entrée disparaît, le portail repasse à « non connecté »
-        throw new Error(`Session ${connector.label} expirée ou révoquée : reconnectez-vous sur le portail.`);
+        throw actionNeeded(connector, `Session ${connector.label} expirée ou révoquée`);
       })
       .finally(() => refreshing.delete(id));
     refreshing.set(id, refresh);

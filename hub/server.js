@@ -5,7 +5,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { store } from "./store.js";
-import { oauthRouter, withToken, hasCredential, keyCookie, PUBLIC_URL } from "./oauth.js";
+import { oauthRouter, withToken, hasCredential, keyCookie, PUBLIC_URL, connectLink } from "./oauth.js";
 import * as sso from "./sso.js";
 import { cachedSchema } from "./cache.js";
 import * as salesforce from "./connectors/salesforce.js";
@@ -114,7 +114,16 @@ const INSTRUCTIONS = [
   "Question sur un client, un fournisseur, une commande ou une facture sans nommer le système : interroger Sage X3 ET Salesforce, puis dire ce que chacun renvoie.",
   "Salesforce : salesforce_tools puis salesforce_call (serveur MCP officiel SObject Reads). Sage X3 : sagex3_describe puis sagex3_query ; les montants sont dans la devise de l'ERP.",
   "Documents : sharepoint_search / sharepoint_read, dropbox_tools puis dropbox_call. Analyses MyReport : myreport_tools puis myreport_call.",
+  "Résultat « … aucune donnée n'a été lue. Action requise : … » : le collaborateur doit (re)connecter ce système ; relayer l'action et le lien tels quels, sans jamais en déduire une absence de données ni un total nul.",
 ].join(" ");
+/** Consignes de la session : générales, plus l'état des connexions du collaborateur à l'ouverture (systèmes à connecter et leur lien). */
+function instructionsFor(key) {
+  const u = store.get(key) || {};
+  const todo = CONNECTORS.filter((c) => !c.mock && (c.oauth?.clientId || c.apiKey) && !hasCredential(u[c.id]));
+  if (!todo.length) return INSTRUCTIONS;
+  const ready = CONNECTORS.filter((c) => c.mock || hasCredential(u[c.id])).map((c) => c.label);
+  return `${INSTRUCTIONS} État des connexions de ce collaborateur à l'ouverture de la session : ${ready.length ? `connecté à ${ready.join(", ")}` : "aucun système connecté"} ; à connecter : ${todo.map((c) => `${c.label} (${connectLink(c)})`).join(", ")}. N'en parler que si la question porte sur un système à connecter.`;
+}
 
 /** Compteur d'usage du mois et, avec AUDIT=on, ligne d'audit (qui, quel outil, quand, résultat) ; jamais les arguments ni le résultat. */
 function usage(c, t, key, ms, e) {
@@ -126,7 +135,7 @@ function usage(c, t, key, ms, e) {
 function buildServer(key) {
   const server = new McpServer(
     { name: SERVER_NAME, version: VERSION },
-    { instructions: INSTRUCTIONS },
+    { instructions: instructionsFor(key) },
   );
   for (const c of CONNECTORS) for (const t of c.tools) {
     server.registerTool(t.name, { description: t.description, inputSchema: t.input, annotations: { readOnlyHint: true } }, async (args) => {
@@ -145,6 +154,7 @@ function buildServer(key) {
         health.record(c.id, Date.now() - t0, e, key);
         usage(c, t, key, Date.now() - t0, e);
         debug(`${t.name} erreur ${Date.now() - t0} ms : ${e.status ?? "erreur"}`); // jamais le message (il peut citer une clé demandée)
+        if (e.action) return { content: [{ type: "text", text: e.message }] }; // démarche du collaborateur (connexion), pas une panne : information, pas isError
         return { isError: true, content: [{ type: "text", text: e.message }] };
       }
     });

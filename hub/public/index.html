@@ -553,6 +553,20 @@ async function loadStatus() {
 
 function view(name) { $("#app").hidden = name !== "app"; $("#signin").hidden = name !== "signin"; $("#offline").hidden = name !== "offline"; }
 let seq = 0;
+// ---- Lien direct ?connecter=<système> (donné par l'assistant quand une connexion manque) : ouvre la ligne et met en avant
+// « Se connecter » ou le formulaire ; conservé le temps d'un passage par le SSO, puis retiré de l'adresse.
+function keepLink() { const id = new URLSearchParams(location.search).get("connecter"); if (id) try { sessionStorage.setItem("connecter", id); } catch { /* stockage indisponible : lien perdu, portail normal */ } }
+function openLinked() {
+  let id = new URLSearchParams(location.search).get("connecter");
+  try { id ||= sessionStorage.getItem("connecter"); sessionStorage.removeItem("connecter"); } catch { /* idem */ }
+  if (location.search.includes("connecter=")) history.replaceState(null, "", location.pathname);
+  const s = id && ME.systems.find((x) => x.id === id); // seulement un système connu : rien de l'adresse n'est injecté dans la page
+  if (!s) return;
+  const form = s.apiKey && !s.connected && !(s.oauth && s.configured);
+  toggle(s.id, true, form);
+  $(`#t-${s.id}`)?.closest("li")?.scrollIntoView({ block: "center" });
+  if (!form) document.querySelector(`a[href="/auth/${s.id}"]`)?.focus();
+}
 async function load() {
   const n = ++seq; let me;
   try { const r = await fetch("/api/me"); if (!r.ok) throw new Error(`HTTP ${r.status}`); me = await r.json(); } catch { view("offline"); $("#profile").innerHTML = ""; return; }
@@ -563,7 +577,7 @@ async function load() {
   // SSO : un visiteur non identifié part vers Microsoft Entra ID (transparent si le navigateur a déjà une session Microsoft 365),
   // sauf juste après « Se déconnecter » (?sso=off) : la session Microsoft, elle, est toujours ouverte, on attend un clic.
   if (me.sso && !me.key) {
-    if (!location.search.includes("sso=off")) { location.replace("/auth/sso"); return; }
+    if (!location.search.includes("sso=off")) { keepLink(); location.replace("/auth/sso"); return; }
     $("#profile").innerHTML = ""; view("signin"); return;
   }
   view("app"); ME = me;
@@ -573,7 +587,7 @@ async function load() {
     + (me.sso ? `<button class="iconbtn" type="button" onclick="logout()" aria-label="Se déconnecter" title="Se déconnecter">${ico("logout", "icon sm")}</button>` : "");
   paintSystems();
   $("#mcp-url").textContent = me.mcpUrl;
-  paintCfg(); paintSummary(); renderTabs(); loadStatus();
+  paintCfg(); paintSummary(); renderTabs(); loadStatus(); openLinked();
   $("#config-section").hidden = !me.config;
   if (me.config) $("#config").innerHTML = me.config.map((v) => `<tr><td><i class="on-dot ${v.value ? "on" : ""}"></i>${esc(v.name)}</td><td>${v.value ? esc(v.value) : "— vide (défaut ou mode simulé)"}</td></tr>`).join("");
 }

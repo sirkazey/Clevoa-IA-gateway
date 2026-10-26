@@ -26,6 +26,10 @@ l'assistant interroge les outils **avec vos droits, en lecture seule**.
    **Vérifier et enregistrer** essaie d'abord vos identifiants ou votre jeton auprès du système : s'il les refuse, ou
    s'il ne répond pas, un message rouge s'affiche sous le formulaire et rien n'est enregistré (votre connexion
    précédente, s'il y en avait une, reste en place).
+
+   Si vous posez une question sur une application que vous n'avez pas encore connectée (ou dont la connexion a expiré),
+   l'assistant vous le dit et vous donne un lien : il ouvre directement la bonne ligne du portail, avec le bouton
+   **Se connecter** ou le formulaire prêt. Connectez-vous, puis reposez la question.
 3. Cliquer le bouton de test (flèches circulaires) d'une ligne, ou **Tout tester** : le détail de la ligne s'ouvre avec
    un encadré vert « Accès vérifié » (outils ou tables disponibles) ou rouge avec le message d'erreur. La flèche de
    droite ouvre ce détail, avec **Reconnecter** et **Déconnecter**. Une erreur n'empêche pas les autres outils de fonctionner.
