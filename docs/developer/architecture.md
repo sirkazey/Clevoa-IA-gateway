@@ -34,7 +34,7 @@ Assistant IA (Claude Code, Claude Desktop, ChatGPT, Copilot)
 │ resolve.js     noms résolus IPv4 d'abord, puis IPv6 (musl, Docker)   │
 │ connectors/    salesforce · sagex3 · sharepoint · dropbox · myreport │
 │ public/        index.html, le portail                                │
-│ test/          node:test, amont mocké, 146 tests                     │
+│ test/          node:test, amont mocké, 147 tests                     │
 └───┬─────────────┬───────────────┬───────────────┬───────────────┬────┘
     ▼ MCP HTTP    ▼ REST Syracuse ▼ Graph (GET)   ▼ MCP HTTP      ▼ MCP SSE
  Salesforce    Sage X3 24R1    SharePoint      Dropbox (MCP    MyReport Server
