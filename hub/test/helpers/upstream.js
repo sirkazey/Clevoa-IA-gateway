@@ -110,7 +110,7 @@ export async function startUpstream() {
       const who = query.login_hint?.split("@")[0] || query.mock_user;
       if (!who) return json(res, 400, { error: "mock: login_hint ou mock_user requis" });
       const code = `issued-${state.codes.size + 1}`;
-      state.codes.set(code, { who, challenge: query.code_challenge });
+      state.codes.set(code, { who, challenge: query.code_challenge, scope: query.scope || "" });
       const back = new URL(query.redirect_uri); back.searchParams.set("code", code); back.searchParams.set("state", query.state);
       res.writeHead(302, { Location: back.href }); return res.end();
     }
@@ -130,17 +130,18 @@ export async function startUpstream() {
         return json(res, 200, { access_token: "ms-token-refreshed", refresh_token: "ms-refresh-tourne", token_type: "Bearer",
           ...(mode === "idtoken" || mode === "forged" ? { id_token: sign(claims, { tamper: mode === "forged" }) } : {}) });
       }
-      let code = p.get("code");
+      let code = p.get("code"), profile = true; // comme Entra : sans le scope profile, ni oid, ni preferred_username, ni name dans l'id_token
       const issued = state.codes.get(code);
       if (issued) {
         state.codes.delete(code);
         if (createHash("sha256").update(p.get("code_verifier") || "").digest("base64url") !== issued.challenge) return json(res, 400, { error: "invalid_grant", error_description: "PKCE: code_verifier invalide" });
-        code = issued.who;
+        code = issued.who; profile = issued.scope.split(" ").includes("profile");
       } else if (code.startsWith("issued-")) return json(res, 400, { error: "invalid_grant", error_description: "code inconnu ou déjà utilisé" });
       const [who, flaw] = code.split(":"), now = Math.floor(Date.now() / 1000);
       const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
       const claims = { sub: `pairwise-${who}`, iss: flaw === "iss" ? `http://evil.example.invalid/${ms[1]}/v2.0` : `${base}/ms/${ms[1]}/v2.0`, aud: flaw === "aud" ? "other-app" : p.get("client_id"), tid: flaw === "tid" ? "other-tenant" : ms[1],
         oid: flaw === "noid" ? undefined : `oid-${who}`, preferred_username: `${who}@charlois.example`, name: who[0].toUpperCase() + who.slice(1), iat: now, exp: flaw === "exp" ? now - 60 : now + 600 };
+      if (!profile) for (const k of ["oid", "preferred_username", "name"]) delete claims[k];
       const idToken = flaw === "none" ? [b64({ alg: "none" }), b64(claims), ""].join(".") : sign(claims, { tamper: flaw === "sig" });
       return json(res, 200, { access_token: `ms-token-${code}`, refresh_token: `ms-refresh-${code}`, token_type: "Bearer", id_token: idToken });
     }

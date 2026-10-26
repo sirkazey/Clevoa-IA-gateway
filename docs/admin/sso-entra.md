@@ -51,8 +51,10 @@ identifiant `oid`). Ne jamais désactiver la vérification TLS de Node
 Constater que le SSO est actif : la ligne de démarrage contient `· SSO entra`, le portail affiche « via Microsoft
 Entra ID » à côté de l'identité, `SSO_MODE` apparaît dans la configuration du conteneur. Lire un échec : « Échec de la
 connexion Microsoft Entra ID (…) » avec une réponse HTTP 400 = `id_token` refusé (locataire ou application inattendus) ;
-la même phrase avec une réponse HTTP 502 et la ligne de journal `[oauth] sso : échec de l'échange de jeton` = échange de
-code refusé par Entra (secret ou URI faux ; le statut d'Entra est entre parenthèses) ; « Système inconnu ou session
+la même phrase avec une réponse HTTP 502 et la ligne de journal `[oauth] sso : échec de l'échange de jeton (HTTP 400)` = échange de
+code refusé par Entra (secret ou URI faux ; le statut d'Entra est entre parenthèses). Codes du journal propres au SSO :
+`SSO_REVENDICATIONS_ABSENTES`, `SSO_LOCATAIRE`, `SSO_AUDIENCE`, `SSO_EXPIRE`, et `SSO_AUTRE_COMPTE` pour SharePoint connecté
+avec un autre compte Microsoft que celui du portail ; « Système inconnu ou session
 absente » = flux lancé sans identité.
 
 ## Mode `mock` : développement et CI, jamais la production

@@ -190,7 +190,7 @@ test("SharePoint et Dropbox : OAuth utilisateur (Entra avec scopes délégués l
   up.reset();
   const sp = new URL((await fetch(`${hub.url}/auth/sharepoint`, { headers: { cookie }, ...noFollow })).headers.get("location"));
   assert.equal(sp.origin + sp.pathname, `${up.url}/ms/common/oauth2/v2.0/authorize`);
-  assert.equal(sp.searchParams.get("scope"), "openid offline_access User.Read Files.Read.All Sites.Read.All");
+  assert.equal(sp.searchParams.get("scope"), "openid profile offline_access User.Read Files.Read.All Sites.Read.All");
   const spCb = await fetch(`${hub.url}/auth/sharepoint/callback?code=sp1&state=${sp.searchParams.get("state")}`, { headers: { cookie }, ...noFollow });
   assert.equal(spCb.status, 302, await spCb.text());
   assert.equal(up.requests("/v1.0/me")[0].headers.authorization, "Bearer ms-token-sp1");

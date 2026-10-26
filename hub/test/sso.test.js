@@ -80,9 +80,12 @@ test("Connexion SSO : redirection Entra (S256, openid profile email, sans prompt
   const sp = await fetch(`${hub.url}/auth/sharepoint?silent=1`, { headers: { cookie: `mcp_key=${marie}` }, ...noFollow });
   const spLoc = new URL(sp.headers.get("location"));
   assert.equal(spLoc.searchParams.get("prompt"), "none"); assert.equal(spLoc.searchParams.get("login_hint"), "marie@charlois.example");
-  assert.equal(spLoc.searchParams.get("scope"), "openid offline_access User.Read Files.Read.All Sites.Read.All");
-  const spCb = await fetch(`${hub.url}/auth/sharepoint/callback?code=marie&state=${spLoc.searchParams.get("state")}`, { headers: { cookie: `mcp_key=${marie}` }, ...noFollow });
-  assert.equal(spCb.status, 302); assert.equal(spCb.headers.get("location"), "/");
+  assert.equal(spLoc.searchParams.get("scope"), "openid profile offline_access User.Read Files.Read.All Sites.Read.All");
+  // Par la mire Entra simulée, qui, comme Entra, n'émet oid, preferred_username et name que si le scope profile est demandé :
+  // sans lui, l'id_token SharePoint n'a pas d'oid et la vérification « même compte que le SSO » échoue (constaté sur un vrai locataire).
+  const back = new URL((await fetch(spLoc, noFollow)).headers.get("location"));
+  const spCb = await fetch(`${hub.url}${back.pathname}${back.search}`, { headers: { cookie: `mcp_key=${marie}` }, ...noFollow });
+  assert.equal(spCb.status, 302, await spCb.text()); assert.equal(spCb.headers.get("location"), "/");
   assert.equal(hub.readUsers()[marie].sharepoint.access_token, "ms-token-marie");
   assert.equal(hub.readUsers()[marie].sharepoint.id_token, undefined, "l'id_token SharePoint n'est pas conservé"); assert.equal(hub.readUsers()[marie].sso.sub, "oid-marie", "le flux SharePoint ne touche pas l'identité");
   assert.ok((await me(marie)).systems.find((s) => s.id === "sharepoint").connected);
@@ -285,6 +288,7 @@ test("Poste partagé : fixation de session impossible, clé antérieure au SSO j
   const spState = new URL(sp.headers.get("location")).searchParams.get("state");
   const other = await fetch(`${hub.url}/auth/sharepoint/callback?code=marie&state=${spState}`, { headers: { cookie: `mcp_key=${paul}` }, ...noFollow });
   assert.equal(other.status, 400, await other.text()); assert.equal(hub.readUsers()[paul].sharepoint, undefined);
+  assert.ok(hub.logs().includes("[oauth] sharepoint : échec de l'échange de jeton (SSO_AUTRE_COMPTE)"), "cause lisible au journal, sans identité");
   const sp2 = await fetch(`${hub.url}/auth/sharepoint`, { headers: { cookie: `mcp_key=${paul}` }, ...noFollow });
   const own = await fetch(`${hub.url}/auth/sharepoint/callback?code=paul&state=${new URL(sp2.headers.get("location")).searchParams.get("state")}`, { headers: { cookie: `mcp_key=${paul}` }, ...noFollow });
   assert.equal(own.status, 302); assert.equal(hub.readUsers()[paul].sharepoint.access_token, "ms-token-paul");
