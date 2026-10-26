@@ -263,7 +263,7 @@ test("Cache : par utilisateur — Bob ne réutilise pas la structure d'Alice, il
     const calls = up.requests("$prototypes");
     assert.ok(calls.length > 0 && calls.every((r) => r.headers.authorization === "Bearer sage-token-bob"));
     const sf = await c.callTool({ name: "salesforce_tools", arguments: {} });
-    assert.equal(sf.isError, true, "Bob n'est pas connecté à Salesforce : pas de structure empruntée");
+    assert.match(sf.content[0].text, /^Non connecté à Salesforce : aucune donnée n'a été lue/, "Bob n'est pas connecté à Salesforce : pas de structure empruntée");
   } finally { await c.close(); }
 });
 
@@ -317,7 +317,7 @@ test("Clé d'API Syracuse : les outils MCP l'envoient en Bearer, et un 401 ne d�
     assert.equal(up.requests("/api1/x3/erp/PROD/BPCUSTOMER")[0].headers.authorization, "Bearer syr-key-dan");
     up.failNext("/api1/x3/erp/PROD/BPCUSTOMER", 401);
     const r = await c.callTool({ name: "sagex3_query", arguments: { representation: "BPCUSTOMER" } });
-    assert.equal(r.isError, true);
+    assert.match(r.content[0].text, /^Sage X3 a refusé vos identifiants \(401\), effacés pour ne pas bloquer votre compte : aucune donnée n'a été lue\. Action requise : ressaisir ses identifiants sur /);
     assert.equal(up.requests("/oauth/token").length, 0);
   } finally { await c.close(); }
 });
@@ -368,10 +368,24 @@ test("Refresh : sans refresh_token, le 401 amont remonte en isError sans appel a
     assert.match(r.content[0].text, /Sage X3 401/);
     assert.equal(up.requests("/oauth/token").length, 0);
 
+    // Système non connecté : une information (pas isError), sans donnée, avec le lien direct vers la ligne du portail
     const sf = await sfQuery(c, "SELECT Id FROM Account");
-    assert.equal(sf.isError, true);
-    assert.match(sf.content[0].text, /Non connecté à Salesforce/);
+    assert.equal(sf.isError, undefined);
+    assert.match(sf.content[0].text, /^Non connecté à Salesforce : aucune donnée n'a été lue\. Action requise : se connecter sur http:\/\/127\.0\.0\.1:\d+\/\?connecter=salesforce \(une minute\), puis reposer la question\.$/);
+    assert.equal(sf.content.length, 1, "pas de ligne « Source » : rien n'a été lu");
   } finally { await c.close(); }
+});
+
+test("Consignes de session : état des connexions du collaborateur et lien direct pour chaque système à connecter ; rien si tout est connecté", async () => {
+  const bob = await sseClient(KEY_NO_REFRESH);
+  try {
+    const ins = bob.getInstructions();
+    assert.match(ins, /État des connexions de ce collaborateur à l'ouverture de la session : connecté à Sage X3 ; à connecter : Salesforce \(http:\/\/127\.0\.0\.1:\d+\/\?connecter=salesforce\), SharePoint/);
+    assert.match(ins, /N'en parler que si la question porte sur un système à connecter/);
+    assert.match(ins, /sans jamais en déduire une absence de données ni un total nul/);
+  } finally { await bob.close(); }
+  const alice = await sseClient(KEY);
+  try { assert.ok(!alice.getInstructions().includes("État des connexions"), "tout est connecté : pas de rappel"); } finally { await alice.close(); }
 });
 
 test("Refresh : un 401 persistant après refresh remonte en isError", async () => {
@@ -414,7 +428,7 @@ test("Refresh token révoqué : message clair, jetons effacés, portail repassé
   const c = await sseClient();
   try {
     const r = await sfQuery(c, "SELECT Id FROM Account");
-    assert.equal(r.isError, true); assert.match(r.content[0].text, /Session Salesforce expirée ou révoquée : reconnectez-vous/);
+    assert.equal(r.isError, undefined); assert.match(r.content[0].text, /^Session Salesforce expirée ou révoquée : aucune donnée n'a été lue\. Action requise : se connecter sur .*\/\?connecter=salesforce /);
     assert.equal(hub.readUsers()[KEY].salesforce, undefined, "entrée Salesforce effacée");
     const again = await sfQuery(c, "SELECT Id FROM Account");
     assert.match(again.content[0].text, /Non connecté à Salesforce/);
@@ -433,8 +447,8 @@ test("Traçabilité : chaque résultat d'outil se termine par une ligne « Sourc
     assert.equal(src, "Source : Sage X3 · dossier PROD");
     assert.ok(!/Bearer|sage-token|http|alice|C0001/.test(src), "ni jeton, ni adresse, ni compte, ni paramètres dans la source");
     const sf = await sfQuery(c, "SELECT Id FROM Account LIMIT 1"); // alice a pu être déconnectée de Salesforce par un test précédent
-    if (!sf.isError) assert.equal(sf.content.at(-1).text, "Source : Salesforce · production", "le mock n'est pas une sandbox");
-    else assert.equal(sf.content.length, 1, "une erreur ne porte pas de ligne Source");
+    if (!/aucune donnée n'a été lue/.test(sf.content[0].text)) assert.equal(sf.content.at(-1).text, "Source : Salesforce · production", "le mock n'est pas une sandbox");
+    else assert.equal(sf.content.length, 1, "une connexion à faire ne porte pas de ligne Source");
   } finally { await c.close(); }
 });
 

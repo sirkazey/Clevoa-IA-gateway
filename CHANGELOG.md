@@ -15,6 +15,7 @@ Correctifs constatés aux premiers tests réels de SharePoint et du SSO Entra, s
 ### Ajouté
 - Identifiants Syracuse, clé d'API ou jeton MyReport vérifiés auprès du système avant l'enregistrement (« Vérifier et enregistrer ») : refusés ou système injoignable, rien n'est enregistré, la connexion précédente reste en place et le motif s'affiche sous le formulaire.
 - Protection contre le blocage du compte Syracuse (3 mots de passe erronés chez Charlois) : un seul essai par vérification (première représentation seule, les autres ensuite), deux refus au plus par quart d'heure, identifiants effacés au premier 401 au lieu d'être réessayés à chaque question de l'assistant.
+- Système à connecter ou à reconnecter : l'outil répond par une information (« aucune donnée n'a été lue. Action requise : se connecter sur <lien> »), plus par une erreur ; le lien `?connecter=<système>` ouvre la bonne ligne du portail ; l'assistant reçoit à l'ouverture de la session la liste des systèmes à connecter.
 
 ### Corrigé
 - Résolution des noms en IPv4 d'abord, puis IPv6 : l'image Alpine (musl) garde au plus 48 adresses par nom ; avec un DNS qui renvoie des réponses en double (Docker Desktop), `login.microsoftonline.com` ne donnait plus que de l'IPv6, injoignable sans IPv6 dans le réseau Docker (`ENETUNREACH`).
