@@ -10,19 +10,28 @@ travail. Les règles permanentes sont dans [`CLAUDE.md`](../../CLAUDE.md), charg
    Claude GitHub est installée sur `sirkazey/Clevoa-IA-gateway` (même page). Sans elle, la session ne peut ni cloner ni
    ouvrir de PR.
 2. **Environnement cloud.** Sur claude.ai/code, créer un environnement nommé `MCP-Finance` :
-   * *Network access* : niveau par défaut ; si le niveau est limité, ajouter `nodejs.org` aux domaines autorisés
-     (téléchargement de Node 24), case « gestionnaires de paquets » cochée (npm) ;
-   * *Setup script* : coller la ligne ci-dessous (elle trouve le dépôt quel que soit son nom de dossier) ;
+   * *Network access* : **Trusted** (par défaut) ; il autorise déjà `nodejs.org` et npm ;
+   * *Setup script* : coller le script ci-dessous. Il installe Node 24 sans dépendre du dépôt, puis les dépendances si
+     le dépôt est déjà cloné, et sort toujours en code 0 (un code non nul empêche la session de démarrer) ;
    * aucune variable ni secret : les tests tournent sans réseau ni compte réel.
 
    ```bash
-   for d in */; do [ -f "$d/ops/claude-setup.sh" ] && bash "$d/ops/claude-setup.sh" && break; done
+   #!/bin/bash
+   # Clevoa AI Gateway : Node 24 (l'image fournit Node 22), puis dépendances si le dépôt est déjà cloné. Toujours code 0.
+   V=24.22.1
+   if ! /opt/node24/bin/node --version 2>/dev/null | grep -qx "v$V"; then
+     mkdir -p /opt/node24 && curl -sSfL "https://nodejs.org/dist/v$V/node-v$V-linux-x64.tar.xz" | tar -xJ -C /opt/node24 --strip-components=1
+   fi
+   mkdir -p "$HOME/.local/bin" && ln -sf /opt/node24/bin/node /opt/node24/bin/npm /opt/node24/bin/npx "$HOME/.local/bin/"
+   for d in */; do [ -f "$d/ops/claude-setup.sh" ] && bash "$d/ops/claude-setup.sh"; done
+   true
    ```
-3. **Session.** Nouvelle session dans cet environnement, dépôt `sirkazey/Clevoa-IA-gateway`, branche `dev`, modèle le
-   plus capable proposé, mode de permission *auto*.
+3. **Session.** Nouvelle session dans cet environnement, **dépôt `sirkazey/Clevoa-IA-gateway` sélectionné avant le
+   premier message** (sinon le dépôt n'est pas cloné : « Cloner le dépôt » apparaît grisé), branche `dev`, modèle le plus
+   capable proposé, mode de permission *auto*.
 4. **Contexte.** Coller le prompt du § 2 comme premier message.
 5. **Vérification.** La session doit répondre avec la version courante, l'état de `main` et `dev`, et le résultat
-   des tests du hub. Si Node 22 apparaît, le script du § 1.2 n'a pas tourné : lancer `bash ops/claude-setup.sh`.
+   des tests du hub. Si Node 22 apparaît ou si les dépendances manquent, lancer `bash ops/claude-setup.sh` dans la session.
 
 Facultatif, selon le travail : reconnecter Google Drive (contrats et documents Clevoa), Microsoft Learn (documentation
 Entra ID), et recopier les préférences personnelles (§ 3).
