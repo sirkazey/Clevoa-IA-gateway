@@ -13,11 +13,18 @@ const BASE = (process.env.SAGE_URL || "").replace(/\/$/, "");
 const FOLDER = process.env.SAGE_FOLDER || "PROD";
 const LANG = process.env.SAGE_LANG || "fr-FR"; // Syracuse traduit les libellés selon Accept-Language ; une seule étiquette (« fr-FR,fr » a donné de l'anglais sur 24R1)
 const TIMEOUT_MS = 30_000; // Syracuse ouvre une session X3 à chaque appel : parfois lent, jamais infini
-const REPRESENTATIONS = (process.env.SAGE_REPRESENTATIONS || "BPCUSTOMER,BPSUPPLIER,SINVOICE,PINVOICE,SORDER,PORDER,GACCENTRY,ITMMASTER").split(",").map((s) => s.trim());
+// Défaut : représentations standard publiées sur 24R1. SINVOICE et GACCENTRY en sont retirées (404 « does not exist » sur la
+// préproduction : développement spécifique chez l'intégrateur) ; les ajouter par SAGE_REPRESENTATIONS une fois publiées.
+const DEFAULT_REPRESENTATIONS = "BPCUSTOMER,BPSUPPLIER,PINVOICE,SORDER,PORDER,ITMMASTER";
+const REPRESENTATIONS = (process.env.SAGE_REPRESENTATIONS || DEFAULT_REPRESENTATIONS).split(",").map((s) => s.trim());
 const name = z.string().regex(/^\w+$/, "nom de représentation invalide"); // bloque toute traversée de chemin
 // Pièges vérifiés sur la préproduction, renvoyés par sagex3_describe (données plutôt que prose dans le schéma d'outil).
-const FACTURES = "Le type de pièce n'est pas exposé : il est dans NUM (…FAF… facture, …AVF… avoir). Les montants ne sont pas signés, un avoir compte positif : distinguer factures et avoirs avant de totaliser. INVNUM renseigné = avoir rattaché à cette facture d'origine. Le statut de règlement n'est pas exposé.";
-const NOTES = { PINVOICE: FACTURES, SINVOICE: FACTURES };
+const SUITE = "Les montants ne sont pas signés, un avoir compte positif : distinguer factures et avoirs avant de totaliser. INVNUM renseigné = avoir rattaché à cette facture d'origine. Le statut de règlement n'est pas exposé.";
+const FACTURES = `Le type de pièce n'est pas exposé : il est dans NUM (…FAF… facture, …AVF… avoir). ${SUITE}`;
+// PIHTYP (menu local 533) ajouté par l'intégrateur sur les dossiers de recette seulement : la règle du numéro reste la référence
+// tant que le champ n'est pas en production.
+const FACTURES_ACHAT = `Type de pièce : si sagex3_describe liste le champ PIHTYP, il fait foi (1 facture, 2 facture complémentaire, 3 avoir, 4 avoir/retour) ; sinon, il est dans NUM (…FAF… facture, …AVF… avoir). ${SUITE}`;
+const NOTES = { PINVOICE: FACTURES_ACHAT, SINVOICE: FACTURES };
 
 export const id = "sagex3";
 export const label = "Sage X3";

@@ -33,7 +33,7 @@ services:
       SAGE_FOLDER: ${SAGE_FOLDER}
       SAGE_APIKEY_MODE: ${SAGE_APIKEY_MODE}      # bearer (défaut) ou basic : comment envoyer la clé d'API personnelle
       SAGE_LANG: ${SAGE_LANG}                         # langue des libellés Syracuse ; défaut fr-FR
-      SAGE_REPRESENTATIONS: ${SAGE_REPRESENTATIONS}   # représentations exposées ; défaut : 8 standards (BPCUSTOMER, BPSUPPLIER, SINVOICE, PINVOICE, SORDER, PORDER, GACCENTRY, ITMMASTER)
+      SAGE_REPRESENTATIONS: ${SAGE_REPRESENTATIONS}   # représentations exposées ; défaut : 6 standards (BPCUSTOMER, BPSUPPLIER, PINVOICE, SORDER, PORDER, ITMMASTER)
       SAGE_OAUTH_AUTH_URL: ${SAGE_OAUTH_AUTH_URL}
       SAGE_OAUTH_TOKEN_URL: ${SAGE_OAUTH_TOKEN_URL}
       SAGE_OAUTH_USERINFO_URL: ${SAGE_OAUTH_USERINFO_URL}

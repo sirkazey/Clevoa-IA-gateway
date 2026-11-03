@@ -1,6 +1,6 @@
 # État des fonctionnalités et limites connues
 
-Version 1.5.1 (correctifs d'audit de la 1.5.0 du 26/10/2026), toujours sans avoir passé le cloisonnement avec un compte non administrateur, le déploiement sur un serveur de pré-production ni une restauration réelle : à faire avant toute production (Node 24 ; base d'exploitation SQLite : disponibilité, usage, journal d'audit facultatif ; OpenID Connect et limites de débit par des composants éprouvés). Statuts selon [les conventions](../CONTRIBUTING.md#statut-des-fonctionnalités) : **disponible** (vérifié
+Version 1.5.2 (03/11/2026 : type de pièce `PIHTYP` de PINVOICE, liste Sage X3 par défaut sans `SINVOICE` ni `GACCENTRY`), toujours sans avoir passé le cloisonnement avec un compte non administrateur, le déploiement sur un serveur de pré-production ni une restauration réelle : à faire avant toute production (Node 24 ; base d'exploitation SQLite : disponibilité, usage, journal d'audit facultatif ; OpenID Connect et limites de débit par des composants éprouvés). Statuts selon [les conventions](../CONTRIBUTING.md#statut-des-fonctionnalités) : **disponible** (vérifié
 sur le système réel), **testé sur bouchon** (tests automatisés et simulateur seulement), **expérimental**, **prévu**, **non planifié**.
 Évolutions : [roadmap produit](../roadmap-produit.md). Preuves : [journal des tests réels](journal-tests-reels.md), [campagne de charge](charge-v1.2.1.md), CI.
 
@@ -44,8 +44,9 @@ sur le système réel), **testé sur bouchon** (tests automatisés et simulateur
 
 * **Cloisonnement sur les systèmes réels** observé avec un compte administrateur seulement. Le test avec un compte
   restreint sur Sage X3 et Salesforce est la première preuve manquante.
-* **Sage X3** : seules les colonnes de liste sont renvoyées par `sagex3_query` ; type de pièce (facture / avoir) et
-  statut de règlement non exposés tant que l'intégrateur n'a pas publié les représentations demandées ; fiche
+* **Sage X3** : seules les colonnes de liste sont renvoyées par `sagex3_query` ; type de pièce de PINVOICE
+  (`PIHTYP`) publié sur les dossiers de recette seulement, non encore exercé par le hub (règle du numéro conservée) ;
+  statut de règlement (`GACCDUDATE`), `SINVOICE` et `GACCENTRY` absents en standard : développement spécifique à chiffrer ; fiche
   complète de 60 à 130 000 caractères (paramètre `champs`) ; délai de 30 s par requête ; enregistrements techniques
   en tête sans tri.
 * **Salesforce** : une session MCP vers SObject Reads par appel d'outil (trois requêtes HTTP) ; un 429 amont est rendu

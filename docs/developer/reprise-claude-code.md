@@ -107,7 +107,8 @@ est déjà dans [`docs/validation/`](../validation/etat-des-fonctionnalites.md).
 
 ## 6. État au 3 novembre 2026
 
-* `main` : version **1.5.1** (`de0c1be`), tag `v1.5.1` posé ; `dev` réaligné sur `main` (`9161c5e`).
+* `main` : version **1.5.2** (livrée le 3 novembre 2026), tag `v1.5.2` et Release à poser par le propriétaire ; `dev`
+  réaligné sur `main` après la livraison.
 * Recette réelle restante avant toute production : [état des fonctionnalités § 3](../validation/etat-des-fonctionnalites.md#3-tests-restant-à-réaliser).
 * Sage X3 (préproduction CHREC) : l'intégrateur a ajouté le champ `PIHTYP` (type de pièce, menu local 533 : 1 facture,
   2 facture complémentaire, 3 avoir, 4 avoir/retour) à la représentation `PINVOICE`, sur CHDEV et CHREC seulement.
@@ -116,10 +117,11 @@ est déjà dans [`docs/validation/`](../validation/etat-des-fonctionnalites.md).
 
 Travaux en attente, dans l'ordre proposé :
 
-1. Version corrective : note de `PINVOICE` sur `PIHTYP` (garder la règle du numéro de pièce tant que le champ n'est
-   pas en production), `SINVOICE` retirée de la liste par défaut des représentations, journal des tests réels mis à jour.
-2. Documentation : job `sbom` absent du tableau de [tests et analyses](tests.md).
-3. Décision du propriétaire : alléger le dépôt pour un client unique (télémétrie, backend AWS et console ; connecteurs
-   Dropbox et MyReport ; le test de retour arrière s'appuie sur le simulateur MyReport, à basculer sur Sage).
-4. Côté GitHub, à faire par le propriétaire : supprimer les branches déjà fusionnées, poser les rulesets de `main`,
+1. Sage X3 sur CHREC : vérifier que le hub lit `PIHTYP` (« Décris PINVOICE », puis une liste d'avoirs d'achat) et
+   consigner le résultat au [journal des tests réels](../validation/journal-tests-reels.md). Fait en 1.5.2 : note de
+   `PINVOICE`, liste par défaut sans `SINVOICE` ni `GACCENTRY`, ligne `sbom` dans [tests et analyses](tests.md).
+2. Décision du propriétaire : alléger le dépôt pour un client unique (télémétrie, backend AWS et console ; connecteurs
+   Dropbox et MyReport ; le test de retour arrière s'appuie sur le simulateur MyReport, à basculer sur Sage) : à
+   reprendre après la recette réelle.
+3. Côté GitHub, à faire par le propriétaire : supprimer les branches déjà fusionnées, poser les rulesets de `main`,
    `dev` et des tags `v*`.
