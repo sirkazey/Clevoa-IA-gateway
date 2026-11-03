@@ -40,11 +40,13 @@ sans clé à copier. Statut : **expérimental**, désactivé par défaut (`ONLIN
 ## 2. Prérequis
 
 * SSO Entra du portail actif (`SSO_MODE=entra`) : même locataire, même identité ([guide](sso-entra.md)).
-* Un compte Cloudflare et une zone DNS gérée par Cloudflare pour le nom public (ex. `mcp.exemple.fr`).
+* Le compte Cloudflare **de Clevoa**, qui exploite le service managé, et une zone DNS gérée par Cloudflare pour le nom public
+  (ex. `mcp.exemple.fr`) ; un tunnel et un nom d'hôte par client. Compte à sécuriser comme une production :
+  [responsabilités](../developer/architecture.md#9-service-managé--qui-exploite-quoi).
 * Claude **Team** ou **Enterprise** : seul l'Owner ajoute le connecteur pour l'organisation.
 * Avis du DPO : Cloudflare termine le HTTPS et **voit les échanges en clair** (questions et réponses, données métier
-  comprises). Cloudflare devient sous-traitant ; la localisation des données en UE est réservée à l'offre Enterprise de
-  Cloudflare.
+  comprises). Cloudflare devient sous-traitant ultérieur de Clevoa, à prévoir au contrat ; la localisation des données en UE
+  est réservée à l'offre Enterprise de Cloudflare.
 
 ## 3. Entra ID : inscription « connecteur Claude »
 

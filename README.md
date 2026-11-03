@@ -33,18 +33,62 @@ propre nom de serveur MCP et son libellé (`MCP_SERVER_NAME`, `INSTANCE_LABEL`).
 ## Architecture
 
 ```mermaid
-flowchart LR
-    A["Assistant IA<br/>Claude Code · Claude Desktop · ChatGPT · Copilot"] -- "MCP + Bearer clé personnelle" --> H
-    subgraph H["mcp-hub (1 conteneur)"]
-        P["Portail · OAuth · SSO"] --- S["Outils MCP<br/>/mcp · /sse"]
-        S --- U["users.json chiffré<br/>jetons individuels"]
+flowchart TB
+    subgraph U["Collaborateurs"]
+        direction LR
+        D["Claude Desktop · Claude Code<br/>ChatGPT · Copilot<br/>réseau interne ou VPN"]
+        M["claude.ai web · mobile<br/>hors réseau"]
     end
-    H -- "MCP SObject Reads" --> SF["Salesforce"]
-    H -- "REST Syracuse" --> X3["Sage X3"]
-    H -- "Microsoft Graph" --> SP["SharePoint / OneDrive"]
-    H -- "MCP officiel" --> DB["Dropbox"]
-    H -- "MCP SSE" --> MR["MyReport"]
+    subgraph EXT["Hors du réseau du client"]
+        direction LR
+        C["Cloud Anthropic<br/>connecteur Claude de l'organisation"]
+        T["Cloudflare · compte Clevoa<br/>nom public · WAF · tunnel"]
+    end
+    subgraph CH["Infrastructure du client · aucun port entrant"]
+        CD["cloudflared"]
+        subgraph H["mcp-hub · 1 conteneur"]
+            direction LR
+            P["Portail · SSO<br/>/mcp · /sse · clé perso"]
+            O["Port en ligne<br/>OAuth relayé · /mcp"]
+            S["Outils MCP<br/>users.json chiffré · hub.db"]
+        end
+        B["mcp-backup"]
+        X3["Sage X3"]
+        MR["MyReport"]
+    end
+    subgraph SAAS["Services en ligne du client"]
+        direction LR
+        E["Microsoft Entra ID"]
+        SP["SharePoint · OneDrive"]
+        SF["Salesforce"]
+        DB["Dropbox"]
+    end
+    subgraph CL["Clevoa · service managé"]
+        direction LR
+        TB["Télémétrie et incidents<br/>AWS, à déployer"]
+        CO["Console de suivi"]
+    end
+    D -->|"MCP + clé personnelle"| P
+    M --> C
+    M -.->|"connexion, une fois"| T
+    C -->|"MCP + jeton Entra"| T
+    T ---|"tunnel sortant"| CD
+    CD --> O
+    P --- S
+    O --- S
+    B --- S
+    S -->|"REST Syracuse"| X3
+    S -->|"MCP SSE"| MR
+    O -.->|"connexion et jetons relayés"| E
+    P -.->|"SSO"| E
+    S -->|"Graph · SObject Reads · MCP officiel"| SAAS
+    S -.->|"compteurs, toutes les 6 h"| TB
+    TB --> CO
 ```
+
+Accès en ligne (claude.ai web et mobile) : expérimental, désactivé par défaut ([guide](docs/admin/acces-en-ligne.md)).
+Clevoa exploite le service pour le client : déploiement des briques, compte Cloudflare, supervision et évolutions
+([responsabilités](docs/developer/architecture.md#9-service-managé--qui-exploite-quoi)).
 
 Détail des modules et des flux : [architecture](docs/developer/architecture.md).
 

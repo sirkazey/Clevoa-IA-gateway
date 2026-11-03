@@ -1,19 +1,23 @@
 # Architecture
 
-Pour le développeur qui reprend le code. Un seul conteneur Node 24, cinq dépendances directes (`@modelcontextprotocol/sdk`,
-`express`, `zod`, `express-rate-limit` pour toutes les limites de débit, `openid-client` pour le SSO et SharePoint ; registre et
-politique : [dépendances](dependances.md)), un fichier d'état chiffré (`users.json`) et, depuis la 1.5, une base
+Pour le développeur qui reprend le code. Un seul conteneur Node 24, six dépendances directes (`@modelcontextprotocol/sdk`,
+`express`, `zod`, `express-rate-limit` pour toutes les limites de débit, `openid-client` pour le SSO et SharePoint, `jose` pour
+vérifier les jetons Entra de l'accès en ligne ; registre et politique : [dépendances](dependances.md)), un fichier d'état chiffré (`users.json`) et, depuis la 1.5, une base
 d'exploitation SQLite intégrée à Node (`hub.db`, sans dépendance ni service), aucune abstraction. Les connecteurs sont des
 modules, pas des services.
 
 ## 1. Vue d'ensemble
 
 ```
-Assistant IA (Claude Code, Claude Desktop, ChatGPT, Copilot)
-        │  MCP : SSE (/sse + /messages) ou Streamable HTTP (/mcp) + Authorization: Bearer <clé perso>
-        ▼
+Réseau interne ou VPN                              Hors réseau (accès en ligne, ONLINE=on)
+Claude Code, Claude Desktop, ChatGPT, Copilot      claude.ai web et mobile → cloud Anthropic → Cloudflare
+  │ MCP SSE ou Streamable HTTP                       │ MCP Streamable HTTP + jeton Entra ; tunnel sortant
+  │ + Authorization: Bearer <clé perso>              │ (cloudflared, aucun port entrant)
+  ▼ port 8080                                        ▼ port 8090
 ┌─────────────────── mcp-hub (1 conteneur, Node 24) ───────────────────┐
 │ server.js      identité (clé), outils MCP, portail, diagnostic, API  │
+│ online.js      port en ligne : OAuth relayé vers Entra (SDK), jetons │
+│                Entra vérifiés (jose), collaborateur → sa clé (SSO)   │
 │ oauth.js       flux OAuth2 code + PKCE + refresh, tous connecteurs   │
 │ sso.js         SSO Entra ID (pseudo-connecteur OIDC, modes mock/entra)│
 │ store.js       users.json chiffré AES-256-GCM, par clé MCP            │
@@ -34,7 +38,7 @@ Assistant IA (Claude Code, Claude Desktop, ChatGPT, Copilot)
 │ resolve.js     noms résolus IPv4 d'abord, puis IPv6 (musl, Docker)   │
 │ connectors/    salesforce · sagex3 · sharepoint · dropbox · myreport │
 │ public/        index.html, le portail                                │
-│ test/          node:test, amont mocké, 149 tests                     │
+│ test/          node:test, amont mocké, 162 tests                     │
 └───┬─────────────┬───────────────┬───────────────┬───────────────┬────┘
     ▼ MCP HTTP    ▼ REST Syracuse ▼ Graph (GET)   ▼ MCP HTTP      ▼ MCP SSE
  Salesforce    Sage X3 24R1    SharePoint      Dropbox (MCP    MyReport Server
@@ -45,6 +49,12 @@ En pré-production, le conteneur `mcp-stub` ([`clevoa-mcp-stub/`](../../clevoa-m
 systèmes, Entra ID et le backend Clevoa ; 11 tests de bout en bout branchent le vrai hub dessus.
 
 ## 2. Identité et état
+
+* **Accès en ligne** (`online.js`, expérimental, `ONLINE=on`) : second port, sans portail ni clé statique. Le relais OAuth
+  du SDK (`ProxyOAuthServerProvider`) publie les métadonnées (RFC 8414, RFC 9728, PKCE S256) et transmet `/authorize` et
+  `/token` à Entra ID ; le hub ne délivre aucun jeton. Chaque jeton d'accès Entra est vérifié (signature, émetteur, locataire,
+  audience, application cliente, scope `mcp`), puis rattaché à la clé du collaborateur par `oid` + locataire (`store.findSso`),
+  comme le SSO : mêmes connexions qu'au portail. Le portail refuse alors toute requête relayée par Cloudflare.
 
 * **Clé MCP personnelle** : chaîne aléatoire, cookie `mcp_key` pour le portail, en-tête `Authorization: Bearer` pour
   les clients MCP (jamais dans l'URL). Avec le SSO, une clé n'est utilisable qu'une fois liée à une identité Entra
@@ -125,7 +135,9 @@ ensuite), simulateur intégré (Sage X3 et MyReport sans URL). Interface et budg
 ## 6. Déploiement
 
 `docker-compose.yml` (base commune : `mcp-hub`, `mcp-backup`, `nginx` en profil `proxy`) étendu par
-`docker-compose.dev.yml` (bouchon, logs détaillés, défauts vers `mcp-stub`) et `docker-compose.prod.yml` (verrous).
+`docker-compose.dev.yml` (bouchon, logs détaillés, défauts vers `mcp-stub`) et `docker-compose.prod.yml` (verrous) ;
+`docker-compose.online.yml` s'ajoute à l'un ou l'autre pour l'accès en ligne (`cloudflared`, réseau dédié,
+[guide](../admin/acces-en-ligne.md)).
 Scripts d'exploitation dans `ops/` (`backup-loop.sh` dans le conteneur de sauvegarde, `backup.sh`, `restore.sh`,
 `test-backup-restore.sh`, `ops/nginx/mcp.conf`). Détail : [installation](../admin/installation.md) et
 [exploitation](../admin/exploitation.md).
@@ -146,3 +158,22 @@ Scripts d'exploitation dans `ops/` (`backup-loop.sh` dans le conteneur de sauveg
 Pas de framework, pas de serveur de base de données (la base d'exploitation est le SQLite intégré à Node, un fichier dans
 le volume), pas de service supplémentaire, pas d'abstraction entre connecteurs tant qu'un quatrième proxy n'existe pas. Factorisation refusée quand le gain est nul. Toute correction est localisée et vient avec
 un test. Les décisions prises et leurs raisons sont consignées dans [l'historique](../history/decisions.md).
+
+## 9. Service managé : qui exploite quoi
+
+Clevoa vend le service managé complet : déploiement des briques chez le client, supervision et évolutions. Les données
+métier restent dans les systèmes du client ; le hub tourne sur son infrastructure.
+
+| Zone | Composants | Exploité par | Ce qui y passe |
+|---|---|---|---|
+| Infrastructure du client | `mcp-hub`, `mcp-backup`, `cloudflared`, `nginx` (facultatif) ; volume `users.json` et `hub.db` | Clevoa (déploiement, mises à jour, sauvegardes), sur les serveurs du client | jetons chiffrés des collaborateurs, données métier en transit |
+| Annuaire et systèmes du client | Entra ID, Sage X3, MyReport, Salesforce, SharePoint, Dropbox | le client et ses intégrateurs | données métier, selon les droits de chaque collaborateur |
+| Cloudflare, compte Clevoa | nom public, règles WAF, tunnel | Clevoa | **requêtes et réponses MCP en clair** (HTTPS terminé chez Cloudflare) ; Cloudflare est sous-traitant ultérieur de Clevoa |
+| Cloud Anthropic | connecteur de l'organisation Claude du client | le client (Owner Claude) ; Anthropic | questions, réponses, jetons Entra de chaque collaborateur |
+| Clevoa | télémétrie et incidents (AWS, à déployer), console de suivi | Clevoa | compteurs et états seulement, jamais une donnée métier ni une identité |
+
+Conséquences pour Clevoa : sécuriser le compte Cloudflare comme une production (double authentification par clé matérielle,
+membres nominatifs et rôles minimaux, jetons d'API restreints, journal d'audit conservé) ; prévoir au contrat avec le client
+le rôle de sous-traitant de Clevoa et Cloudflare comme sous-traitant ultérieur (avis du DPO du client) ; un tunnel et un nom
+d'hôte par client, jamais partagés.
+
