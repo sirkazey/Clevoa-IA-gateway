@@ -35,7 +35,8 @@ plus ; chaque ajout se juge à cette aune.
 
 Fichiers en minuscules avec tirets (`guide-utilisateur.md`), un sujet par fichier, pas de fichier de moins de vingt
 lignes (on fusionne). Un composant annexe (`clevoa-mcp-stub/`, `clevoa-backend/`, `clevoa-console/`, `loadtest/`) garde son `README.md`
-à côté de son code. Les seuls fichiers de documentation à la racine sont `README.md`, `CHANGELOG.md`, `LICENSE.md` et `.env.example`.
+à côté de son code. Les seuls fichiers de documentation à la racine sont `README.md`, `CHANGELOG.md`, `LICENSE.md` et `.env.example`, plus
+`CLAUDE.md` (consignes chargées par Claude Code, [reprise du projet](developer/reprise-claude-code.md)).
 
 ### Rédaction
 
