@@ -494,6 +494,17 @@ test("Sage X3 : une représentation absente du dossier (404) n'empêche pas le d
   } finally { await none.stop(); }
 });
 
+test("Sage X3 : sans SAGE_REPRESENTATIONS, liste par défaut sans SINVOICE ni GACCENTRY (absentes en standard sur 24R1)", async () => {
+  const h = await startHub({ upstreamUrl: up.url, env: { SAGE_REPRESENTATIONS: "" } });
+  try {
+    const cookie = `mcp_key=${(await fetch(`${h.url}/api/me`)).headers.get("set-cookie").match(/mcp_key=([^;]+)/)[1]}`;
+    await fetch(`${h.url}/api/sagex3/apikey`, { method: "POST", headers: { cookie, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "syr-key-alice" }) });
+    const d = await fetch(`${h.url}/api/test/sagex3`, { headers: { cookie } }).then((x) => x.json());
+    assert.equal(d.ok, true, JSON.stringify(d));
+    assert.deepEqual(d.tables, ["BPCUSTOMER", "BPSUPPLIER", "PINVOICE", "SORDER", "PORDER", "ITMMASTER"]);
+  } finally { await h.stop(); }
+});
+
 test("Salesforce sans étendue openid : userinfo refusé (403) → email obtenu par l'outil getUserInfo du serveur MCP", async () => {
   up.reset();
   const c2 = `mcp_key=${(await fetch(`${hub.url}/api/me`)).headers.get("set-cookie").match(/mcp_key=([^;]+)/)[1]}`;

@@ -51,10 +51,11 @@ say "I. sauvegarde manuelle (ops/backup.sh) : nom horodaté, chiffrée, lisible 
 sudo ops/backup.sh "$WORK/manuelles" >/dev/null; m=$(ls "$WORK/manuelles"/users-*.json); [ "$(head -c 5 "$m")" = "enc1:" ]; echo "ok : $m"
 say "J. incohérence conteneur / volume : refus avant tout arrêt, données intactes"
 docker volume create autre-mcp-data >/dev/null
-if VOLUME=autre-mcp-data CONTAINER=mcp-hub-preprod sudo -E ops/restore.sh "$m" 2>"$WORK/err"; then echo "aurait dû refuser"; exit 1; fi
+# Variables passées APRÈS sudo, comme dans la documentation d'exploitation : « VAR=x sudo -E » ne les transmet plus sur Ubuntu 26.04.
+if sudo VOLUME=autre-mcp-data CONTAINER=mcp-hub-preprod ops/restore.sh "$m" 2>"$WORK/err"; then echo "aurait dû refuser"; exit 1; fi
 grep -q "Incohérence" "$WORK/err"; [ "$(docker inspect -f '{{.State.Running}}' mcp-hub-preprod)" = "true" ]; connected "$WORK/jar1"; echo "ok : refus, hub toujours en marche"
 say "K. VOLUME explicite : le conteneur qui le monte est retrouvé seul, restauration d'un fichier au NOUVEAU format de nom"
-VOLUME=$(docker volume ls -q --filter name=mcp-data | grep -v autre) sudo -E ops/restore.sh "$f2"; health; connected "$WORK/jar2"; echo "ok"
+sudo VOLUME="$(docker volume ls -q --filter name=mcp-data | grep -v autre)" ops/restore.sh "$f2"; health; connected "$WORK/jar2"; echo "ok"
 docker volume rm autre-mcp-data >/dev/null
 say "L. une ENCRYPTION_KEY différente est détectée"
 cp .env "$WORK/env.bak"; sed -i "s/^ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$(openssl rand -hex 32)/" .env

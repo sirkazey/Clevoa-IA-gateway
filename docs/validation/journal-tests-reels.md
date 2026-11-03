@@ -45,6 +45,19 @@ descriptions d'outils (colonnes de liste vs fiche, avoirs, enregistrements techn
 Demandes ouvertes (ticket Redmine 4CAD #31562) : publier `SINVOICE`, `GACCENTRY`, `GACCDUDATE` sur CHREC ; exposer le type
 de pièce sur PINVOICE et SINVOICE.
 
+### Suite du ticket 4CAD #31562 (état au 3 novembre 2026)
+
+Réponse de l'intégrateur, **non exercée par le hub** (aucun test exécuté depuis le 23/10) :
+
+* champ `PIHTYP` (type de pièce, menu local 533 : 1 facture, 2 facture complémentaire, 3 avoir, 4 avoir/retour) ajouté à
+  `PINVOICE` sur les dossiers CHDEV et CHREC seulement, pas en production ;
+* `SINVOICE`, `GACCENTRY` et `GACCDUDATE` n'existent pas en standard (404 constaté en S7) : développement spécifique à
+  chiffrer, en attente du recueil des besoins de la direction financière.
+
+Suite donnée dans le hub (1.5.2) : note de `PINVOICE` sur `PIHTYP`, règle du numéro de pièce conservée ; `SINVOICE` et
+`GACCENTRY` retirées de la liste par défaut. Test à faire sur CHREC : « Décris PINVOICE » puis « avoirs d'achat du mois »,
+`PIHTYP` lu dans la liste ou dans la fiche.
+
 ## 2026-10-23 · Salesforce sandbox `preprod`
 
 Org `charloisgroup--preprod.sandbox.my.salesforce.com`, serveur MCP hébergé « SObject Reads » de la sandbox, application

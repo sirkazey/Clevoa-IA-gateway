@@ -7,6 +7,16 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
+## [1.5.2] – 2026-11-03
+
+Version corrective Sage X3, issue de la réponse de l'intégrateur au ticket #31562 : aucune variable à ajouter ; une instance
+qui fixe déjà `SAGE_REPRESENTATIONS` n'est pas concernée par le changement de liste par défaut.
+
+### Modifié
+- Sage X3 : la note de `PINVOICE` (`sagex3_describe`) indique le champ `PIHTYP` (1 facture, 2 facture complémentaire, 3 avoir, 4 avoir/retour), qui fait foi quand il est publié ; la règle du numéro `…FAF…` / `…AVF…` reste la référence tant qu'il ne l'est que sur les dossiers de recette.
+- Sage X3 : `SINVOICE` et `GACCENTRY` retirées de la liste par défaut de `SAGE_REPRESENTATIONS` (absentes en standard sur 24R1, 404) ; six représentations standard par défaut.
+- Documentation : suite du ticket au journal des tests réels, job `sbom` dans le tableau des tests ; reprise du projet dans Claude Code (`CLAUDE.md`, `ops/claude-setup.sh`) ; scénario de sauvegarde adapté au runner Ubuntu 26.04 (variables passées après `sudo`).
+
 ## [1.5.1] – 2026-10-26
 
 Version corrective issue de l'audit complet du dépôt (code, scripts, CI, documentation) : aucune fonction nouvelle, aucune
