@@ -41,7 +41,7 @@ sans clé à copier. Statut : **expérimental**, désactivé par défaut (`ONLIN
 
 * SSO Entra du portail actif (`SSO_MODE=entra`) : même locataire, même identité ([guide](sso-entra.md)).
 * Le compte Cloudflare **de Clevoa**, qui exploite le service managé, et une zone DNS gérée par Cloudflare pour le nom public
-  (ex. `mcp.exemple.fr`) ; un tunnel et un nom d'hôte par client. Compte à sécuriser comme une production :
+  (ex. `<client>-mcp.<domaine>`) ; un tunnel et un nom d'hôte par client. Compte à sécuriser comme une production :
   [responsabilités](../developer/architecture.md#9-service-managé--qui-exploite-quoi).
 * Claude **Team** ou **Enterprise** : seul l'Owner ajoute le connecteur pour l'organisation.
 * Avis du DPO : Cloudflare termine le HTTPS et **voit les échanges en clair** (questions et réponses, données métier
@@ -67,24 +67,17 @@ Claude), il doit pouvoir être révoqué seul. Libellés du centre d'administrat
 
 ## 4. Cloudflare : tunnel et règles
 
-Libellés du tableau de bord Cloudflare **à vérifier**.
-
-1. Zero Trust → Réseaux → Tunnels → Créer un tunnel *Cloudflared* ; copier le **jeton** (variable `TUNNEL_TOKEN`, jamais
-   commité, jamais dans un ticket).
-2. Nom d'hôte public : `mcp.exemple.fr` → service `http://mcp-hub:8090`. Ne publier **aucun autre** service.
-3. Sécurité de la zone, pour ce nom d'hôte :
-   * désactiver le blocage des robots d'IA et le « Bot Fight Mode » : ils bloquent Claude ;
-   * règle WAF : `/mcp` et `/token` acceptés seulement depuis les adresses d'Anthropic
-     ([liste officielle](https://platform.claude.com/docs/en/api/ip-addresses), à recopier le jour de la mise en place) ;
-     `/authorize` et `/.well-known/` ouverts (navigateur du collaborateur, découverte par Claude) ; tout autre chemin bloqué.
-     Comparer les chemins en minuscules.
+Procédure complète, contrôles et rotations : [runbook Cloudflare](cloudflare.md). En bref : compte Clevoa sécurisé (§ 1),
+un tunnel et un nom d'hôte par client et par environnement, à un seul niveau sous le domaine (`<client>-mcp.<domaine>`),
+une seule route vers `http://mcp-hub:8090` (§ 3), chemins autorisés seulement et `/mcp` et `/token` réservés aux adresses
+d'Anthropic (§ 4), contrôles après chaque modification (§ 5).
 
 ## 5. Hub : variables et démarrage
 
 Dans `.env`, en plus de la configuration existante :
 
 ```
-ONLINE_URL=https://mcp.exemple.fr
+ONLINE_URL=https://<client>-mcp.<domaine>
 ONLINE_CLIENT_ID=<ID d'application de l'inscription « connecteur Claude »>
 ONLINE_CLIENT_SECRET=<valeur du secret>
 TUNNEL_TOKEN=<jeton du tunnel Cloudflare>
@@ -96,8 +89,8 @@ Démarrage, en ajoutant le complément `docker-compose.online.yml` à la stack e
 docker compose -f docker-compose.prod.yml -f docker-compose.online.yml up -d
 ```
 
-Contrôle : ligne de journal `[online] accès en ligne actif : https://mcp.exemple.fr/mcp (port 8090, annuaire …)`, puis
-`https://mcp.exemple.fr/.well-known/oauth-authorization-server` répond depuis un navigateur. Le hub refuse de démarrer sans SSO,
+Contrôle : ligne de journal `[online] accès en ligne actif : https://<client>-mcp.<domaine>/mcp (port 8090, annuaire …)`, puis
+`https://<client>-mcp.<domaine>/.well-known/oauth-authorization-server` répond depuis un navigateur. Le hub refuse de démarrer sans SSO,
 sans identifiant ou secret, avec une adresse non https en production, ou avec le même port que le portail.
 
 Retour arrière : relancer la stack **sans** `docker-compose.online.yml` ; le tunnel tombe, le portail interne est inchangé.
@@ -107,7 +100,7 @@ Supprimer ensuite le nom d'hôte public dans Cloudflare.
 
 Paramètres de l'organisation → Connecteurs → Ajouter un connecteur personnalisé (libellés **à vérifier**) :
 
-* URL : `https://mcp.exemple.fr/mcp` (exactement, chemin compris) ;
+* URL : `https://<client>-mcp.<domaine>/mcp` (exactement, chemin compris) ;
 * paramètres avancés : identifiant client = `ONLINE_CLIENT_ID`, secret client = `ONLINE_CLIENT_SECRET`.
 
 Chaque collaborateur clique ensuite **Connecter**, se connecte avec son compte Microsoft de l'entreprise, et retrouve le
