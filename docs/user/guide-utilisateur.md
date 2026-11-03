@@ -103,7 +103,8 @@ Outils exposés à l'assistant : `salesforce_tools`, `salesforce_call` · `sagex
 
 * `sagex3_query` ne renvoie que les colonnes de liste ; le filtre accepte tout champ d'en-tête, mais la valeur filtrée
   n'est pas renvoyée : l'assistant lit alors chaque fiche avec `sagex3_get` (un total sur 100 factures = 100 lectures).
-* Le type de pièce (facture ou avoir) n'est pas exposé par PINVOICE : seul le numéro (`…FAF…` / `…AVF…`) le distingue, et
+* Le type de pièce (facture ou avoir) de PINVOICE vient du champ `PIHTYP` quand l'intégrateur l'a publié (recette
+  seulement à ce jour), sinon du numéro (`…FAF…` / `…AVF…`), et
   les montants ne sont pas signés. L'assistant en est averti.
 * Le statut de règlement n'est pas exposé tant que les échéances (`GACCDUDATE`) ne sont pas publiées par l'intégrateur.
 * Une fiche complète pèse de 60 à 130 000 caractères : le paramètre `champs` de `sagex3_get` ne garde que l'utile.

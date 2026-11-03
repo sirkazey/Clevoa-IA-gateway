@@ -248,6 +248,10 @@ test("Cache : la structure est chargée au premier appel avec le jeton de l'util
     assert.equal(porder.notes, undefined, "pas de piège connu sur PORDER");
     const sinvNotes = text(await c.callTool({ name: "sagex3_describe", arguments: { representation: "SINVOICE" } })).notes;
     assert.match(sinvNotes, /FAF… facture, …AVF… avoir/, "pièges factures/avoirs renvoyés comme données");
+    const pinvNotes = text(await c.callTool({ name: "sagex3_describe", arguments: { representation: "PINVOICE" } })).notes;
+    assert.match(pinvNotes, /PIHTYP, il fait foi \(1 facture, 2 facture complémentaire, 3 avoir, 4 avoir\/retour\)/, "PINVOICE : type de pièce PIHTYP quand il est publié");
+    assert.match(pinvNotes, /sinon, il est dans NUM \(…FAF… facture, …AVF… avoir\)/, "règle du numéro de pièce conservée tant que PIHTYP n'est pas en production");
+    assert.doesNotMatch(sinvNotes, /PIHTYP/, "PIHTYP propre aux factures d'achat");
     assert.deepEqual(porder.champs_fiche.map((f) => f.name), ["PORDER_NUM", "LINES.ITMREF"], "facette details lue en direct, bloc déplié");
     assert.equal(up.requests("$prototypes('PORDER.$details')").length, 1);
     assert.equal(up.requests("$prototypes('PORDER.$query')").length, 1);

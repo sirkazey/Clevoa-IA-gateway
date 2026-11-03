@@ -78,8 +78,11 @@ curl.exe -sS -u IDENTIFIANT -w "`nHTTP %{http_code}`n" "https://<syracuse>/api1/
 SAGE_URL=https://<syracuse>
 SAGE_FOLDER=<POINT_DE_CONNEXION>
 SAGE_APIKEY_MODE=basic
-SAGE_REPRESENTATIONS=BPCUSTOMER,BPSUPPLIER,SINVOICE,PINVOICE,SORDER,PORDER,GACCENTRY,ITMMASTER
+SAGE_REPRESENTATIONS=BPCUSTOMER,BPSUPPLIER,PINVOICE,SORDER,PORDER,ITMMASTER
 ```
+
+Vide, `SAGE_REPRESENTATIONS` prend ces six représentations standard. `SINVOICE` et `GACCENTRY` n'en font plus partie
+(404 « does not exist » sur la préproduction : développement spécifique de l'intégrateur) ; les ajouter une fois publiées.
 
 Optionnel : `SAGE_LANG` (langue des libellés, défaut `fr-FR`). Délai maximal par requête Syracuse : 30 s, fixe.
 
@@ -109,7 +112,9 @@ identifiants refusés (401) au lieu de les réessayer ; le collaborateur les res
   d'en-tête de la fiche (ex. `AMTATI gt 400`) mais la valeur n'est pas renvoyée ; `sagex3_get` lit la fiche, avec le
   paramètre `champs` pour ne garder que l'utile.
 * Les dates se filtrent en `@AAAA-MM-JJ@` ; le hub convertit une date entre apostrophes.
-* Le **type de pièce** (facture / avoir) n'est pas exposé par PINVOICE (numéro `…FAF…` / `…AVF…`), les montants ne sont
+* Le **type de pièce** (facture / avoir) de PINVOICE se lit dans le champ `PIHTYP` (1 facture, 2 facture complémentaire,
+  3 avoir, 4 avoir/retour) là où l'intégrateur l'a publié (dossiers de recette seulement à ce jour), sinon dans le
+  numéro (`…FAF…` / `…AVF…`) ; le modèle reçoit les deux règles. Les montants ne sont
   pas signés ; le **statut de règlement** n'est pas exposé tant que `GACCDUDATE` n'est pas publiée. Le modèle en est averti.
 * Sans tri, Syracuse renvoie en tête des enregistrements techniques (`NUM` = `00000`) ; le modèle est instruit de trier.
 * `SAGE_LANG` n'agit que sur les titres de champs ; les libellés analytiques sont des données saisies dans X3.
