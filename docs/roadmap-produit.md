@@ -90,6 +90,7 @@ configuration, il n'est pas exposé en production) ; une personnalisation ne jus
 * mini-portail d'administration, interface déclarative des connecteurs MCP (deux pistes de la même liste sont
   réintégrées le 2026-10-25 : le tableau de bord graphique des installations, sous la forme de la console de suivi de
   Clevoa, et la santé des connecteurs sur le portail, en 1.4.0) ([archive § 2](history/roadmap-2026-10.md#2-catalogue-des-évolutions-possibles-optionnel-roadmap-clevoa)) ;
-* accès depuis claude.ai web et mobile, écarté ([décisions](history/decisions.md)).
+* accès depuis claude.ai web et mobile : écarté le 2026-10-21, repris le 2026-11-03 en expérimental
+  ([accès en ligne](admin/acces-en-ligne.md), [décisions](history/decisions.md)).
 
 Une de ces pistes ne revient qu'avec une nouvelle décision datée et un client qui la demande.

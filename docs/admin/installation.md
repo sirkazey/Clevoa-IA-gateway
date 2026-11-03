@@ -160,7 +160,7 @@ par version.
 ## 7. Première mise en service auprès des collaborateurs
 
 1. Choisir l'assistant autorisé (Claude Code, Claude Desktop, ChatGPT, Copilot), installé sur un poste du réseau ou en
-   VPN. Claude.ai web et mobile ne sont pas pris en charge : à annoncer clairement.
+   VPN. Claude.ai web et mobile demandent l'[accès en ligne](acces-en-ligne.md), expérimental : à annoncer clairement.
 2. Informer les collaborateurs : le hub ne lit que ce qu'ils ont déjà le droit de voir, leurs jetons sont chiffrés et
    individuels, une télémétrie réduite à des compteurs part vers Clevoa ([sécurité](securite.md)). Mettre à jour le
    registre des traitements si la DSI le tient.

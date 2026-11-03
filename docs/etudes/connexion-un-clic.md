@@ -170,6 +170,41 @@ petit serveur (relais n° 2) ; une inscription d'application dans un Entra de te
   et OAuth ; le portail reste interne.
   Une revue de sécurité indépendante est un préalable à la production.
 
+## 9. Décision du 3 novembre 2026 : Entra seul, relais OAuth du SDK et Cloudflare Tunnel
+
+Décision du propriétaire, après revue des briques existantes (recherches du 3/11/2026, sources ci-dessous). Principe : réutiliser
+des briques éprouvées, ne développer que le strict nécessaire. Le serveur d'autorisation écrit à la main du prototype
+`proto/oauth-tunnel` (émission, rotation et révocation des jetons, sessions, cookies chiffrés) est abandonné ; la branche est
+conservée pour mémoire.
+
+**Retenu** : tous les utilisateurs de Claude sont aujourd'hui dans l'Entra de Charlois. Le relais OAuth du SDK MCP
+(`ProxyOAuthServerProvider`, déjà dépendance du hub) publie les métadonnées exigées par Claude et transmet connexion et jetons à
+Entra ; le hub vérifie les jetons Entra avec `jose` et rattache le collaborateur par son identité, comme le SSO. Relais :
+Cloudflare Tunnel. Client Claude pré-enregistré (identifiant et secret saisis par l'Owner) : ni DCR ni CIMD. Guide :
+[accès en ligne](../admin/acces-en-ligne.md).
+
+| Option | Verdict au 3/11/2026 | Raison |
+|---|---|---|
+| Entra seul, directement serveur d'autorisation | écartée | métadonnées sans PKCE annoncé ni adresse RFC 8414 (§ 3) |
+| **Entra derrière le relais OAuth du SDK MCP** | **retenue** | brique officielle déjà présente ; Entra garde authentification, jetons et révocation ; environ 100 lignes dans le hub |
+| Cloudflare Access « Managed OAuth » ou MCP server portals | écartée pour l'instant | Managed OAuth en bêta ouverte (changelog du 20/03/2026) ; échecs de claude.ai web et mobile signalés ([C1]), dont un ticket ouvert depuis septembre et une réponse vide d'Access à `initialize` constatée par Anthropic |
+| Worker `workers-oauth-provider` | écartée | conforme à la révision 2026-07-28, mais page de connexion et relais vers le hub à écrire (code maison) |
+| Keycloak 26.8 | réserve | guide MCP officiel, plusieurs annuaires ; deux conteneurs de plus (Java, PostgreSQL), fonctions MCP récentes « expérimentales » ([K1]). À reprendre si Oakwood Cooperage ou Google s'ajoutent |
+| Authentik, Ory Hydra, Zitadel | écartées | inscription des clients sous licence commerciale (Authentik) ; pas de page de connexion (Hydra) ; `resource` ignoré (Zitadel) |
+| MCP tunnels d'Anthropic | inapplicable | aperçu de recherche réservé à l'API ; « not available as connectors in claude.ai » ([A2]). À revoir s'ils s'ouvrent aux connecteurs : Cloudflare n'y voit pas les données |
+
+Exigences de Claude revérifiées le 3/11/2026 ([A1]) : PKCE S256 annoncé, `401` avec `resource_metadata`, `resource` égal à l'URL
+saisie, retour `https://claude.ai/api/mcp/auth_callback` (web, bureau, mobile), client pré-enregistré accepté, connecteur
+d'organisation disponible sur mobile. Adresses sortantes d'Anthropic : deux recherches ont donné `160.79.104.0/21` seule ou avec
+`153.61.208.0/20` ; recopier la [liste officielle](https://platform.claude.com/docs/en/api/ip-addresses) à la mise en place.
+
+Sources du 3/11/2026 :
+[A1] https://claude.com/docs/connectors/building/authentication.md ;
+[A2] https://platform.claude.com/docs/en/agents-and-tools/mcp-tunnels/overview ;
+[C1] https://github.com/anthropics/claude-ai-mcp/issues/410, /980, /992 ;
+[C2] https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/managed-oauth/ ;
+[K1] https://www.keycloak.org/securing-apps/mcp-authz-server.
+
 ## Sources
 
 * [S1] Anthropic, custom connectors (remote MCP) : https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp

@@ -74,8 +74,8 @@ Claude Desktop n'accepte pas d'en-tête sur un serveur distant : le bloc **Claud
 
 Journal en cas d'échec : Paramètres → Développeur → Ouvrir les journaux → `mcp-server-<nom du serveur>.log`.
 
-Claude.ai web et mobile ne sont pas pris en charge : le hub reste sur le réseau interne et ces clients ne peuvent pas
-poser l'en-tête d'autorisation.
+Claude.ai web et mobile ne fonctionnent que si votre service informatique a activé l'accès en ligne (expérimental) :
+le connecteur apparaît alors dans Claude, et un clic sur « Connecter » suffit, avec votre compte Microsoft de l'entreprise.
 
 ## 3. Poser des questions et lire les réponses
 

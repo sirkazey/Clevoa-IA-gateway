@@ -38,8 +38,9 @@ d'outils ; noms d'objets validés (`^\w+$`) ; outils annotés `readOnlyHint`.
 ## 3. Accès MCP et portail
 
 * La clé MCP personnelle se transmet **uniquement** dans l'en-tête `Authorization: Bearer`. Le paramètre `?key=` est
-  ignoré (une clé dans l'URL finirait dans les journaux du reverse proxy). Conséquence : les connecteurs de claude.ai
-  web et mobile ne peuvent pas se connecter ; aucun serveur OAuth 2.1 n'est implémenté, volontairement.
+  ignoré (une clé dans l'URL finirait dans les journaux du reverse proxy). Les connecteurs de claude.ai web et mobile ne
+  peuvent pas utiliser cette clé : ils passent par l'[accès en ligne](acces-en-ligne.md) (expérimental, désactivé par défaut),
+  port séparé où le hub ne délivre aucun jeton et vérifie ceux d'Entra ID. Cloudflare y voit les échanges en clair.
 * Le callback OAuth est lié au navigateur qui a lancé le flux (anti login-CSRF) ; les POST du portail refusent une
   autre origine ; PKCE S256 sur tous les flux.
 * Transport SSE : `POST /messages` exige la clé MCP et la session doit avoir été ouverte par cette clé (403 sinon).

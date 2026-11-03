@@ -26,7 +26,7 @@ sur le système réel), **testé sur bouchon** (tests automatisés et simulateur
 | Supervision du hub (`/metrics` Prometheus, `/metrics/prtg` PRTG, jeton dédié) | testé sur bouchon | `health.test.js` | capteur HTTP Data Advanced sur le PRTG de Charlois |
 | Claude Desktop via `mcp-remote` | disponible | vérifié le 23/10/2026 sur Windows | |
 | Claude Code, ChatGPT, Copilot (MCP HTTP + en-tête) | testé sur bouchon | tests de transport du hub ; Claude Code déclaré vérifié sans entrée au journal ; ChatGPT et Copilot non exercés | une session réelle par assistant, consignée au journal |
-| Claude.ai web et mobile | écarté | décision ([historique](../history/decisions.md)) | |
+| Claude.ai web et mobile, hors réseau : accès en ligne (`ONLINE=on`, relais OAuth du SDK vers Entra, Cloudflare Tunnel) | expérimental | `online.test.js` sur Entra simulé ; décision du 3/11/2026 ([guide](../admin/acces-en-ligne.md)) | premier essai réel (tunnel, Entra, claude.ai, mobile) ; avis du DPO ; test d'intrusion ; connexion des systèmes sans le portail interne |
 | Protocole MCP : révisions 2024-10-07 à 2025-11-25 négociées (SDK `@modelcontextprotocol/sdk` 1.32.1), outils annotés `readOnlyHint`, erreurs JSON-RPC propres, reconnexion SSE | testé sur bouchon | `hub/test/compat.test.js` (échanges JSON-RPC bruts) ; Claude Desktop vérifié en réel | une session réelle par assistant autre que Claude Desktop |
 | Transports Streamable HTTP et SSE | disponible | tests hub, campagne de charge | retrait du SSE quand les assistants cibles seront tous en Streamable HTTP |
 | Chiffrement `users.json`, clé MCP en en-tête, limitation de débit, en-têtes de sécurité | disponible | tests hub, ZAP passif | |
@@ -63,7 +63,8 @@ sur le système réel), **testé sur bouchon** (tests automatisés et simulateur
   et Salesforce.
 * **Mémoire** : stable sur 27 minutes de charge (RSS ≤ 132 Mo), non démontrée sur une journée.
 * **Capacité réelle** : latences et quotas des systèmes réels non mesurés ; throttling Graph 429 non testé.
-* **Claude.ai web et mobile** non pris en charge (pas d'en-tête d'autorisation possible, hub interne).
+* **Claude.ai web et mobile** : seulement par l'accès en ligne, expérimental, jamais essayé en réel ; un seul annuaire Entra ;
+  connexion des systèmes encore sur le portail interne ; Cloudflare voit les échanges en clair.
 * **Rapports de test** : les tests réels ont été faits par une seule personne, avec un seul profil.
 
 ## 3. Tests restant à réaliser

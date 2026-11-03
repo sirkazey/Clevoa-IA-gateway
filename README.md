@@ -101,7 +101,8 @@ Composants annexes : [bouchon d'entreprise](clevoa-mcp-stub/README.md), [backend
 * Aucun compte de service : sans jeton personnel, aucun outil ne répond. Le fichier des jetons est chiffré avec une clé
   maîtresse à conserver dans un coffre ; la perdre impose à chaque collaborateur de se reconnecter.
 * La clé MCP personnelle se transmet uniquement en en-tête `Authorization: Bearer`, jamais dans l'URL. Les connecteurs de
-  claude.ai web et mobile ne sont donc pas pris en charge (choix assumé : le hub reste sur le réseau interne).
+  claude.ai web et mobile passent par l'[accès en ligne](docs/admin/acces-en-ligne.md) (expérimental, désactivé par défaut) :
+  port séparé, jetons Microsoft Entra ID vérifiés par le hub, tunnel Cloudflare sortant.
 * Limitation de débit par adresse IP, plafonds d'appels sortants par connecteur (`MYREPORT_MAX_PER_MIN`,
   `SF_MAX_PER_MIN`), en-têtes de sécurité HTTP, conteneur sans privilèges en lecture seule.
 * Télémétrie vers Clevoa toutes les 6 heures, réduite à un identifiant aléatoire d'installation, la version, les
