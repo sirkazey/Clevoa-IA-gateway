@@ -1,6 +1,6 @@
 {
   "name": "clevoa-gateway-hub",
-  "version": "1.6.0-rc.1",
+  "version": "1.7.0-rc.1",
   "private": true,
   "type": "module",
   "description": "Clevoa AI Gateway : hub MCP en lecture seule vers Salesforce, Sage X3, SharePoint, Dropbox et MyReport, avec les droits de chaque collaborateur",
@@ -15,6 +15,7 @@
     "@modelcontextprotocol/sdk": "^1.32.1",
     "express": "^5.2.1",
     "express-rate-limit": "8.7.1",
+    "jose": "6.2.13",
     "openid-client": "6.8.8",
     "zod": "^4.0.0"
   }

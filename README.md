@@ -33,18 +33,62 @@ propre nom de serveur MCP et son libellé (`MCP_SERVER_NAME`, `INSTANCE_LABEL`).
 ## Architecture
 
 ```mermaid
-flowchart LR
-    A["Assistant IA<br/>Claude Code · Claude Desktop · ChatGPT · Copilot"] -- "MCP + Bearer clé personnelle" --> H
-    subgraph H["mcp-hub (1 conteneur)"]
-        P["Portail · OAuth · SSO"] --- S["Outils MCP<br/>/mcp · /sse"]
-        S --- U["users.json chiffré<br/>jetons individuels"]
+flowchart TB
+    subgraph U["Collaborateurs"]
+        direction LR
+        D["Claude Desktop · Claude Code<br/>ChatGPT · Copilot<br/>réseau interne ou VPN"]
+        M["claude.ai web · mobile<br/>hors réseau"]
     end
-    H -- "MCP SObject Reads" --> SF["Salesforce"]
-    H -- "REST Syracuse" --> X3["Sage X3"]
-    H -- "Microsoft Graph" --> SP["SharePoint / OneDrive"]
-    H -- "MCP officiel" --> DB["Dropbox"]
-    H -- "MCP SSE" --> MR["MyReport"]
+    subgraph EXT["Hors du réseau du client"]
+        direction LR
+        C["Cloud Anthropic<br/>connecteur Claude de l'organisation"]
+        T["Cloudflare · compte Clevoa<br/>nom public · WAF · tunnel"]
+    end
+    subgraph CH["Infrastructure du client · aucun port entrant"]
+        CD["cloudflared"]
+        subgraph H["mcp-hub · 1 conteneur"]
+            direction LR
+            P["Portail · SSO<br/>/mcp · /sse · clé perso"]
+            O["Port en ligne<br/>OAuth relayé · /mcp"]
+            S["Outils MCP<br/>users.json chiffré · hub.db"]
+        end
+        B["mcp-backup"]
+        X3["Sage X3"]
+        MR["MyReport"]
+    end
+    subgraph SAAS["Services en ligne du client"]
+        direction LR
+        E["Microsoft Entra ID"]
+        SP["SharePoint · OneDrive"]
+        SF["Salesforce"]
+        DB["Dropbox"]
+    end
+    subgraph CL["Clevoa · service managé"]
+        direction LR
+        TB["Télémétrie et incidents<br/>AWS, à déployer"]
+        CO["Console de suivi"]
+    end
+    D -->|"MCP + clé personnelle"| P
+    M --> C
+    M -.->|"connexion, une fois"| T
+    C -->|"MCP + jeton Entra"| T
+    T ---|"tunnel sortant"| CD
+    CD --> O
+    P --- S
+    O --- S
+    B --- S
+    S -->|"REST Syracuse"| X3
+    S -->|"MCP SSE"| MR
+    O -.->|"connexion et jetons relayés"| E
+    P -.->|"SSO"| E
+    S -->|"Graph · SObject Reads · MCP officiel"| SAAS
+    S -.->|"compteurs, toutes les 6 h"| TB
+    TB --> CO
 ```
+
+Accès en ligne (claude.ai web et mobile) : expérimental, désactivé par défaut ([guide](docs/admin/acces-en-ligne.md)).
+Clevoa exploite le service pour le client : déploiement des briques, compte Cloudflare, supervision et évolutions
+([responsabilités](docs/developer/architecture.md#9-service-managé--qui-exploite-quoi)).
 
 Détail des modules et des flux : [architecture](docs/developer/architecture.md).
 
@@ -101,7 +145,8 @@ Composants annexes : [bouchon d'entreprise](clevoa-mcp-stub/README.md), [backend
 * Aucun compte de service : sans jeton personnel, aucun outil ne répond. Le fichier des jetons est chiffré avec une clé
   maîtresse à conserver dans un coffre ; la perdre impose à chaque collaborateur de se reconnecter.
 * La clé MCP personnelle se transmet uniquement en en-tête `Authorization: Bearer`, jamais dans l'URL. Les connecteurs de
-  claude.ai web et mobile ne sont donc pas pris en charge (choix assumé : le hub reste sur le réseau interne).
+  claude.ai web et mobile passent par l'[accès en ligne](docs/admin/acces-en-ligne.md) (expérimental, désactivé par défaut) :
+  port séparé, jetons Microsoft Entra ID vérifiés par le hub, tunnel Cloudflare sortant.
 * Limitation de débit par adresse IP, plafonds d'appels sortants par connecteur (`MYREPORT_MAX_PER_MIN`,
   `SF_MAX_PER_MIN`), en-têtes de sécurité HTTP, conteneur sans privilèges en lecture seule.
 * Télémétrie vers Clevoa toutes les 6 heures, réduite à un identifiant aléatoire d'installation, la version, les
@@ -116,5 +161,5 @@ Composants annexes : [bouchon d'entreprise](clevoa-mcp-stub/README.md), [backend
 
 Logiciel propriétaire de Clevoa SASU : [LICENSE.md](LICENSE.md). Les dépendances open source conservent leurs licences
 (MIT, ISC, BSD). Versions : [CHANGELOG.md](CHANGELOG.md) et
-[releases GitHub](https://github.com/sirkazey/Clevoa-IA-gateway/releases) ; version courante **1.6.0-rc.1** (`hub/version.js`), affichée sur le portail et dans les journaux de démarrage. Tests réels
+[releases GitHub](https://github.com/sirkazey/Clevoa-IA-gateway/releases) ; version courante **1.7.0-rc.1** (`hub/version.js`), affichée sur le portail et dans les journaux de démarrage. Tests réels
 restants avant la production : [état des fonctionnalités](docs/validation/etat-des-fonctionnalites.md).
