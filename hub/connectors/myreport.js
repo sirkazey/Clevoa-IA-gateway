@@ -46,13 +46,13 @@ export async function ping(_tok, schema) {
 
 export const tools = [
   {
-    name: "myreport_tools",
+    name: "myreport_tools", title: "MyReport – outils disponibles",
     description: "Outils d'analyse exposés par le serveur MCP MyReport, avec leur schéma d'arguments. À appeler avant myreport_call.",
     input: {},
     run: async (_tok, _a, schema) => (await schema()).tools,
   },
   {
-    name: "myreport_call",
+    name: "myreport_call", title: "MyReport – interroger",
     description: "Transfère une requête d'analyse financière à MyReport Server avec le jeton de l'utilisateur, ex. tool='liste_indicateurs'. Seuls les outils de la liste blanche MYREPORT_TOOLS sont transférés.",
     input: { tool: z.string().regex(/^[\w.-]+$/), arguments: z.record(z.string(), z.any()).default({}) },
     run: async (tok, { tool, arguments: args }) => {

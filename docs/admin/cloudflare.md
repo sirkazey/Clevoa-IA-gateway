@@ -62,7 +62,7 @@ nombre : à vérifier). Remplacer `<hote>` ; recopier les adresses d'Anthropic d
 1. **Chemins autorisés seulement** (tout le reste bloqué, casse comprise) :
 
    ```
-   (http.host eq "<hote>" and not (lower(http.request.uri.path) in {"/mcp" "/token" "/authorize"}
+   (http.host eq "<hote>" and not (lower(http.request.uri.path) in {"/mcp" "/token" "/authorize" "/favicon.ico"}
      or starts_with(lower(http.request.uri.path), "/.well-known/oauth-")))
    ```
 2. **`/mcp` et `/token` réservés à Claude** (appelés depuis le cloud d'Anthropic) :
@@ -72,7 +72,7 @@ nombre : à vérifier). Remplacer `<hote>` ; recopier les adresses d'Anthropic d
      and not ip.src in {<plages d'Anthropic>})
    ```
 
-`/authorize` reste ouvert (navigateur du collaborateur, au moment de « Connecter ») ; `/.well-known/oauth-…` aussi
+`/authorize` reste ouvert (navigateur du collaborateur, au moment de « Connecter »), `/favicon.ico` aussi (logo) ; `/.well-known/oauth-…` aussi
 (découverte par Claude).
 
 - [ ] Robots : « Bot Fight Mode » et le blocage des robots d'IA **désactivés** pour ces noms d'hôte, sinon Claude est bloqué.

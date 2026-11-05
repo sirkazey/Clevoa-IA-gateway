@@ -154,7 +154,7 @@ export const strip = (o) => Object.fromEntries(Object.entries(o).filter(([k]) =>
 
 export const tools = [
   {
-    name: "sagex3_representations",
+    name: "sagex3_representations", title: "Sage X3 – tables disponibles",
     description: "Contexte et représentations (tables/vues) Sage X3 disponibles : instance et dossier interrogés (prod ou test), représentations utilisables, absentes ou en erreur.",
     input: {},
     run: async (_tok, _args, schema) => {
@@ -163,7 +163,7 @@ export const tools = [
     },
   },
   {
-    name: "sagex3_describe",
+    name: "sagex3_describe", title: "Sage X3 – champs d'une table",
     description: "Champs d'une représentation Sage X3. colonnes_liste = les seules valeurs renvoyées par sagex3_query ; champs_fiche = fiche complète renvoyée par sagex3_get (blocs dépliés en BLOC.CHAMP). Le where accepte tout champ d'en-tête mais seules les colonnes de liste sont renvoyées : lire les fiches avec sagex3_get. Filtrer sur X, jamais sur X_REF (libellé). Lire `notes` : pièges connus de la représentation.",
     input: { representation: name.describe("Ex. PINVOICE, BPCUSTOMER") },
     run: async (tok, { representation }, schema) => {
@@ -177,7 +177,7 @@ export const tools = [
     },
   },
   {
-    name: "sagex3_query",
+    name: "sagex3_query", title: "Sage X3 – rechercher",
     description: "Interroge une représentation Sage X3 (lecture seule, droits de l'utilisateur). Filtre SData, ex. (ACCDAT ge @2026-01-01@) and (BPR eq 'C0001'). Toujours trier (orderBy 'ACCDAT desc') ou filtrer sur une date : sans cela, des enregistrements techniques (NUM 00000) arrivent en tête. Pièges par représentation : champ notes de sagex3_describe. Au plus 500 lignes par appel : une liste coupée est signalée (avertissement), elle ne donne jamais un total.",
     input: {
       representation: name.describe("Ex. PINVOICE"),
@@ -195,7 +195,7 @@ export const tools = [
     },
   },
   {
-    name: "sagex3_get",
+    name: "sagex3_get", title: "Sage X3 – lire une fiche",
     description: "Détail d'un enregistrement Sage X3 par clé, ex. representation=PINVOICE key='TO2192607FAF0006'. Une fiche complète pèse 60 à 130 000 caractères (blocs de lignes) : indiquer champs pour ne garder que l'utile, ex. ['NUM','AMTATI','TOTLINAMT','PIHPID'] (un nom de bloc garde tout le bloc).",
     input: { representation: name, key: z.string(), champs: z.array(z.string().regex(/^\w+$/)).optional().describe("Champs ou blocs à conserver (voir champs_fiche de sagex3_describe) ; vide = fiche entière") },
     run: async (tok, { representation, key, champs }) => {

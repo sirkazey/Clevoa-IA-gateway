@@ -7,6 +7,17 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
+## [1.7.0-rc.4] – 2026-11-05
+
+Version candidate de finition de l'accès en ligne : présentation du connecteur dans les assistants et nouvelle identité visuelle.
+
+### Ajouté
+- Serveur MCP présenté aux assistants : titre « Clevoa AI Gateway », description (systèmes proposés, lecture seule), logo Clevoa en icônes intégrées (protocole 2025-11-25) ; titre lisible pour chaque outil (« Sage X3 – rechercher »…).
+- Port en ligne : `/favicon.ico`, ajouté aux chemins autorisés de la règle WAF du runbook Cloudflare.
+
+### Modifié
+- Logo du portail, symbole, favicons et icône iPhone remplacés par ceux du kit Clevoa de novembre 2026 ; favicon de la console aligné.
+
 ## [1.7.0-rc.3] – 2026-11-05
 
 Version candidate corrective de la 1.7.0-rc.2, issue de la mise en route du tunnel en pré-production. Sans
