@@ -118,7 +118,9 @@ Paramètres de l'organisation → Connecteurs → Ajouter un connecteur personna
 * paramètres avancés : identifiant client = `ENTRAID_CLAUDE_CLIENT_ID`, secret client = `ENTRAID_CLAUDE_CLIENT_SECRET`.
 
 Chaque collaborateur clique ensuite **Connecter**, se connecte avec son compte Microsoft de l'entreprise, et retrouve le
-connecteur dans claude.ai, l'application de bureau et l'application mobile.
+connecteur dans claude.ai, l'application de bureau et l'application mobile. Le portail le guide : avec
+`CLOUDFLARE_TUNNEL=1`, « Brancher votre assistant » s'ouvre sur l'onglet « Claude » (étapes et adresse `/mcp` à donner à
+l'Owner) et n'affiche plus le bloc `mcp-remote` de Claude Desktop ; « Claude Code et autres » reste disponible.
 
 Présentation : le hub annonce un titre (« Clevoa AI Gateway »), une description (systèmes proposés, lecture seule) et le logo
 Clevoa (icônes intégrées, protocole MCP 2025-11-25), et chaque outil a un titre lisible (« Sage X3 – rechercher »…). Claude
