@@ -404,7 +404,7 @@ async function handleMcp(req, res) {
   await transport.handleRequest(req, res, req.body);
 }
 app.post("/mcp", mcpRate, mcpAuth, seen, handleMcp);
-// Accès en ligne (ONLINE=on) : même gestionnaire, même plafond par collaborateur, sur un port séparé où l'identité vient d'un jeton Entra.
+// Accès en ligne (ONLINE=on ou 1) : même gestionnaire, même plafond par collaborateur, sur un port séparé où l'identité vient d'un jeton Entra.
 const onlineRate = rateLimit({ windowMs: 60_000, limit: MCP_PER_MIN, standardHeaders: "draft-8", legacyHeaders: false,
   keyGenerator: (req) => createHash("sha256").update(req.key).digest("base64url"),
   message: { error: `Trop de requêtes (${MCP_PER_MIN} par minute) : réessayez dans une minute.` } });

@@ -113,7 +113,7 @@ est déjà dans [`docs/validation/`](../validation/etat-des-fonctionnalites.md).
   `PIHTYP` lu sur CHREC ; `SINVOICE`, `GACCENTRY`, `GACCDUDATE` absents en standard (développement spécifique à chiffrer).
 * Accès en ligne en cours de mise en place : serveurs DNS de `clevoa.fr` changés pour Cloudflare le 05/11 (publication par le registre en cours), tunnel `charlois-test`
   créé, application Entra du portail complétée (scope `mcp`, jetons v2, consentement administrateur) ; reste la route du
-  tunnel, les règles WAF, `docker-compose.online.yml` dans la stack et l'ajout du connecteur par l'Owner Claude.
+  tunnel, les règles WAF, les variables `CLOUDFLARE_*` et `ENTRAID_CLAUDE_*` dans la stack et l'ajout du connecteur par l'Owner Claude.
 * Recette réelle restante avant toute production : [état des fonctionnalités § 3](../validation/etat-des-fonctionnalites.md#3-tests-restant-à-réaliser),
   en premier le cloisonnement avec un compte non administrateur.
 

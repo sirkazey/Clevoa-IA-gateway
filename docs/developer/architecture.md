@@ -9,7 +9,7 @@ modules, pas des services.
 ## 1. Vue d'ensemble
 
 ```
-Réseau interne ou VPN                              Hors réseau (accès en ligne, ONLINE=on)
+Réseau interne ou VPN                              Hors réseau (CLOUDFLARE_TUNNEL=1)
 Claude Code, Claude Desktop, ChatGPT, Copilot      claude.ai web et mobile → cloud Anthropic → Cloudflare
   │ MCP SSE ou Streamable HTTP                       │ MCP Streamable HTTP + jeton Entra ; tunnel sortant
   │ + Authorization: Bearer <clé perso>              │ (cloudflared, aucun port entrant)
@@ -50,7 +50,7 @@ systèmes, Entra ID et le backend Clevoa ; 11 tests de bout en bout branchent le
 
 ## 2. Identité et état
 
-* **Accès en ligne** (`online.js`, expérimental, `ONLINE=on`) : second port, sans portail ni clé statique. Le relais OAuth
+* **Accès en ligne** (`online.js`, expérimental, `CLOUDFLARE_TUNNEL=1` dans la stack, `ONLINE` dans le conteneur) : second port, sans portail ni clé statique. Le relais OAuth
   du SDK (`ProxyOAuthServerProvider`) publie les métadonnées (RFC 8414, RFC 9728, PKCE S256) et transmet `/authorize` et
   `/token` à Entra ID ; le hub ne délivre aucun jeton. Chaque jeton d'accès Entra est vérifié (signature, émetteur, locataire,
   audience, application cliente, scope `mcp`), puis rattaché à la clé du collaborateur par `oid` + locataire (`store.findSso`),
@@ -134,10 +134,9 @@ ensuite), simulateur intégré (Sage X3 et MyReport sans URL). Interface et budg
 
 ## 6. Déploiement
 
-`docker-compose.yml` (base commune : `mcp-hub`, `mcp-backup`, `nginx` en profil `proxy`) étendu par
-`docker-compose.dev.yml` (bouchon, logs détaillés, défauts vers `mcp-stub`) et `docker-compose.prod.yml` (verrous) ;
-`docker-compose.online.yml` s'ajoute à l'un ou l'autre pour l'accès en ligne (`cloudflared`, réseau dédié,
-[guide](../admin/acces-en-ligne.md)).
+`docker-compose.yml` (base commune : `mcp-hub`, `mcp-backup`, `cloudflared` à zéro instance sauf `CLOUDFLARE_TUNNEL=1`,
+`nginx` en profil `proxy`) étendu par `docker-compose.dev.yml` (bouchon, logs détaillés, défauts vers `mcp-stub`) et
+`docker-compose.prod.yml` (verrous) ; réseau `tunnel` réservé au hub et à `cloudflared` ([accès en ligne](../admin/acces-en-ligne.md)).
 Scripts d'exploitation dans `ops/` (`backup-loop.sh` dans le conteneur de sauvegarde, `backup.sh`, `restore.sh`,
 `test-backup-restore.sh`, `ops/nginx/mcp.conf`). Détail : [installation](../admin/installation.md) et
 [exploitation](../admin/exploitation.md).

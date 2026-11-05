@@ -7,6 +7,16 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
+## [1.7.0-rc.2] – 2026-11-05
+
+Version candidate corrective de la 1.7.0-rc.1, issue de la première mise en place sous Portainer : Portainer CE ne permet pas
+d'ajouter un fichier Compose à une stack déjà créée. Sans `CLOUDFLARE_TUNNEL=1`, comportement identique à la 1.7.0-rc.1.
+
+### Modifié
+- Accès en ligne intégré aux stacks de pré-production et de production : `cloudflared` y figure à zéro instance et démarre avec `CLOUDFLARE_TUNNEL=1` ; `docker-compose.online.yml` retiré.
+- Variables de la stack renommées pour être lisibles : `CLOUDFLARE_TUNNEL`, `CLOUDFLARE_TUNNEL_TOKEN`, `CLOUDFLARE_PUBLIC_URL`, `ENTRAID_CLAUDE_CLIENT_ID`, `ENTRAID_CLAUDE_CLIENT_SECRET` ; messages de démarrage du hub alignés.
+- Documentation de la pré-production du 05/11 (journal des tests réels P1 à P11, guide d'accès en ligne, runbook Cloudflare, SSO Entra).
+
 ## [1.7.0-rc.1] – 2026-11-05
 
 Version candidate : accès en ligne pour Claude (web, mobile, application de bureau) hors du réseau de l'entreprise, sans clé

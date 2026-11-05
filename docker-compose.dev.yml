@@ -78,5 +78,16 @@ services:
       service: nginx
     container_name: mcp-proxy-preprod
 
+  cloudflared:
+    extends:
+      file: docker-compose.yml
+      service: cloudflared
+    container_name: cloudflared-preprod
+    depends_on:
+      mcp-hub: { condition: service_healthy }
+
 volumes:
   mcp-data:
+
+networks:
+  tunnel: {}
