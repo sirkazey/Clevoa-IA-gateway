@@ -7,6 +7,14 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
+## [1.6.0-rc.1] – 2026-11-05
+
+Version candidate : choix des connecteurs proposés aux collaborateurs. Aucune variable obligatoire ; sans réglage, comportement
+de la 1.5.2.
+
+### Ajouté
+- `CONNECTORS_ENABLED` (ex. `sagex3,salesforce,sharepoint`) : seuls les connecteurs listés apparaissent au portail et dans les outils de l'assistant, sans route de connexion, vérification ni compteur pour les autres ; vide = tous. Les connexions déjà enregistrées d'un connecteur écarté sont conservées ; un nom inconnu arrête le démarrage.
+
 ## [1.5.2] – 2026-11-03
 
 Version corrective Sage X3, issue de la réponse de l'intégrateur au ticket #31562 : aucune variable à ajouter ; une instance

@@ -27,8 +27,15 @@ const PORT = process.env.PORT || 8080;
 const debug = process.env.LOG_LEVEL === "debug" ? (...a) => console.log("[debug]", ...a) : () => {};
 // Verrou production : l'URL publique doit être en https (cookie Secure, callbacks OAuth), sauf test local.
 if (IS_PROD && !/^https:|^http:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(PUBLIC_URL)) { console.error(`[prod] PUBLIC_URL doit être en https : ${PUBLIC_URL}`); process.exit(1); }
+// Connecteurs proposés : CONNECTORS_ENABLED (ex. sagex3,salesforce,sharepoint) ; vide = tous. Un connecteur écarté n'a ni ligne au
+// portail, ni outil MCP, ni route OAuth, ni vérification, ni compteur ; les connexions déjà enregistrées restent dans users.json.
+// Un nom inconnu arrête le démarrage : une faute de frappe ne doit pas masquer un système sans le dire.
+const ALL = [salesforce, sagex3, sharepoint, dropbox, myreport];
+const WANTED = (process.env.CONNECTORS_ENABLED || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+const unknown = WANTED.filter((id) => !ALL.some((c) => c.id === id));
+if (unknown.length) { console.error(`[config] CONNECTORS_ENABLED : connecteur inconnu (${unknown.join(", ")}) ; valeurs possibles : ${ALL.map((c) => c.id).join(", ")}`); process.exit(1); }
 // En production, un connecteur sans configuration (simulateur) n'est pas exposé : jamais de données inventées en prod.
-const CONNECTORS = [salesforce, sagex3, sharepoint, dropbox, myreport].filter((c) => !(IS_PROD && c.mock));
+const CONNECTORS = ALL.filter((c) => (!WANTED.length || WANTED.includes(c.id)) && !(IS_PROD && c.mock));
 // Multi-client : nom sous lequel le serveur MCP s'annonce aux assistants (clé du bloc mcpServers du portail) et libellé de
 // l'instance affiché sur le portail. Le nom sert de clé JSON côté client : lettres, chiffres, tirets et soulignés seulement.
 const SERVER_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(process.env.MCP_SERVER_NAME || "") ? process.env.MCP_SERVER_NAME : "clevoa-gateway";
@@ -39,7 +46,7 @@ const domainOverride = Object.fromEntries((process.env.CONNECTOR_DOMAINS || "").
 const domainOf = (c) => (Object.hasOwn(domainOverride, c.id) ? domainOverride[c.id] : DOMAINS.includes(c.domain) ? c.domain : "autre");
 const byId = Object.assign(Object.create(null), Object.fromEntries(CONNECTORS.map((c) => [c.id, c]))); // sans prototype : « constructor », « __proto__ »… ne désignent aucun système
 // Variables visibles dans le portail : toutes celles des connecteurs et du hub présentes dans l'environnement (jamais la valeur des secrets).
-const ENV = Object.keys(process.env).filter((n) => /^(PUBLIC_URL|APP_ENV|LOG_LEVEL|TRUST_PROXY|ENCRYPTION_KEY|SSO_MODE|MCP_SERVER_NAME|INSTANCE_LABEL|SF_|SAGE_|MS_|SP_|GRAPH_URL|DROPBOX_|MYREPORT_|CLEVOA_|PROBE$|SLOW_MS$|METRICS_TOKEN$|CONNECTOR_DOMAINS$|AUDIT$|AUDIT_DAYS$)/.test(n)).sort();
+const ENV = Object.keys(process.env).filter((n) => /^(PUBLIC_URL|APP_ENV|LOG_LEVEL|TRUST_PROXY|ENCRYPTION_KEY|SSO_MODE|MCP_SERVER_NAME|INSTANCE_LABEL|SF_|SAGE_|MS_|SP_|GRAPH_URL|DROPBOX_|MYREPORT_|CLEVOA_|PROBE$|SLOW_MS$|METRICS_TOKEN$|CONNECTOR_DOMAINS$|CONNECTORS_ENABLED$|AUDIT$|AUDIT_DAYS$)/.test(n)).sort();
 const masked = (n) => (/SECRET|CLEVOA_KEY|ENCRYPTION_KEY|METRICS_TOKEN/.test(n) ? "••••••••" : process.env[n]); // CLEVOA_KEY est une clé de licence, masquée comme les secrets
 
 // ---------- Limitation de débit (express-rate-limit, mémoire, par adresse IP, fenêtre d'une minute) ----------

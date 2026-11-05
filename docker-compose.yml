@@ -62,6 +62,7 @@ services:
       PROBE: ${PROBE}                        # vide = vérification de joignabilité (HEAD sans identifiant) toutes les 10 min, lun-ven 7 h-19 h ; off = aucune ; always = à toute heure
       SLOW_MS: ${SLOW_MS}                    # temps de réponse p95 (ms) au-delà duquel le portail affiche « Lent » ; défaut 10000
       METRICS_TOKEN: ${METRICS_TOKEN}        # jeton de la supervision (GET /metrics, format Prometheus) ; vide = route désactivée
+      CONNECTORS_ENABLED: ${CONNECTORS_ENABLED} # connecteurs proposés, ex. sagex3,salesforce,sharepoint ; vide = tous
       CONNECTOR_DOMAINS: ${CONNECTOR_DOMAINS} # classement sur le portail, ex. sagex3=industrie (commerce, finance, industrie, documents, rh, autre)
       # Journal d'audit (1.5) — docs/admin/securite.md § 7 : à activer seulement après avis du DPO et information des collaborateurs
       AUDIT: ${AUDIT}                        # on = chaque appel d'outil journalisé (collaborateur, système, outil, résultat, durée ; jamais les arguments ni les données)

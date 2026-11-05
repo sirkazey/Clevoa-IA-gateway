@@ -1,6 +1,6 @@
 # État des fonctionnalités et limites connues
 
-Version 1.5.2 (03/11/2026 : type de pièce `PIHTYP` de PINVOICE, liste Sage X3 par défaut sans `SINVOICE` ni `GACCENTRY`), toujours sans avoir passé le cloisonnement avec un compte non administrateur, le déploiement sur un serveur de pré-production ni une restauration réelle : à faire avant toute production (Node 24 ; base d'exploitation SQLite : disponibilité, usage, journal d'audit facultatif ; OpenID Connect et limites de débit par des composants éprouvés). Statuts selon [les conventions](../CONTRIBUTING.md#statut-des-fonctionnalités) : **disponible** (vérifié
+Version 1.6.0-rc.1 (05/11/2026 : connecteurs proposés au choix, `CONNECTORS_ENABLED` ; 1.5.2 : type de pièce `PIHTYP`, liste Sage X3 par défaut sans `SINVOICE` ni `GACCENTRY`), toujours sans avoir passé le cloisonnement avec un compte non administrateur, le déploiement sur un serveur de pré-production ni une restauration réelle : à faire avant toute production (Node 24 ; base d'exploitation SQLite : disponibilité, usage, journal d'audit facultatif ; OpenID Connect et limites de débit par des composants éprouvés). Statuts selon [les conventions](../CONTRIBUTING.md#statut-des-fonctionnalités) : **disponible** (vérifié
 sur le système réel), **testé sur bouchon** (tests automatisés et simulateur seulement), **expérimental**, **prévu**, **non planifié**.
 Évolutions : [roadmap produit](../roadmap-produit.md). Preuves : [journal des tests réels](journal-tests-reels.md), [campagne de charge](charge-v1.2.1.md), CI.
 
