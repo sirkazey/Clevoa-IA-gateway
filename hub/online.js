@@ -1,5 +1,5 @@
 // Accès en ligne pour Claude (claude.ai web, mobile et application de bureau) : port séparé, publié par un tunnel Cloudflare, qui ne
-// sert que l'OAuth et /mcp. Désactivé par défaut (ONLINE=on). Aucun serveur d'autorisation maison : le relais OAuth du SDK MCP
+// sert que l'OAuth et /mcp. Désactivé par défaut (ONLINE=on ou 1, soit CLOUDFLARE_TUNNEL=1 dans la stack). Aucun serveur d'autorisation maison : le relais OAuth du SDK MCP
 // (ProxyOAuthServerProvider) publie des métadonnées conformes (PKCE S256, RFC 8414, RFC 9728) et transmet connexion et jetons à
 // Entra ID ; Entra authentifie (double authentification, accès conditionnel), délivre, renouvelle et révoque. Le hub ne délivre
 // aucun jeton : il vérifie ceux d'Entra (signature, émetteur, locataire, audience, application cliente, scope) avec jose, puis
@@ -15,7 +15,7 @@ import { store } from "./store.js";
 import * as sso from "./sso.js";
 import { IS_PROD } from "./version.js";
 
-export const ENABLED = process.env.ONLINE === "on";
+export const ENABLED = ["on", "1"].includes(process.env.ONLINE); // Compose : CLOUDFLARE_TUNNEL=1 ; vide ou 0 = désactivé
 const PORT = Number(process.env.ONLINE_PORT || 8090);
 const BASE = (process.env.ONLINE_URL || "").replace(/\/$/, "");
 const CLIENT_ID = process.env.ONLINE_CLIENT_ID || "", CLIENT_SECRET = process.env.ONLINE_CLIENT_SECRET || "";
@@ -30,14 +30,14 @@ const ISSUER = `${LOGIN}/${TENANT}/v2.0`; // jetons d'accès v2 (requestedAccess
 
 if (ENABLED) {
   const fail = (m) => { console.error(`[online] ${m}`); process.exit(1); };
-  if (!sso.MODE) fail("ONLINE=on exige le SSO Entra du portail (SSO_MODE=entra, ou mock en pré-production) : même annuaire, même identité");
-  if (!/^https?:\/\/[^/]+$/.test(BASE)) fail("ONLINE_URL doit être l'adresse publique sans chemin, ex. https://mcp.exemple.fr");
-  if (IS_PROD && !BASE.startsWith("https://")) fail("ONLINE_URL doit être en https en production");
-  if (!/^https:\/\/|^http:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(BASE)) fail("ONLINE_URL doit être en https (http seulement en local)");
-  if (!CLIENT_ID || !CLIENT_SECRET) fail("ONLINE_CLIENT_ID et ONLINE_CLIENT_SECRET (inscription Entra du connecteur Claude) sont requis");
-  if (CLIENT_SECRET.length < 16) fail("ONLINE_CLIENT_SECRET trop court : copier la valeur du secret Entra, pas son identifiant");
+  if (!sso.MODE) fail("CLOUDFLARE_TUNNEL=1 (ONLINE) exige le SSO Entra du portail (SSO_MODE=entra, ou mock en pré-production) : même annuaire, même identité");
+  if (!/^https?:\/\/[^/]+$/.test(BASE)) fail("CLOUDFLARE_PUBLIC_URL (ONLINE_URL) doit être l'adresse publique sans chemin, ex. https://charlois-test.clevoa.fr");
+  if (IS_PROD && !BASE.startsWith("https://")) fail("CLOUDFLARE_PUBLIC_URL (ONLINE_URL) doit être en https en production");
+  if (!/^https:\/\/|^http:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(BASE)) fail("CLOUDFLARE_PUBLIC_URL (ONLINE_URL) doit être en https (http seulement en local)");
+  if (!CLIENT_ID || !CLIENT_SECRET) fail("ENTRAID_CLAUDE_CLIENT_ID et ENTRAID_CLAUDE_CLIENT_SECRET (ONLINE_CLIENT_ID et ONLINE_CLIENT_SECRET dans le conteneur) sont requis");
+  if (CLIENT_SECRET.length < 16) fail("ENTRAID_CLAUDE_CLIENT_SECRET trop court : copier la valeur du secret Entra, pas son identifiant");
   if (!(PORT > 0 && PORT < 65536) || PORT === Number(process.env.PORT || 8080)) fail("ONLINE_PORT doit être un port distinct de celui du portail");
-  if (REDIRECTS.some((u) => !/^https:\/\/|^http:\/\/(localhost|127\.0\.0\.1)(:|\/)/.test(u))) fail("ONLINE_REDIRECT_URIS : https seulement (boucle locale tolérée)");
+  if (REDIRECTS.some((u) => !/^https:\/\/|^http:\/\/(localhost|127\.0\.0\.1)(:|\/)/.test(u))) fail("ENTRAID_CLAUDE_REDIRECT_URIS (ONLINE_REDIRECT_URIS) : https seulement (boucle locale tolérée)");
 }
 
 const client = { client_id: CLIENT_ID, client_secret: CLIENT_SECRET, redirect_uris: REDIRECTS, token_endpoint_auth_method: "client_secret_post",

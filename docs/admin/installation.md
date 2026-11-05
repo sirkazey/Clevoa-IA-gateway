@@ -153,8 +153,8 @@ secrets (`ENCRYPTION_KEY`, `CLEVOA_KEY`), son volume et son identifiant d'instal
 client ; un connecteur demandé par un client reste désactivé tant qu'il n'est pas configuré.
 
 Tags publiés au 03/11/2026 : `v1.2.0`, `v1.2.1`, `v1.3.0`, `v1.3.1`, `v1.3.2-rc.1`, `v1.3.2-rc.2`, `v1.4.0-rc.1`,
-`v1.4.0-rc.2`, `v1.5.0-rc.1`, `v1.5.0`, `v1.5.1`, `v1.5.2`, `v1.6.0-rc1` (la 1.0.0 n'est pas publiée sur GitHub, la 1.1.0 n'a pas de tag ; aucune 1.3.2
-finale). Version courante : `1.7.0-rc.1` (tag à créer). Suivi du backlog : issues GitHub (modèles « Bug » et « Évolution ») et milestones
+`v1.4.0-rc.2`, `v1.5.0-rc.1`, `v1.5.0`, `v1.5.1`, `v1.5.2`, `v1.6.0-rc1`, `v1.7.0-rc.1` (la 1.0.0 n'est pas publiée sur GitHub, la 1.1.0 n'a pas de tag ; aucune 1.3.2
+finale). Version courante : `1.7.0-rc.2` (tag à créer). Suivi du backlog : issues GitHub (modèles « Bug » et « Évolution ») et milestones
 par version.
 
 ## 7. Première mise en service auprès des collaborateurs

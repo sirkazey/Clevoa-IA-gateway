@@ -1,6 +1,6 @@
 # État des fonctionnalités et limites connues
 
-Version 1.7.0-rc.1 (05/11/2026 : accès en ligne pour Claude, expérimental ; 1.6.0-rc.1 : connecteurs proposés au choix, `CONNECTORS_ENABLED` ; 1.5.2 : type de pièce `PIHTYP`, liste Sage X3 par défaut sans `SINVOICE` ni `GACCENTRY`), toujours sans avoir passé le cloisonnement avec un compte non administrateur, le déploiement sur un serveur de pré-production ni une restauration réelle : à faire avant toute production (Node 24 ; base d'exploitation SQLite : disponibilité, usage, journal d'audit facultatif ; OpenID Connect et limites de débit par des composants éprouvés). Statuts selon [les conventions](../CONTRIBUTING.md#statut-des-fonctionnalités) : **disponible** (vérifié
+Version 1.7.0-rc.2 (05/11/2026 : accès en ligne activable par une variable, sans fichier Compose supplémentaire ; 1.7.0-rc.1 : accès en ligne pour Claude, expérimental ; 1.6.0-rc.1 : connecteurs proposés au choix, `CONNECTORS_ENABLED` ; 1.5.2 : type de pièce `PIHTYP`, liste Sage X3 par défaut sans `SINVOICE` ni `GACCENTRY`), déployée le 05/11/2026 sur le serveur de pré-production du client (Portainer, systèmes réels, [journal P1–P11](journal-tests-reels.md)) ; toujours sans avoir passé le cloisonnement avec un compte non administrateur ni une restauration réelle : à faire avant toute production (Node 24 ; base d'exploitation SQLite : disponibilité, usage, journal d'audit facultatif ; OpenID Connect et limites de débit par des composants éprouvés). Statuts selon [les conventions](../CONTRIBUTING.md#statut-des-fonctionnalités) : **disponible** (vérifié
 sur le système réel), **testé sur bouchon** (tests automatisés et simulateur seulement), **expérimental**, **prévu**, **non planifié**.
 Évolutions : [roadmap produit](../roadmap-produit.md). Preuves : [journal des tests réels](journal-tests-reels.md), [campagne de charge](charge-v1.2.1.md), CI.
 
@@ -11,7 +11,7 @@ sur le système réel), **testé sur bouchon** (tests automatisés et simulateur
 | Sage X3 24R1, identifiant et mot de passe Syracuse (`basic`) | disponible | préproduction 4CAD Cloud, 23/10/2026 (S1–S19) | test avec un compte X3 restreint ; production |
 | Sage X3, OAuth2 ou clé d'API `bearer` | testé sur bouchon | tests hub | un vrai IdP Syracuse |
 | Salesforce, serveur MCP hébergé SObject Reads | disponible (sandbox) | sandbox `preprod`, 23/10/2026 (F1–F6) | org de production ; expiration réelle du JWT (durée annoncée par Salesforce, non mesurée) et rotation du refresh token ; compte restreint |
-| SharePoint / OneDrive (Graph délégué) | disponible (pré-prod, un compte) | locataire Charlois, 26/10/2026 ([E1–E8](journal-tests-reels.md)) : connexion, liste des sites | lister, chercher, lire un document ; second collaborateur ; revue des permissions `Files.Read.All` et `Sites.Read.All` ; consentement administrateur |
+| SharePoint / OneDrive (Graph délégué) | disponible (pré-prod, un compte) | locataire Charlois, 26/10/2026 ([E1–E8](journal-tests-reels.md)) : connexion, liste des sites ; serveur de pré-production le 05/11 (P5, P10), consentement administrateur accordé | lister, chercher, lire un document ; second collaborateur ; revue des permissions `Files.Read.All` et `Sites.Read.All` ; consentement administrateur |
 | Dropbox (serveur MCP officiel) | testé sur bouchon | tests hub, bouchon aligné sur les schémas du serveur officiel (22/10/2026) | acceptation par `mcp.dropbox.com` d'un jeton d'app tierce |
 | MyReport (proxy MCP SSE) | testé sur bouchon | plomberie SSE et liste blanche seulement | serveur MCP de l'éditeur, non livré ; outils réels inconnus |
 | SSO Microsoft Entra ID (`entra`) | disponible (pré-prod, un compte) | locataire Charlois, 26/10/2026 ([E5–E8](journal-tests-reels.md)) ; `hub/test/sso.test.js` | cloisonnement entre deux collaborateurs réels ; compte invité |
@@ -26,7 +26,7 @@ sur le système réel), **testé sur bouchon** (tests automatisés et simulateur
 | Supervision du hub (`/metrics` Prometheus, `/metrics/prtg` PRTG, jeton dédié) | testé sur bouchon | `health.test.js` | capteur HTTP Data Advanced sur le PRTG de Charlois |
 | Claude Desktop via `mcp-remote` | disponible | vérifié le 23/10/2026 sur Windows | |
 | Claude Code, ChatGPT, Copilot (MCP HTTP + en-tête) | testé sur bouchon | tests de transport du hub ; Claude Code déclaré vérifié sans entrée au journal ; ChatGPT et Copilot non exercés | une session réelle par assistant, consignée au journal |
-| Claude.ai web et mobile, hors réseau : accès en ligne (`ONLINE=on`, relais OAuth du SDK vers Entra, Cloudflare Tunnel) | expérimental | `online.test.js` sur Entra simulé ; décision du 3/11/2026 ([guide](../admin/acces-en-ligne.md)) | premier essai réel (tunnel, Entra, claude.ai, mobile) ; avis du DPO ; test d'intrusion ; connexion des systèmes sans le portail interne |
+| Claude.ai web et mobile, hors réseau : accès en ligne (`CLOUDFLARE_TUNNEL=1`, relais OAuth du SDK vers Entra, Cloudflare Tunnel) | expérimental | `online.test.js` sur Entra simulé ; décision du 3/11/2026 ([guide](../admin/acces-en-ligne.md)) | premier essai réel (tunnel, Entra, claude.ai, mobile) ; avis du DPO ; test d'intrusion ; connexion des systèmes sans le portail interne |
 | Protocole MCP : révisions 2024-10-07 à 2025-11-25 négociées (SDK `@modelcontextprotocol/sdk` 1.32.1), outils annotés `readOnlyHint`, erreurs JSON-RPC propres, reconnexion SSE | testé sur bouchon | `hub/test/compat.test.js` (échanges JSON-RPC bruts) ; Claude Desktop vérifié en réel | une session réelle par assistant autre que Claude Desktop |
 | Transports Streamable HTTP et SSE | disponible | tests hub, campagne de charge | retrait du SSE quand les assistants cibles seront tous en Streamable HTTP |
 | Chiffrement `users.json`, clé MCP en en-tête, limitation de débit, en-têtes de sécurité | disponible | tests hub, ZAP passif | |
@@ -45,7 +45,7 @@ sur le système réel), **testé sur bouchon** (tests automatisés et simulateur
 * **Cloisonnement sur les systèmes réels** observé avec un compte administrateur seulement. Le test avec un compte
   restreint sur Sage X3 et Salesforce est la première preuve manquante.
 * **Sage X3** : seules les colonnes de liste sont renvoyées par `sagex3_query` ; type de pièce de PINVOICE
-  (`PIHTYP`) publié sur les dossiers de recette seulement, non encore exercé par le hub (règle du numéro conservée) ;
+  (`PIHTYP`) publié sur les dossiers de recette seulement, lu par le hub en liste sur CHREC le 05/11 (règle du numéro conservée tant qu'il n'est pas en production) ;
   statut de règlement (`GACCDUDATE`), `SINVOICE` et `GACCENTRY` absents en standard : développement spécifique à chiffrer ; fiche
   complète de 60 à 130 000 caractères (paramètre `champs`) ; délai de 30 s par requête ; enregistrements techniques
   en tête sans tri.
@@ -86,5 +86,5 @@ sur le système réel), **testé sur bouchon** (tests automatisés et simulateur
 | Comparaison croisée Sage + Salesforce dans une même réponse | vérifie la consigne par défaut du serveur MCP | |
 | Claude Code, ChatGPT, Copilot : une session réelle chacun, consignée au journal | seul Claude Desktop est prouvé ; les autres ne sont testés qu'au niveau du protocole | poste avec l'assistant, clé MCP |
 | Backend de télémétrie déployé sur AWS (DynamoDB, SNS, rapport horaire) et `clevoa.fr`, console sur le NAS de Clevoa | testé localement sans AWS | compte AWS Clevoa, nom de domaine, validation juridique |
-| Mise à jour puis retour arrière sur la pré-production du client, depuis Portainer (référence de tag) | testé en CI et en local, jamais sous Portainer | tag de la version à recetter, stack reconfigurée sur un tag |
+| Mise à jour puis retour arrière sur la pré-production du client, depuis Portainer (référence de tag) | mise à jour faite sous Portainer le 05/11 (1.6.0-rc1 → 1.7.0-rc.1, connexions conservées) ; retour arrière jamais sous Portainer | tag de la version à recetter, stack reconfigurée sur un tag |
 | Diagnostic exporté depuis l'installation du client et relu | exécuté sur la stack pré-prod locale seulement | accès administrateur au serveur |

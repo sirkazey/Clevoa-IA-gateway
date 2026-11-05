@@ -2,7 +2,7 @@
 
 Public : l'administrateur du hub et l'administrateur Entra ID du client. Objet : permettre aux collaborateurs d'utiliser le hub
 depuis Claude **hors du réseau de l'entreprise** (téléphone, ordinateur en déplacement), sans ouvrir de port sur le pare-feu et
-sans clé à copier. Statut : **expérimental**, désactivé par défaut (`ONLINE=on`), testé sur bouchon seulement
+sans clé à copier. Statut : **expérimental**, désactivé par défaut (`CLOUDFLARE_TUNNEL=1` l'active), testé sur bouchon seulement
 ([état des fonctionnalités](../validation/etat-des-fonctionnalites.md)). Choix et alternatives écartées :
 [étude](../etudes/connexion-un-clic.md#9-décision-du-3-novembre-2026--entra-seul-relais-oauth-du-sdk-et-cloudflare-tunnel).
 
@@ -41,26 +41,35 @@ sans clé à copier. Statut : **expérimental**, désactivé par défaut (`ONLIN
 
 * SSO Entra du portail actif (`SSO_MODE=entra`) : même locataire, même identité ([guide](sso-entra.md)).
 * Le compte Cloudflare **de Clevoa**, qui exploite le service managé, et une zone DNS gérée par Cloudflare pour le nom public
-  (ex. `<client>-mcp.<domaine>`) ; un tunnel et un nom d'hôte par client. Compte à sécuriser comme une production :
+  (ex. `<client>.<domaine>`) ; un tunnel et un nom d'hôte par client. Compte à sécuriser comme une production :
   [responsabilités](../developer/architecture.md#9-service-managé--qui-exploite-quoi).
 * Claude **Team** ou **Enterprise** : seul l'Owner ajoute le connecteur pour l'organisation.
 * Avis du DPO : Cloudflare termine le HTTPS et **voit les échanges en clair** (questions et réponses, données métier
   comprises). Cloudflare devient sous-traitant ultérieur de Clevoa, à prévoir au contrat ; la localisation des données en UE
   est réservée à l'offre Enterprise de Cloudflare.
 
-## 3. Entra ID : inscription « connecteur Claude »
+## 3. Entra ID : application pour Claude
 
-Une **inscription d'application distincte** de celle du portail et de SharePoint : son secret est confié à Anthropic (saisi dans
-Claude), il doit pouvoir être révoqué seul. Libellés du centre d'administration Entra **à vérifier**.
+Deux possibilités ; le secret de cette application est confié à Anthropic (saisi dans Claude) :
 
-1. Inscriptions d'applications → Nouvelle inscription : nom « Clevoa – connecteur Claude », comptes de **cet annuaire
+* **application dédiée** (recommandée en production) : le secret confié à Anthropic n'ouvre que le scope `mcp` ;
+* **application du portail réutilisée** (choix de la pré-production Charlois le 05/11/2026) : rien à créer, mais le secret
+  confié à Anthropic appartient à une application qui a aussi les droits SharePoint délégués avec consentement
+  administrateur. Créer alors un **secret dédié à Claude**, révocable sans toucher à celui du hub, et `ENTRAID_CLAUDE_CLIENT_ID` =
+  `MS_CLIENT_ID`.
+
+Les étapes sont les mêmes ; seule la première change (nouvelle inscription, ou ajout de l'URI de retour à l'application
+existante). Libellés du centre d'administration Entra **à vérifier**.
+
+1. Inscriptions d'applications → Nouvelle inscription (ou l'application existante) : comptes de **cet annuaire
    uniquement**, URI de redirection *Web* `https://claude.ai/api/mcp/auth_callback`.
 2. Exposer une API : URI d'ID d'application `api://<ID d'application>`, scope `mcp` (« Accéder au hub Clevoa en lecture »,
    consentement par les administrateurs et les utilisateurs).
 3. Manifeste : `"requestedAccessTokenVersion": 2` (sous `api`). Sans cela, Entra émet des jetons v1 que le hub refuse.
 4. Certificats et secrets : nouveau secret client ; noter sa **valeur** (pas son identifiant) et sa date d'expiration.
-5. Consentement administrateur pour le scope `mcp` (et `offline_access`), pour éviter l'écran de consentement à chaque
-   collaborateur.
+5. API autorisées : ajouter le scope `mcp` (onglet « Mes API », ou « API utilisées par mon organisation ») et
+   `offline_access`, puis « Accorder un consentement d'administrateur ». Application réutilisée : ce consentement couvre
+   aussi les droits Graph du portail, qui doivent tous être déclarés dans la liste (sinon le consentement les retire).
 6. Recommandé : Applications d'entreprise → cette application → Propriétés → **Affectation requise** = Oui, puis affecter les
    collaborateurs ou un groupe. Les autres comptes de l'annuaire ne pourront pas se connecter.
 7. Recommandé : une stratégie d'accès conditionnel (double authentification) ciblant cette application.
@@ -68,40 +77,41 @@ Claude), il doit pouvoir être révoqué seul. Libellés du centre d'administrat
 ## 4. Cloudflare : tunnel et règles
 
 Procédure complète, contrôles et rotations : [runbook Cloudflare](cloudflare.md). En bref : compte Clevoa sécurisé (§ 1),
-un tunnel et un nom d'hôte par client et par environnement, à un seul niveau sous le domaine (`<client>-mcp.<domaine>`),
+un tunnel et un nom d'hôte par client et par environnement, à un seul niveau sous le domaine (`<client>.<domaine>`),
 une seule route vers `http://mcp-hub:8090` (§ 3), chemins autorisés seulement et `/mcp` et `/token` réservés aux adresses
 d'Anthropic (§ 4), contrôles après chaque modification (§ 5).
 
 ## 5. Hub : variables et démarrage
 
-Dans `.env`, en plus de la configuration existante :
+Le tunnel et le port en ligne font partie des stacks de pré-production et de production (depuis la 1.7.0-rc.2) : rien à
+ajouter à la stack, seulement des variables (Portainer : *Environment variables*, puis *Update the stack*).
 
-```
-ONLINE_URL=https://<client>-mcp.<domaine>
-ONLINE_CLIENT_ID=<ID d'application de l'inscription « connecteur Claude »>
-ONLINE_CLIENT_SECRET=<valeur du secret>
-TUNNEL_TOKEN=<jeton du tunnel Cloudflare>
-```
+| Variable de la stack | Valeur |
+|---|---|
+| `CLOUDFLARE_TUNNEL` | `1` : démarre `cloudflared` et ouvre le port 8090 du hub ; vide ou `0` : accès en ligne désactivé |
+| `CLOUDFLARE_TUNNEL_TOKEN` | le jeton du tunnel : le long texte après `--token` dans la commande Docker affichée par Cloudflare (pas l'ID du tunnel) |
+| `CLOUDFLARE_PUBLIC_URL` | le nom public, sans chemin, ex. `https://<client>-test.<domaine>` |
+| `ENTRAID_CLAUDE_CLIENT_ID` | l'ID d'application Entra utilisée par Claude (celle du portail si elle est réutilisée) |
+| `ENTRAID_CLAUDE_CLIENT_SECRET` | la valeur du secret réservé à Claude |
 
-Démarrage, en ajoutant le complément `docker-compose.online.yml` à la stack existante (Portainer : *Additional paths*) :
+Facultatives : `ENTRAID_CLAUDE_REDIRECT_URIS` (vide = `https://claude.ai/api/mcp/auth_callback`), `CLOUDFLARE_TRUST_PROXY`
+(défaut 1). Dans le conteneur, le hub les reçoit sous les noms `ONLINE`, `ONLINE_URL`, `ONLINE_CLIENT_ID`,
+`ONLINE_CLIENT_SECRET`, `ONLINE_REDIRECT_URIS` et `ONLINE_TRUST_PROXY`.
 
-```bash
-docker compose -f docker-compose.prod.yml -f docker-compose.online.yml up -d
-```
+Contrôle : un conteneur `cloudflared-preprod` (ou `-prod`) en marche ; ligne de journal du hub `[online] accès en ligne actif :
+https://<client>-test.<domaine>/mcp (port 8090, annuaire …)` ; le tunnel « Healthy » dans Cloudflare ; puis
+`https://<client>-test.<domaine>/.well-known/oauth-authorization-server` répond depuis un navigateur. Le hub refuse de démarrer
+sans SSO, sans identifiant ou secret, avec une adresse non https en production, ou avec le même port que le portail.
 
-Contrôle : ligne de journal `[online] accès en ligne actif : https://<client>-mcp.<domaine>/mcp (port 8090, annuaire …)`, puis
-`https://<client>-mcp.<domaine>/.well-known/oauth-authorization-server` répond depuis un navigateur. Le hub refuse de démarrer sans SSO,
-sans identifiant ou secret, avec une adresse non https en production, ou avec le même port que le portail.
-
-Retour arrière : relancer la stack **sans** `docker-compose.online.yml` ; le tunnel tombe, le portail interne est inchangé.
-Supprimer ensuite le nom d'hôte public dans Cloudflare.
+Retour arrière : `CLOUDFLARE_TUNNEL=0` puis *Update the stack* ; le conteneur `cloudflared` disparaît, le portail interne est
+inchangé. Supprimer ensuite le nom d'hôte public dans Cloudflare.
 
 ## 6. Claude : ajout du connecteur par l'Owner
 
 Paramètres de l'organisation → Connecteurs → Ajouter un connecteur personnalisé (libellés **à vérifier**) :
 
-* URL : `https://<client>-mcp.<domaine>/mcp` (exactement, chemin compris) ;
-* paramètres avancés : identifiant client = `ONLINE_CLIENT_ID`, secret client = `ONLINE_CLIENT_SECRET`.
+* URL : `https://<client>.<domaine>/mcp` (exactement, chemin compris) ;
+* paramètres avancés : identifiant client = `ENTRAID_CLAUDE_CLIENT_ID`, secret client = `ENTRAID_CLAUDE_CLIENT_SECRET`.
 
 Chaque collaborateur clique ensuite **Connecter**, se connecte avec son compte Microsoft de l'entreprise, et retrouve le
 connecteur dans claude.ai, l'application de bureau et l'application mobile.
