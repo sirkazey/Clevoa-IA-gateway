@@ -46,9 +46,13 @@ test("Négociation : une révision inconnue reçoit la plus récente du serveur 
   assert.equal(body.result.protocolVersion, LATEST_PROTOCOL_VERSION);
 });
 
-test("Identité : nom d'instance, version du hub, capacité outils, consignes de citation de la source", async () => {
+test("Identité : nom d'instance, version du hub, titre, description, icônes, capacité outils, consignes de citation de la source", async () => {
   const { body } = await init(LATEST_PROTOCOL_VERSION);
-  assert.deepEqual(body.result.serverInfo, { name: "client-test", version: VERSION });
+  const { icons, description, ...info } = body.result.serverInfo;
+  assert.deepEqual(info, { name: "client-test", version: VERSION, title: "Clevoa AI Gateway" });
+  assert.match(description, /^Accès en lecture seule, avec les droits de chaque collaborateur : .*Sage X3/);
+  assert.deepEqual(icons.map((i) => [i.mimeType, i.sizes]), [["image/svg+xml", ["any"]], ["image/png", ["256x256"]]]);
+  for (const i of icons) assert.ok(i.src.startsWith(`data:${i.mimeType};base64,`) && i.src.length > 500, `icône ${i.mimeType} intégrée`);
   assert.ok(body.result.capabilities.tools);
   assert.match(body.result.instructions, /LECTURE SEULE/);
   assert.match(body.result.instructions, /Source : …/);
@@ -61,6 +65,7 @@ test("Outils : schéma d'entrée objet, description, annotation readOnlyHint sur
   for (const t of tools) {
     assert.match(t.name, /^[a-z0-9_]{1,64}$/, t.name);
     assert.ok(t.description?.length > 20, `${t.name} : description`);
+    assert.match(t.title ?? "", /^(Sage X3|Salesforce|SharePoint|Dropbox|MyReport) – \S/, `${t.name} : titre lisible`);
     assert.equal(t.inputSchema.type, "object", `${t.name} : schéma objet`);
     assert.equal(t.annotations?.readOnlyHint, true, `${t.name} : lecture seule annoncée`);
   }

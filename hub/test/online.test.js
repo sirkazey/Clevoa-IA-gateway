@@ -170,12 +170,16 @@ test("/mcp refuse les jetons qui ne sont pas des jetons délégués d'Entra pour
   assert.match(h, /^[\x20-\x7e]+$/, "en-tête WWW-Authenticate en ASCII imprimable (RFC 6750) : Claude y lit resource_metadata pour se reconnecter");
 });
 
-test("Port public cloisonné : ni portail, ni API du portail, ni SSE, ni supervision, ni diagnostic, ni départ OAuth des connecteurs", async () => {
-  for (const path of ["/", "/index.html", "/api/me", "/api/test/sagex3", "/sse", "/messages", "/metrics", "/metrics/prtg", "/auth/sso", "/auth/salesforce", "/register", "/revoke"]) {
+test("Port public cloisonné : icône seulement ; ni portail, ni API du portail, ni SSE, ni supervision, ni diagnostic, ni départ OAuth des connecteurs", async () => {
+  for (const path of ["/", "/index.html", "/favicon.svg", "/brand/clevoa-icone-app.svg", "/api/me", "/api/test/sagex3", "/sse", "/messages", "/metrics", "/metrics/prtg", "/auth/sso", "/auth/salesforce", "/register", "/revoke"]) {
     const r = await fetch(`${base}${path}`, noFollow);
     assert.equal(r.status, 404, `${path} : ${r.status}`);
   }
   assert.equal((await fetch(`${base}/mcp`)).status, 405);
+  const ico = await fetch(`${base}/favicon.ico`);
+  assert.equal(ico.status, 200);
+  assert.equal(ico.headers.get("content-type"), "image/x-icon");
+  assert.deepEqual([...new Uint8Array(await ico.arrayBuffer()).slice(0, 4)], [0, 0, 1, 0], "fichier ICO");
   const h = (await fetch(`${base}/.well-known/oauth-authorization-server`)).headers;
   assert.equal(h.get("x-powered-by"), null);
   assert.equal(h.get("x-content-type-options"), "nosniff");

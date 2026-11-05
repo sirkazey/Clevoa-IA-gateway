@@ -17,6 +17,7 @@ import * as telemetry from "./telemetry.js";
 import * as health from "./health.js";
 import * as db from "./db.js";
 import { createHash, timingSafeEqual } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { rateLimit, MemoryStore } from "express-rate-limit"; // déjà fourni par le SDK MCP (même version) : toutes les limites de débit du hub
 import { VERSION, APP_ENV, IS_PROD } from "./version.js";
 import * as resolve from "./resolve.js";
@@ -143,13 +144,25 @@ function usage(c, t, key, ms, e) {
   db.audit({ user, who: u?.email || u?.sso?.upn || null, system: c.id, tool: t.name, outcome: e ? telemetry.category(e) : "ok", ms });
 }
 
+// Présentation du serveur aux assistants (MCP 2025-11-25 : titre, description, icônes). Icônes en data: URI : aucune adresse ni
+// règle WAF à ouvrir, valables sur le portail comme en ligne. Affichage selon l'assistant (Claude : globe générique à ce jour).
+const brand = (f) => readFileSync(new URL(`./public/brand/${f}`, import.meta.url)).toString("base64");
+const SERVER_INFO = {
+  name: SERVER_NAME, version: VERSION, title: "Clevoa AI Gateway",
+  description: `Accès en lecture seule, avec les droits de chaque collaborateur : ${CONNECTORS.map((c) => c.label).join(", ")}.`,
+  icons: [
+    { src: `data:image/svg+xml;base64,${brand("clevoa-icone-app.svg")}`, mimeType: "image/svg+xml", sizes: ["any"] },
+    { src: `data:image/png;base64,${brand("clevoa-icone-app-256.png")}`, mimeType: "image/png", sizes: ["256x256"] },
+  ],
+};
+
 function buildServer(key) {
   const server = new McpServer(
-    { name: SERVER_NAME, version: VERSION },
+    SERVER_INFO,
     { instructions: instructionsFor(key) },
   );
   for (const c of CONNECTORS) for (const t of c.tools) {
-    server.registerTool(t.name, { description: t.description, inputSchema: t.input, annotations: { readOnlyHint: true } }, async (args) => {
+    server.registerTool(t.name, { title: t.title, description: t.description, inputSchema: t.input, annotations: { readOnlyHint: true } }, async (args) => {
       telemetry.count();
       const t0 = Date.now();
       try {

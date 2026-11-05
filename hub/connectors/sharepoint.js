@@ -62,13 +62,13 @@ const encPath = (p) => p.replace(/^\/+|\/+$/g, "").split("/").map(encodeURICompo
 
 export const tools = [
   {
-    name: "sharepoint_sites",
+    name: "sharepoint_sites", title: "SharePoint – sites",
     description: "Sites SharePoint visibles par l'utilisateur (structure en cache).",
     input: {},
     run: async (_tok, _a, schema) => (await schema()).sites,
   },
   {
-    name: "sharepoint_list",
+    name: "sharepoint_list", title: "SharePoint – contenu d'un dossier",
     description: "Contenu d'un dossier SharePoint/OneDrive, ex. path='Finance/2025'.",
     input: { path: pathArg, site: siteArg },
     run: async (tok, { path, site }) => {
@@ -77,13 +77,13 @@ export const tools = [
     },
   },
   {
-    name: "sharepoint_search",
+    name: "sharepoint_search", title: "SharePoint – rechercher des fichiers",
     description: "Recherche de fichiers par mots-clés dans le site (ou OneDrive) avec les droits de l'utilisateur.",
     input: { query: z.string(), site: siteArg },
     run: async (tok, { query, site }) => (await get(tok, `${drive(site)}/root/search(q='${encodeURIComponent(query.replace(/'/g, "''"))}')`, { $top: 50 })).value.map(item),
   },
   {
-    name: "sharepoint_read",
+    name: "sharepoint_read", title: "SharePoint – lire un fichier",
     description: "Contenu texte d'un fichier (txt, csv, md, json, xml…) par son id. Les binaires renvoient leurs métadonnées.",
     input: { itemId: z.string().regex(/^[\w!.-]+$/), site: siteArg },
     run: async (tok, { itemId, site }) => {
