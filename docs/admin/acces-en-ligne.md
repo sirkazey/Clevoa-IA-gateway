@@ -32,7 +32,7 @@ sans clé à copier. Statut : **expérimental**, désactivé par défaut (`CLOUD
 * **Même identité que le portail.** Le collaborateur est retrouvé par son identité Entra (`oid` + locataire), comme avec le
   [SSO du portail](sso-entra.md) : il garde ses connexions (Sage X3, Salesforce, SharePoint…). Un collaborateur jamais passé
   par le portail reçoit une clé liée à son identité ; il connecte ses systèmes sur le portail interne (voir § 7).
-* **Port 8090 cloisonné** : métadonnées, `/authorize`, `/token`, `/mcp` et `/health`. Ni portail, ni clé statique, ni SSE, ni
+* **Port 8090 cloisonné** : métadonnées, `/authorize`, `/token`, `/mcp`, `/health` et l'icône `/favicon.ico`. Ni portail, ni clé statique, ni SSE, ni
   supervision, ni diagnostic.
 * **Portail protégé d'une erreur de routage** : avec l'accès en ligne actif, le portail (8080) refuse toute requête relayée par
   Cloudflare (403). Un nom d'hôte public saisi par erreur vers `:8080` ne publie donc pas le portail.
@@ -113,11 +113,16 @@ inchangé. Supprimer ensuite le nom d'hôte public dans Cloudflare.
 
 Paramètres de l'organisation → Connecteurs → Ajouter un connecteur personnalisé (libellés **à vérifier**) :
 
+* nom : `Clevoa – <client>` (ex. « Clevoa – Charlois »), affiché tel quel aux collaborateurs ;
 * URL : `https://<client>.<domaine>/mcp` (exactement, chemin compris) ;
 * paramètres avancés : identifiant client = `ENTRAID_CLAUDE_CLIENT_ID`, secret client = `ENTRAID_CLAUDE_CLIENT_SECRET`.
 
 Chaque collaborateur clique ensuite **Connecter**, se connecte avec son compte Microsoft de l'entreprise, et retrouve le
 connecteur dans claude.ai, l'application de bureau et l'application mobile.
+
+Présentation : le hub annonce un titre (« Clevoa AI Gateway »), une description (systèmes proposés, lecture seule) et le logo
+Clevoa (icônes intégrées, protocole MCP 2025-11-25), et chaque outil a un titre lisible (« Sage X3 – rechercher »…). Claude
+affichait encore une icône générique pour les connecteurs personnalisés : le logo apparaîtra quand il sera pris en charge.
 
 ## 7. Limites connues
 

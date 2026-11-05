@@ -79,13 +79,13 @@ function truncated(r) {
 
 export const tools = [
   {
-    name: "salesforce_tools",
+    name: "salesforce_tools", title: "Salesforce – outils disponibles",
     description: "Outils du serveur MCP Salesforce SObject Reads (sur la sandbox : find, getObjectSchema, getRelatedRecords, getUserInfo, listRecentSobjectRecords, soqlQuery) avec leur schéma d'arguments. À appeler avant salesforce_call.",
     input: {},
     run: async (_tok, _a, schema) => ({ instance: LOGIN, serveur_mcp: MCP_URL, environnement_hub: APP_ENV, outils: (await schema()).tools }), // instance (prod ou sandbox) visible du modèle
   },
   {
-    name: "salesforce_call",
+    name: "salesforce_call", title: "Salesforce – interroger",
     description: `Appelle un outil du serveur MCP Salesforce avec les droits de l'utilisateur, ex. tool='soqlQuery', arguments={q:'SELECT Name FROM Account WHERE Industry = \\'Wine\\' LIMIT 20'} ; tool='getObjectSchema' sans argument pour l'index des objets, puis arguments={objects:'Account'} pour ses champs. Un soqlQuery sans LIMIT reçoit LIMIT ${DEFAULT_LIMIT} d'office, sauf les agrégats. Pour répondre à « combien », toujours SELECT COUNT() FROM … (ou COUNT(Id) … GROUP BY …), jamais en comptant les lignes d'une liste.`,
     input: { tool: z.string().regex(/^[\w.-]+$/), arguments: z.record(z.string(), z.any()).default({}) },
     run: (tok, { tool, arguments: args }) => {

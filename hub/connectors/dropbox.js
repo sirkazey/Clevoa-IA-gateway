@@ -36,13 +36,13 @@ export async function ping(_tok, schema) {
 
 export const tools = [
   {
-    name: "dropbox_tools",
+    name: "dropbox_tools", title: "Dropbox – outils disponibles",
     description: "Outils Dropbox disponibles en lecture seule (list_folder, search, fetch…) avec leur schéma d'arguments. À appeler avant dropbox_call.",
     input: {},
     run: async (_tok, _a, schema) => (await schema()).tools,
   },
   {
-    name: "dropbox_call",
+    name: "dropbox_call", title: "Dropbox – lire",
     description: "Appelle un outil Dropbox en lecture seule avec les droits de l'utilisateur, ex. tool='list_folder', arguments={path:'/Finance'}.",
     input: { tool: z.enum(READ_ONLY), arguments: z.record(z.string(), z.any()).default({}) },
     run: (tok, { tool, arguments: args }) => mcp(tok, (c) => callRemote(c, tool, args)),

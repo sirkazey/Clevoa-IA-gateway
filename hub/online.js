@@ -6,6 +6,7 @@
 // rattache le collaborateur à sa clé par son identité Entra, comme le SSO du portail (même oid, même locataire, mêmes connexions).
 // Client Claude pré-enregistré : inscription d'application Entra dédiée, dont l'Owner saisit l'identifiant et le secret dans Claude.
 import express from "express";
+import { readFileSync } from "node:fs";
 import { createRemoteJWKSet, jwtVerify, errors as joseErrors } from "jose";
 import { mcpAuthRouter, getOAuthProtectedResourceMetadataUrl } from "@modelcontextprotocol/sdk/server/auth/router.js";
 import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
@@ -110,6 +111,7 @@ export function keyFor({ oid, tid, upn, name }) {
   return key;
 }
 
+const FAVICON = readFileSync(new URL("./public/favicon.ico", import.meta.url));
 const SECURITY_HEADERS = { "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY",
   "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'", "Cache-Control": "no-store" };
 
@@ -137,6 +139,8 @@ export function app(mcp) {
   a.post("/mcp", auth, bind, express.json({ limit: "1mb" }), ...mcp);
   a.all("/mcp", (_req, res) => res.status(405).json({ error: "Utilisez POST (mode sans état)." }));
   a.get("/health", (_req, res) => res.json({ ok: true }));
+  // Icône du nom public, pour les assistants qui la cherchent à la racine du domaine (chemin autorisé par la règle WAF 1).
+  a.get("/favicon.ico", (_req, res) => res.type("image/x-icon").set("Cache-Control", "public, max-age=86400").send(FAVICON));
   a.use((_req, res) => res.status(404).json({ error: "introuvable" }));
   return a;
 }
