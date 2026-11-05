@@ -224,7 +224,7 @@ test("Hub → Clevoa : POST au démarrage avec la clé et un payload sans aucune
   const html = await fetch(`${hub.url}/`).then((r) => r.text());
   assert.match(html, /Propulsé par <b>Clevoa<\/b> — Licence Active/);
   const me = await fetch(`${hub.url}/api/me`).then((r) => r.json());
-  assert.equal(me.config.find((v) => v.name === "CLEVOA_KEY").value, "••••••••", "clé de licence masquée dans le portail");
+  assert.equal(me.config, undefined, "aucune variable de l'instance dans le portail");
 });
 
 test("Hub sans CLEVOA_KEY : aucune télémétrie envoyée", async () => {

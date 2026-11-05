@@ -39,15 +39,30 @@ peuvent tourner en **simulateur** : les données sont inventées et étiquetées
 
 ## 2. Brancher l'assistant
 
-Le panneau **Brancher votre assistant**, à droite (en dessous sur un téléphone), propose deux onglets, chacun avec ses instructions et un bloc de
-configuration prêt à copier. Votre clé y figure : elle est masquée à l'écran (bouton **Afficher la clé**), mais le
-bouton **Copier** la copie en entier. Ne la partagez jamais : elle vaut pour tous vos outils connectés.
+Le panneau **Brancher votre assistant**, à droite (en dessous sur un téléphone), propose deux onglets. Quand votre DSI a
+ouvert l'accès en ligne, le premier est **Claude** ; sinon c'est **Claude Desktop**. Le second, **Claude Code et autres**,
+sert aux usages techniques.
 
-### Claude Code, ChatGPT, Copilot et clients MCP HTTP
+### Claude (claude.ai, application de bureau, mobile) : accès en ligne
 
-Onglet **Claude Code, ChatGPT, Copilot** : URL `<portail>/mcp` et en-tête `Authorization: Bearer <clé>`. Ces assistants
-sont testés au niveau du protocole MCP ; seul Claude Desktop a été vérifié en conditions réelles. Signaler à la DSI
-tout écart constaté.
+Sans clé ni fichier à copier :
+
+1. Dans Claude : Paramètres → Connecteurs.
+2. Sur le connecteur Clevoa (nommé par votre organisation, par exemple « Clevoa – Charlois »), cliquer **Connecter**, puis
+   s'identifier avec son compte Microsoft professionnel.
+
+Le connecteur suit ensuite votre compte Claude sur le web, le bureau et le téléphone. S'il n'apparaît pas,
+l'administrateur Claude de l'organisation doit l'ajouter ([accès en ligne § 6](../admin/acces-en-ligne.md#6-claude--ajout-du-connecteur-par-lowner)).
+Libellés **à vérifier** au premier essai.
+
+### Claude Code et clients MCP HTTP
+
+Les onglets **Claude Desktop** et **Claude Code et autres** contiennent un bloc de configuration prêt à copier. Votre clé y
+figure : elle est masquée à l'écran (bouton **Afficher la clé**), mais le bouton **Copier** la copie en entier. Ne la
+partagez jamais : elle vaut pour tous vos outils connectés.
+
+Onglet **Claude Code et autres** : URL `<portail>/mcp` et en-tête `Authorization: Bearer <clé>`. Les autres clients MCP
+HTTP sont testés au niveau du protocole seulement ; signaler à la DSI tout écart constaté.
 
 * Claude Code : coller le bloc dans un fichier `.mcp.json` à la racine du projet (ou dans `~/.claude.json` pour tous
   les projets), relancer `claude` ; la commande `/mcp` liste le serveur sous le nom indiqué par le portail (`clevoa-gateway` par
@@ -58,7 +73,7 @@ tout écart constaté.
 claude mcp add --transport http clevoa-gateway <portail>/mcp --header "Authorization: Bearer <clé>"
 ```
 
-### Claude Desktop
+### Claude Desktop sans accès en ligne
 
 Claude Desktop n'accepte pas d'en-tête sur un serveur distant : le bloc **Claude Desktop** passe par le pont
 `mcp-remote`. Prérequis : Node.js LTS installé (`node -v`). Libellés vérifiés sur Claude Desktop pour Windows le

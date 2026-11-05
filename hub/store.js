@@ -1,5 +1,5 @@
 // Persistance minimale : un fichier chiffré AES-256-GCM dans le volume /data, déchiffré en mémoire seulement.
-// users[key] = { email, sso: { sub, tid, upn, name, at }, assistantAt, salesforce: {tokens}, sagex3: {tokens}, sharepoint, dropbox, myreport }
+// users[key] = { email, sso: { sub, tid, upn, name, given, at }, assistantAt, salesforce: {tokens}, sagex3: {tokens}, sharepoint, dropbox, myreport }
 // La "key" est le secret que l'utilisateur met dans son client MCP. La clé maîtresse vient de ENCRYPTION_KEY.
 import { readFileSync, writeFileSync, mkdirSync, renameSync } from "node:fs";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -55,9 +55,9 @@ export const store = {
   },
   // ---- SSO : une identité Entra (oid + locataire) ↔ une clé ----
   findSso: (sub, tid) => Object.keys(db.users).find((k) => db.users[k].sso?.sub === sub && db.users[k].sso?.tid === tid) ?? null,
-  setSso(key, { sub, tid, upn, name, email }) {
+  setSso(key, { sub, tid, upn, name, given, email }) {
     const u = store.get(key); if (!u) return;
-    u.sso = { sub, tid, upn, name, at: new Date().toISOString() };
+    u.sso = { sub, tid, upn, name, given: given || undefined, at: new Date().toISOString() }; // given : prénom (revendication facultative given_name)
     if (email) u.email = email; // l'identité Entra fait foi
     save();
   },

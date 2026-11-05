@@ -146,6 +146,9 @@ test("/mcp : un collaborateur jamais passé par le portail reçoit une clé lié
   const keys = Object.entries(hub.readUsers()).filter(([, u]) => u.sso?.sub === "oid-paul");
   assert.equal(keys.length, 1);
   assert.equal(keys[0][1].email, "paul@charlois.example");
+  const me = await fetch(`${hub.url}/api/me`, { headers: { cookie: `mcp_key=${keys[0][0]}` } }).then((r) => r.json());
+  assert.equal(me.name, "Paul", "sans revendication given_name, le portail affiche le nom complet");
+  assert.equal(me.online, `${base}/mcp`, "accès en ligne actif : le portail présente le connecteur Claude et son adresse");
 });
 
 test("/mcp refuse les jetons qui ne sont pas des jetons délégués d'Entra pour le connecteur Claude de ce locataire", async () => {

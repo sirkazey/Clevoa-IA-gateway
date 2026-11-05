@@ -33,6 +33,7 @@ GUID du locataire et les scopes sont imposés par le code.
 | Authentification → URI de redirection (Web) | `<PUBLIC_URL>/auth/sso/callback`, à côté de `<PUBLIC_URL>/auth/sharepoint/callback`, sans barre finale |
 | Authentification → URI de redirection (Web), **dans la même liste** que les deux précédentes | `<PUBLIC_URL>/?sso=off`, retour après « Se déconnecter » (sinon Entra affiche sa propre page) ; pas le champ « URL de déconnexion du canal frontal », qui reste vide |
 | Certificats et secrets | le secret client déjà utilisé pour SharePoint (`MS_CLIENT_SECRET`) |
+| Configuration du jeton → Ajouter une revendication facultative → type **ID** → `given_name` | facultatif : le portail affiche le prénom ; sans elle, le nom complet (`name`). Libellé **à vérifier**. Pour l'application de l'accès en ligne (`ENTRAID_CLAUDE_CLIENT_ID`), même réglage sur le jeton **d'accès** |
 | API autorisées (Microsoft Graph, déléguées) | `openid`, `profile`, `email`, `offline_access`, `User.Read` ; `Files.Read.All`, `Sites.Read.All`, toutes **déclarées** et avec **consentement administrateur** : sans lui, SharePoint demande une authentification interactive juste après le SSO (constaté le 05/11/2026) |
 
 `.env` (en production, `PUBLIC_URL` doit être en https) :
@@ -50,8 +51,8 @@ Le hub refuse de démarrer si `MS_TENANT_ID` n'est pas un GUID, si l'application
 identifiant `oid`). Ne jamais désactiver la vérification TLS de Node
 (`NODE_TLS_REJECT_UNAUTHORIZED=0`).
 
-Constater que le SSO est actif : la ligne de démarrage contient `· SSO entra`, le portail affiche « via Microsoft
-Entra ID » à côté de l'identité, `SSO_MODE` apparaît dans la configuration du conteneur. Lire un échec : « Échec de la
+Constater que le SSO est actif : la ligne de démarrage contient `· SSO entra`, le portail affiche le prénom (ou le nom complet) avec « via Microsoft
+Entra ID », `SSO_MODE` apparaît dans la configuration du conteneur. Le prénom est relu à chaque connexion au portail. Lire un échec : « Échec de la
 connexion Microsoft Entra ID (…) » avec une réponse HTTP 400 = `id_token` refusé (locataire ou application inattendus) ;
 la même phrase avec une réponse HTTP 502 et la ligne de journal `[oauth] sso : échec de l'échange de jeton (HTTP 400)` = échange de
 code refusé par Entra (secret ou URI faux ; le statut d'Entra est entre parenthèses). Codes du journal propres au SSO :

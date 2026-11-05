@@ -50,12 +50,9 @@ test("GET /api/me sans cookie : pose mcp_key et renvoie {key, mcpUrl, systems[5]
   assert.deepEqual(me.systems.map((s) => s.oauth), [true, true, true, true, false], "MyReport : jeton personnel, pas d'OAuth");
   assert.deepEqual(me.systems.map((s) => s.mock), [false, false, false, false, false]);
   assert.deepEqual(me.systems[4].apiKey, { mode: "bearer", label: "jeton personnel MyReport Server" });
-  // Configuration masquée : valeurs visibles sauf les *SECRET*
-  const cfg = Object.fromEntries(me.config.map((v) => [v.name, v.value]));
-  assert.equal(cfg.SF_CLIENT_ID, "sf-client-id");
-  assert.equal(cfg.SF_CLIENT_SECRET, "••••••••");
-  assert.equal(cfg.SAGE_OAUTH_CLIENT_SECRET, "••••••••");
-  assert.equal(cfg.SAGE_FOLDER, "PROD");
+  assert.equal(me.name, null, "sans SSO, aucun nom : le portail affiche « Clé personnelle de ce navigateur »");
+  assert.equal(me.online, null, "accès en ligne désactivé : le portail garde les configurations par clé");
+  assert.equal(me.config, undefined, "la configuration de l'instance n'est plus exposée au portail");
   assert.ok(!JSON.stringify(me).includes("sf-client-secret"), "le secret ne doit jamais sortir");
   assert.equal(hub.readUsers()[key], undefined, "une clé sans jeton n'est pas écrite sur disque");
 });
@@ -546,6 +543,8 @@ test("Instance : nom de serveur MCP et libellé par défaut, puis surchargés pa
   const html = readFileSync(join(HUB_DIR, "public", "index.html"), "utf8");
   assert.match(html, /"\$\{me\.serverName\}": \{/, "les deux blocs de configuration utilisent le nom annoncé par /api/me");
   assert.doesNotMatch(html, /charlois-finance|Département Finance/, "plus de libellé d'instance codé en dur");
+  assert.match(html, /\$\("#tab-claude"\)\.hidden = !me\.online; \$\("#tab-desktop"\)\.hidden = !!me\.online;/, "accès en ligne : onglet Claude à la place du pont mcp-remote");
+  assert.doesNotMatch(html, /ChatGPT|Copilot|id="config"/, "ni client non vérifié annoncé, ni configuration de l'instance");
 
   const custom = await startHub({ upstreamUrl: up.url, env: { MCP_SERVER_NAME: "charlois-finance", INSTANCE_LABEL: " MCP Charlois " } });
   try {

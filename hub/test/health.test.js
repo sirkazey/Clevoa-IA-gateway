@@ -137,7 +137,6 @@ test("Supervision /metrics et /metrics/prtg : absentes sans METRICS_TOKEN ; jeto
     assert.match(prtg.prtg.text, /systèmes opérationnels/);
     for (const x of [KEY, "alice", "jeton-supervision"]) assert.ok(!JSON.stringify(prtg).includes(x), `rien de ${x}`);
     assert.equal((await fetch(`${hub.url}/metrics/prtg`, { headers: { Authorization: "Bearer jeton-supervision-0123456789" } })).status, 200);
-    const cfg = (await (await fetch(`${hub.url}/api/me`, { headers: { Cookie: `mcp_key=${KEY}` } })).json()).config ?? [];
-    assert.equal(cfg.find((v) => v.name === "METRICS_TOKEN")?.value, "••••••••", "jeton masqué dans la configuration du portail");
+    assert.ok(!(await (await fetch(`${hub.url}/api/me`, { headers: { Cookie: `mcp_key=${KEY}` } })).text()).includes("jeton-supervision"), "jeton de supervision absent du portail");
   } finally { await hub.stop(); }
 });
