@@ -27,9 +27,10 @@ Avant d'ajouter une dépendance, vérifier :
 | `zod` | ^4.0.0 | validation des arguments des outils | MIT | requis par le SDK MCP |
 | `express-rate-limit` | 8.7.1 | toutes les limites de débit du hub (portail, échecs d'authentification, supervision, plafond par système) | MIT | remplace le limiteur maison (2026-10-25) ; déjà fourni par le SDK MCP. Effets : en-têtes `RateLimit` sur les réponses, adresses IPv6 regroupées par préfixe /56 |
 | `openid-client` | 6.8.8 | SSO Entra et SharePoint : échange de code, refresh, vérification de l'id_token **signature comprise** | MIT | bibliothèque certifiée OpenID ; remplace la vérification maison sans signature (2026-10-25). Exige une horloge juste (± 30 s) : NTP sur l'hôte |
+| `jose` | 6.2.13 | accès en ligne : vérification des jetons d'accès Entra (signature RS256 par les clés publiées, émetteur, audience, expiration) | MIT | déjà installée par le SDK MCP et openid-client (même version) ; dépendance directe depuis l'accès en ligne (2026-11-03) |
 | `node:sqlite` (module intégré à Node 24, pas un paquet npm) | — | base d'exploitation `hub.db` : disponibilité, usage, audit (1.5) | domaine public (SQLite) | moteur SQLite embarqué par Node ; aucune dépendance native à compiler. Stabilité « release candidate » dans Node 24 : l'API peut encore évoluer, d'où un seul module (`db.js`) qui l'utilise et des tests sur chaque mise à jour de Node |
 
-Dépendances transitives notables : `jose` et `oauth4webapi` (même auteur qu'openid-client, aucune dépendance propre).
+Dépendances transitives notables : `oauth4webapi` (même auteur qu'openid-client, aucune dépendance propre).
 Inventaire complet : voir le SBOM de la CI (§ 3) ; licences MIT, ISC ou BSD au 25 octobre 2026.
 
 ### Autres composants

@@ -20,6 +20,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { rateLimit, MemoryStore } from "express-rate-limit"; // déjà fourni par le SDK MCP (même version) : toutes les limites de débit du hub
 import { VERSION, APP_ENV, IS_PROD } from "./version.js";
 import * as resolve from "./resolve.js";
+import * as online from "./online.js";
 
 resolve.install(); // IPv4 d'abord pour les appels sortants (resolve.js : musl et DNS de Docker Desktop)
 const PORT = process.env.PORT || 8080;
@@ -188,6 +189,7 @@ const SECURITY_HEADERS = {
   "Cross-Origin-Resource-Policy": "same-origin",
 };
 app.use((_req, res, next) => { res.set(SECURITY_HEADERS); next(); });
+app.use(online.portalGuard); // accès en ligne actif : rien de ce qui vient de Cloudflare ne passe par le portail
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static(new URL("./public", import.meta.url).pathname));
 app.use("/auth", limit("oauth", 60)); // départs et retours OAuth bornés par IP (le départ SSO est ouvert aux anonymes : clés temporaires, états en attente)
@@ -393,14 +395,19 @@ app.post("/messages", mcpRate, mcpAuth, seen, async (req, res) => {
   await s.transport.handlePostMessage(req, res, req.body);
 });
 
-// Transport Streamable HTTP (sans état) : un serveur jetable par requête.
-app.post("/mcp", mcpRate, mcpAuth, seen, async (req, res) => {
+// Transport Streamable HTTP (sans état) : un serveur jetable par requête, pour le collaborateur req.key.
+async function handleMcp(req, res) {
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   const server = buildServer(req.key);
   res.on("close", () => { transport.close(); server.close(); });
   await server.connect(transport);
   await transport.handleRequest(req, res, req.body);
-});
+}
+app.post("/mcp", mcpRate, mcpAuth, seen, handleMcp);
+// Accès en ligne (ONLINE=on) : même gestionnaire, même plafond par collaborateur, sur un port séparé où l'identité vient d'un jeton Entra.
+const onlineRate = rateLimit({ windowMs: 60_000, limit: MCP_PER_MIN, standardHeaders: "draft-8", legacyHeaders: false,
+  keyGenerator: (req) => createHash("sha256").update(req.key).digest("base64url"),
+  message: { error: `Trop de requêtes (${MCP_PER_MIN} par minute) : réessayez dans une minute.` } });
 app.all("/mcp", (_req, res) => res.status(405).json({ error: "Utilisez POST (mode sans état)." }));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
@@ -411,3 +418,4 @@ app.listen(PORT, () => {
   telemetry.start(CONNECTORS, store.seats, store.installationId);
   health.start(CONNECTORS);
 });
+online.start([onlineRate, seen, handleMcp]);
