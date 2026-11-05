@@ -31,9 +31,9 @@ GUID du locataire et les scopes sont imposés par le code.
 | Vue d'ensemble → ID de l'annuaire (locataire) | `MS_TENANT_ID` (un GUID ; `common` est refusé) |
 | Types de comptes pris en charge | Comptes de cet annuaire d'organisation uniquement |
 | Authentification → URI de redirection (Web) | `<PUBLIC_URL>/auth/sso/callback`, à côté de `<PUBLIC_URL>/auth/sharepoint/callback`, sans barre finale |
-| Authentification → URI de redirection après déconnexion | `<PUBLIC_URL>/?sso=off` (sinon Entra affiche sa propre page après « Se déconnecter ») |
+| Authentification → URI de redirection (Web), **dans la même liste** que les deux précédentes | `<PUBLIC_URL>/?sso=off`, retour après « Se déconnecter » (sinon Entra affiche sa propre page) ; pas le champ « URL de déconnexion du canal frontal », qui reste vide |
 | Certificats et secrets | le secret client déjà utilisé pour SharePoint (`MS_CLIENT_SECRET`) |
-| API autorisées (Microsoft Graph, déléguées) | `openid`, `profile`, `email`, `offline_access`, `User.Read` ; `Files.Read.All`, `Sites.Read.All` avec consentement administrateur pour que SharePoint se connecte sans écran |
+| API autorisées (Microsoft Graph, déléguées) | `openid`, `profile`, `email`, `offline_access`, `User.Read` ; `Files.Read.All`, `Sites.Read.All`, toutes **déclarées** et avec **consentement administrateur** : sans lui, SharePoint demande une authentification interactive juste après le SSO (constaté le 05/11/2026) |
 
 `.env` (en production, `PUBLIC_URL` doit être en https) :
 

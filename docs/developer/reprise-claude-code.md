@@ -105,23 +105,25 @@ routines programmées, les connexions des connecteurs, les préférences et la m
 (écrans du portail, rapport SSO) sont à exporter avant sa fermeture si on veut les garder ; leur contenu de référence
 est déjà dans [`docs/validation/`](../validation/etat-des-fonctionnalites.md).
 
-## 6. État au 3 novembre 2026
+## 6. État au 5 novembre 2026
 
-* `main` : version **1.5.2** (livrée le 3 novembre 2026), tag `v1.5.2` et Release à poser par le propriétaire ; `dev`
-  réaligné sur `main` après la livraison.
-* Recette réelle restante avant toute production : [état des fonctionnalités § 3](../validation/etat-des-fonctionnalites.md#3-tests-restant-à-réaliser).
-* Sage X3 (préproduction CHREC) : l'intégrateur a ajouté le champ `PIHTYP` (type de pièce, menu local 533 : 1 facture,
-  2 facture complémentaire, 3 avoir, 4 avoir/retour) à la représentation `PINVOICE`, sur CHDEV et CHREC seulement.
-  `SINVOICE`, `GACCENTRY` et `GACCDUDATE` n'existent pas en standard (404) : développement spécifique à chiffrer, en
-  attente du recueil des besoins de la direction financière.
+* `main` : version **1.7.0-rc.1** (accès en ligne pour Claude, expérimental), tag `v1.7.0-rc.1` posé ; `dev` réaligné.
+* Pré-production sur le serveur du client depuis le 05/11 : Portainer, reverse-proxy nginx existant, Sage X3 (CHREC),
+  Salesforce sandbox, SharePoint et SSO Entra réels, Claude Desktop vérifié ([journal P1–P11](../validation/journal-tests-reels.md)).
+  `PIHTYP` lu sur CHREC ; `SINVOICE`, `GACCENTRY`, `GACCDUDATE` absents en standard (développement spécifique à chiffrer).
+* Accès en ligne en cours de mise en place : serveurs DNS de `clevoa.fr` changés pour Cloudflare le 05/11 (publication par le registre en cours), tunnel `charlois-test`
+  créé, application Entra du portail complétée (scope `mcp`, jetons v2, consentement administrateur) ; reste la route du
+  tunnel, les règles WAF, `docker-compose.online.yml` dans la stack et l'ajout du connecteur par l'Owner Claude.
+* Recette réelle restante avant toute production : [état des fonctionnalités § 3](../validation/etat-des-fonctionnalites.md#3-tests-restant-à-réaliser),
+  en premier le cloisonnement avec un compte non administrateur.
 
 Travaux en attente, dans l'ordre proposé :
 
-1. Sage X3 sur CHREC : vérifier que le hub lit `PIHTYP` (« Décris PINVOICE », puis une liste d'avoirs d'achat) et
-   consigner le résultat au [journal des tests réels](../validation/journal-tests-reels.md). Fait en 1.5.2 : note de
-   `PINVOICE`, liste par défaut sans `SINVOICE` ni `GACCENTRY`, ligne `sbom` dans [tests et analyses](tests.md).
-2. Décision du propriétaire : alléger le dépôt pour un client unique (télémétrie, backend AWS et console ; connecteurs
-   Dropbox et MyReport ; le test de retour arrière s'appuie sur le simulateur MyReport, à basculer sur Sage) : à
-   reprendre après la recette réelle.
-3. Côté GitHub, à faire par le propriétaire : supprimer les branches déjà fusionnées, poser les rulesets de `main`,
+1. Accès en ligne : finir la mise en place ([guide](../admin/acces-en-ligne.md), [runbook Cloudflare](../admin/cloudflare.md))
+   et faire le premier essai réel (claude.ai, application de bureau, mobile).
+2. Petits correctifs constatés le 05/11 : bouchon aligné sur le vrai PINVOICE (statut de règlement retiré, `PIHTYP`
+   ajouté) ; raison du refus silencieux de SharePoint journalisée ; libellé « jeton personnel » de Sage au portail.
+3. Décision du propriétaire : alléger le dépôt pour un client unique (télémétrie, backend AWS et console ; connecteurs
+   Dropbox et MyReport) : à reprendre après la recette réelle ; télémétrie envisagée sur Cloudflare (Workers et D1).
+4. Côté GitHub, à faire par le propriétaire : supprimer les branches déjà fusionnées, poser les rulesets de `main`,
    `dev` et des tags `v*`.
