@@ -7,6 +7,18 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
+## [1.7.0-rc.1] – 2026-11-05
+
+Version candidate : accès en ligne pour Claude (web, mobile, application de bureau) hors du réseau de l'entreprise, sans clé
+à copier. Expérimental, désactivé par défaut (`ONLINE=on` par `docker-compose.online.yml`) ; sans lui, comportement de la 1.6.0-rc.1.
+
+### Ajouté
+- Port séparé (8090) publié par un tunnel Cloudflare sortant : OAuth relayé vers Entra ID par le relais du SDK MCP, jetons Entra vérifiés par le hub (`jose`), collaborateur rattaché à sa clé par son identité Entra, comme le SSO ; ni portail ni clé statique sur ce port.
+- `docker-compose.online.yml` (`cloudflared` figé et durci), guide `docs/admin/acces-en-ligne.md`, runbook `docs/admin/cloudflare.md`, schéma d'architecture global et responsabilités du service managé.
+
+### Sécurité
+- Portail interne : requêtes relayées par Cloudflare refusées (403) quand l'accès en ligne est actif ; démarrage refusé sans SSO Entra, sans https ou avec un secret absent.
+
 ## [1.6.0-rc.1] – 2026-11-05
 
 Version candidate : choix des connecteurs proposés aux collaborateurs. Aucune variable obligatoire ; sans réglage, comportement
