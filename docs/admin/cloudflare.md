@@ -50,7 +50,8 @@ environnement : `<client>.<domaine>` (production) et `<client>-test.<domaine>` (
 - [ ] Nom d'hôte public : `<client>.<domaine>` ou `<client>-test.<domaine>` → service `http://mcp-hub:8090`. **Une seule route** ; règle finale
       « tout le reste » en 404. Ne jamais router vers `:8080` (le hub refuse de toute façon, 403, mais la règle doit être juste).
 - [ ] Démarrage côté client : `CLOUDFLARE_TUNNEL=1` et les variables de l'[accès en ligne § 5](acces-en-ligne.md#5-hub--variables-et-démarrage) ;
-      le tunnel passe « Healthy » dans le tableau de bord.
+      le tunnel passe « Healthy » dans le tableau de bord. « Dégradé » avec des
+      erreurs QUIC dans le journal : l'UDP 7844 est bloqué et `CLOUDFLARE_TUNNEL_PROTOCOL` n'est pas à `http2` (défaut).
 
 ## 4. Règles de sécurité du nom d'hôte
 

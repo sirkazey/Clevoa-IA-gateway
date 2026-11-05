@@ -95,13 +95,16 @@ ajouter à la stack, seulement des variables (Portainer : *Environment variables
 | `ENTRAID_CLAUDE_CLIENT_SECRET` | la valeur du secret réservé à Claude |
 
 Facultatives : `ENTRAID_CLAUDE_REDIRECT_URIS` (vide = `https://claude.ai/api/mcp/auth_callback`), `CLOUDFLARE_TRUST_PROXY`
-(défaut 1). Dans le conteneur, le hub les reçoit sous les noms `ONLINE`, `ONLINE_URL`, `ONLINE_CLIENT_ID`,
+(défaut 1), `CLOUDFLARE_TUNNEL_PROTOCOL` (défaut `http2`, sur TCP 443 : passe les pare-feu qui bloquent l'UDP 7844 ; `auto`
+si l'UDP est ouvert). Dans le conteneur, le hub les reçoit sous les noms `ONLINE`, `ONLINE_URL`, `ONLINE_CLIENT_ID`,
 `ONLINE_CLIENT_SECRET`, `ONLINE_REDIRECT_URIS` et `ONLINE_TRUST_PROXY`.
 
 Contrôle : un conteneur `cloudflared-preprod` (ou `-prod`) en marche ; ligne de journal du hub `[online] accès en ligne actif :
 https://<client>-test.<domaine>/mcp (port 8090, annuaire …)` ; le tunnel « Healthy » dans Cloudflare ; puis
 `https://<client>-test.<domaine>/.well-known/oauth-authorization-server` répond depuis un navigateur. Le hub refuse de démarrer
-sans SSO, sans identifiant ou secret, avec une adresse non https en production, ou avec le même port que le portail.
+sans SSO, sans identifiant ou secret, avec une adresse non https en production, ou avec le même port que le portail ; le
+message cite l'adresse reçue (« vide » : variable absente ou mal nommée dans la stack). `cloudflared` attend que le hub soit
+« healthy » (quelques secondes) ; s'il reste « created », le démarrer à la main et lire son journal.
 
 Retour arrière : `CLOUDFLARE_TUNNEL=0` puis *Update the stack* ; le conteneur `cloudflared` disparaît, le portail interne est
 inchangé. Supprimer ensuite le nom d'hôte public dans Cloudflare.
