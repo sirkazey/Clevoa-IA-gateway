@@ -46,9 +46,6 @@ const DOMAINS = ["commerce", "finance", "industrie", "documents", "rh", "autre"]
 const domainOverride = Object.fromEntries((process.env.CONNECTOR_DOMAINS || "").split(",").map((e) => e.split("=").map((x) => x.trim())).filter(([id, d]) => id && DOMAINS.includes(d)));
 const domainOf = (c) => (Object.hasOwn(domainOverride, c.id) ? domainOverride[c.id] : DOMAINS.includes(c.domain) ? c.domain : "autre");
 const byId = Object.assign(Object.create(null), Object.fromEntries(CONNECTORS.map((c) => [c.id, c]))); // sans prototype : « constructor », « __proto__ »… ne désignent aucun système
-// Variables visibles dans le portail : toutes celles des connecteurs et du hub présentes dans l'environnement (jamais la valeur des secrets).
-const ENV = Object.keys(process.env).filter((n) => /^(PUBLIC_URL|APP_ENV|LOG_LEVEL|TRUST_PROXY|ENCRYPTION_KEY|SSO_MODE|MCP_SERVER_NAME|INSTANCE_LABEL|SF_|SAGE_|MS_|SP_|GRAPH_URL|DROPBOX_|MYREPORT_|CLEVOA_|PROBE$|SLOW_MS$|METRICS_TOKEN$|CONNECTOR_DOMAINS$|CONNECTORS_ENABLED$|AUDIT$|AUDIT_DAYS$)/.test(n)).sort();
-const masked = (n) => (/SECRET|CLEVOA_KEY|ENCRYPTION_KEY|METRICS_TOKEN/.test(n) ? "••••••••" : process.env[n]); // CLEVOA_KEY est une clé de licence, masquée comme les secrets
 
 // ---------- Limitation de débit (express-rate-limit, mémoire, par adresse IP, fenêtre d'une minute) ----------
 // Protège le diagnostic, les jetons et les échecs d'authentification contre la force brute. Une règle = un compteur, partagé par
@@ -208,7 +205,7 @@ app.use(express.static(new URL("./public", import.meta.url).pathname));
 app.use("/auth", limit("oauth", 60)); // départs et retours OAuth bornés par IP (le départ SSO est ouvert aux anonymes : clés temporaires, états en attente)
 app.use(oauthRouter(sso.MODE ? [...CONNECTORS, sso.connector] : CONNECTORS, cookieKey));
 
-// Portail : état de l'utilisateur (crée la clé au premier passage, sauf SSO : identité requise, le portail redirige vers /auth/sso) + configuration masquée.
+// Portail : état de l'utilisateur (crée la clé au premier passage, sauf SSO : identité requise, le portail redirige vers /auth/sso).
 app.get("/api/me", limit("me", 60), (req, res) => {
   let key = cookieKey(req);
   if (!user(key)) {
@@ -225,17 +222,16 @@ app.get("/api/me", limit("me", 60), (req, res) => {
     serverName: SERVER_NAME,
     sso: sso.MODE || undefined,
     email: u.email || null,
+    name: u.sso?.given || u.sso?.name || null, // prénom Entra (revendication facultative given_name), sinon nom complet
     key,
     assistantAt: u.assistantAt || null, // dernier jour où un assistant a utilisé la clé
     mcpUrl: `${PUBLIC_URL}/mcp`,
+    online: online.ENABLED ? online.MCP_URL : null, // accès en ligne actif : le portail présente d'abord le connecteur Claude
     systems: CONNECTORS.map((c) => ({
       id: c.id, label: c.label, domain: domainOf(c), mock: !!c.mock, oauth: !!c.oauth, configured: !!c.oauth?.clientId,
       connected: hasCredential(u[c.id]), method: u[c.id]?.apiKey ? "apikey" : u[c.id]?.access_token ? "oauth" : null,
       apiKey: c.apiKey && !c.mock ? c.apiKey : undefined, // le portail propose la saisie d'un jeton personnel
     })),
-    // Configuration visible en local (Docker Desktop) ou une fois l'utilisateur connecté à un système ; jamais aux anonymes d'un hub public.
-    config: !PUBLIC_URL.startsWith("https") || CONNECTORS.some((c) => hasCredential(u[c.id]))
-      ? ENV.map((n) => ({ name: n, value: process.env[n] ? masked(n) : null })) : undefined,
   });
 });
 // Nouvelle clé pour le même collaborateur : l'ancienne cesse de fonctionner immédiatement (révocation d'un client MCP compromis).

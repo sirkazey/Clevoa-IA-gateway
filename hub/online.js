@@ -26,7 +26,7 @@ const LOGIN = (process.env.MS_LOGIN_URL || "https://login.microsoftonline.com").
 const TENANT = process.env.MS_TENANT_ID || "";
 const SCOPE = "mcp"; // scope exposé par l'inscription Entra (« Exposer une API ») : api://<ONLINE_CLIENT_ID>/mcp
 const ENTRA_SCOPES = [`api://${CLIENT_ID}/${SCOPE}`, "offline_access"]; // demandés à Entra quoi qu'envoie l'assistant
-const MCP_URL = `${BASE}/mcp`;
+export const MCP_URL = `${BASE}/mcp`; // adresse à saisir dans Claude, affichée par le portail
 const ISSUER = `${LOGIN}/${TENANT}/v2.0`; // jetons d'accès v2 (requestedAccessTokenVersion = 2 dans le manifeste)
 
 if (ENABLED) {
@@ -98,16 +98,16 @@ export async function verify(token) {
   const scopes = typeof c.scp === "string" ? c.scp.split(" ") : [];
   if (!scopes.includes(SCOPE)) bad("scope");
   return { token, clientId: CLIENT_ID, scopes, expiresAt: c.exp, resource: new URL(MCP_URL),
-    extra: { oid: c.oid, tid: c.tid, upn: c.preferred_username || c.upn || "", name: c.name || "" } };
+    extra: { oid: c.oid, tid: c.tid, upn: c.preferred_username || c.upn || "", name: c.name || "", given: c.given_name || "" } };
 }
 
 /** Clé du collaborateur : celle que le SSO du portail lui a déjà liée (mêmes connexions Sage, Salesforce…), ou une clé neuve liée
  *  à son identité Entra s'il n'est jamais passé par le portail. Aucune écriture pour un collaborateur déjà connu. */
-export function keyFor({ oid, tid, upn, name }) {
+export function keyFor({ oid, tid, upn, name, given }) {
   const known = store.findSso(oid, tid);
   if (known) return known;
   const key = store.create();
-  store.setSso(key, { sub: oid, tid, upn, name, email: upn || null });
+  store.setSso(key, { sub: oid, tid, upn, name, given, email: upn || null });
   return key;
 }
 

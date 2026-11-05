@@ -36,7 +36,7 @@ export function claims(idToken) {
   if (c.iss.toLowerCase() !== ISSUER || c.tid.toLowerCase() !== TENANT.toLowerCase()) throw bad("émetteur ou locataire inattendu", "SSO_LOCATAIRE");
   if (c.aud !== CLIENT_ID) throw bad("audience inattendue", "SSO_AUDIENCE");
   if (!(c.exp > Date.now() / 1000)) throw bad("expiré", "SSO_EXPIRE");
-  return { sub: c.oid, tid: c.tid, upn: c.preferred_username || c.email || "", name: c.name || "", email: c.email || c.preferred_username || null };
+  return { sub: c.oid, tid: c.tid, upn: c.preferred_username || c.email || "", name: c.name || "", given: c.given_name || "", email: c.email || c.preferred_username || null };
 }
 
 /** Déconnexion : fermer aussi la session Microsoft du navigateur (sinon, sur un poste partagé, le suivant se reconnecterait

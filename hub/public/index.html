@@ -166,6 +166,7 @@
   .tab[aria-selected="true"] { background:var(--surface); color:var(--ink); box-shadow:0 0 0 1px var(--line) }
   .howto { margin:0; padding-left:1.2em; display:grid; gap:4px; font-size:.84rem }
   .howto li::marker { color:var(--accent); font-weight:600 }
+  .note { margin:var(--s3) 0 0; font-size:.8rem; color:var(--muted); line-height:1.5 }
   .howto code, .note code { font-size:.8em; padding:1px 5px; border-radius:6px; background:var(--surface-2); color:var(--ink); word-break:break-all }
   .code { border-radius:var(--r); background:var(--code-bg); color:var(--code-ink) }
   .code pre { margin:0; padding:var(--s3) var(--s4); overflow:auto; font-size:.74rem; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere }
@@ -187,15 +188,7 @@
   .prompt .copy { color:var(--accent); flex:none; display:inline-flex; align-items:center; gap:4px; font-size:.78rem; font-weight:500 }
   .prompt.off q { color:var(--muted) }
 
-  /* ---- Administration, connexion, pied de page ---- */
-  details.admin { margin-top:var(--s4); border:1px solid var(--line); border-radius:var(--r-lg); background:var(--surface) }
-  details.admin summary { cursor:pointer; padding:var(--s3) var(--s4); font-weight:500; color:var(--ink) }
-  details.admin summary small { color:var(--muted); font-weight:400 }
-  details.admin .tbl { overflow:auto; border-top:1px solid var(--line) }
-  table { width:100%; border-collapse:collapse; font-size:.82rem }
-  td { padding:8px var(--s4); border-top:1px solid var(--line); vertical-align:top } tr:first-child td { border-top:0 }
-  td:first-child { font:.78rem var(--mono); color:var(--ink); white-space:nowrap } td:last-child { color:var(--muted); word-break:break-all }
-  .on-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--line-strong); margin-right:8px } .on-dot.on { background:var(--ok) }
+  /* ---- Connexion, pied de page ---- */
   .panel { max-width:520px; margin:var(--s7) auto; text-align:center; background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); padding:var(--s6) var(--s5); display:grid; gap:var(--s4); justify-items:center; box-shadow:var(--shadow) }
   .panel img { height:44px; width:auto }
   .panel h1 { font-size:1.5rem }
@@ -301,8 +294,17 @@
         <div class="box-head"><h2 id="titre-assistant">Brancher votre assistant</h2></div>
         <div class="assist">
           <div class="tabs" role="tablist" aria-label="Assistant" id="client-tabs">
+            <button class="tab" role="tab" id="tab-claude" aria-controls="panel-claude" aria-selected="false" tabindex="-1" onclick="showClient('claude')" hidden>Claude</button>
             <button class="tab" role="tab" id="tab-desktop" aria-controls="panel-desktop" aria-selected="true" onclick="showClient('desktop')">Claude Desktop</button>
             <button class="tab" role="tab" id="tab-http" aria-controls="panel-http" aria-selected="false" tabindex="-1" onclick="showClient('http')">Claude Code et autres</button>
+          </div>
+          <div role="tabpanel" id="panel-claude" aria-labelledby="tab-claude" hidden>
+            <ol class="howto">
+              <li>Dans Claude (claude.ai, application de bureau ou mobile) : Paramètres → Connecteurs.</li>
+              <li>Sur le connecteur Clevoa, cliquez <b>Connecter</b>, puis identifiez-vous avec votre compte Microsoft professionnel.</li>
+              <li>C'est tout : le connecteur suit votre compte Claude sur le web, le bureau et le téléphone.</li>
+            </ol>
+            <p class="note">Aucune clé ni fichier à copier. Connecteur absent de la liste ? L'administrateur Claude de votre organisation doit l'ajouter avec l'adresse <code id="online-url"></code>.</p>
           </div>
           <div role="tabpanel" id="panel-desktop" aria-labelledby="tab-desktop">
             <ol class="howto">
@@ -320,7 +322,7 @@
           <div role="tabpanel" id="panel-http" aria-labelledby="tab-http" hidden>
             <ol class="howto">
               <li>Claude Code : collez le bloc dans <code>.mcp.json</code> à la racine du projet, puis relancez <code>claude</code>.</li>
-              <li>ChatGPT, Copilot et autres clients MCP HTTP : URL <code id="mcp-url"></code>, en-tête <code>Authorization: Bearer</code> suivi de votre clé.</li>
+              <li>Autre client MCP HTTP : adresse <code id="mcp-url"></code>, en-tête <code>Authorization: Bearer</code> suivi de votre clé.</li>
             </ol>
             <div class="code">
               <div class="code-bar"><span>.mcp.json</span><span>
@@ -348,12 +350,6 @@
       <div role="tabpanel" aria-labelledby="titre-exemples"><ul class="prompts" id="prompts"></ul></div>
     </section>
 
-    <div id="config-section" hidden>
-      <details class="admin">
-        <summary>Configuration de l'instance <small>· réservée à l'administrateur, secrets masqués</small></summary>
-        <div class="tbl"><table id="config"></table></div>
-      </details>
-    </div>
   </div>
 </main>
 
@@ -418,7 +414,7 @@ paintTheme();
 function arrowTabs(list) {
   list.addEventListener("keydown", (e) => {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
-    const tabs = [...list.querySelectorAll('[role="tab"]')], i = tabs.indexOf(document.activeElement);
+    const tabs = [...list.querySelectorAll('[role="tab"]:not([hidden])')], i = tabs.indexOf(document.activeElement);
     const j = e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 : (i + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
     e.preventDefault(); tabs[j].focus(); tabs[j].click();
   });
@@ -439,8 +435,11 @@ function paintCfg() {
 }
 function toggleKey() { showKey = !showKey; paintCfg(); }
 function copyCfg(kind) { if (!ME?.key) return; copy(cfg(ME, ME.key)[kind], "Configuration copiée"); store.set("cfgCopied", "1"); paintSummary(); }
+let clientTab = null;
 function showClient(kind) {
-  for (const k of ["desktop", "http"]) { const on = k === kind; $(`#tab-${k}`).setAttribute("aria-selected", String(on)); $(`#tab-${k}`).tabIndex = on ? 0 : -1; $(`#panel-${k}`).hidden = !on; }
+  clientTab = kind;
+  $(".keyline").hidden = kind === "claude"; // le connecteur Claude n'utilise pas la clé
+  for (const k of ["claude", "desktop", "http"]) { const on = k === kind; $(`#tab-${k}`).setAttribute("aria-selected", String(on)); $(`#tab-${k}`).tabIndex = on ? 0 : -1; $(`#panel-${k}`).hidden = !on; }
 }
 
 // ---- Bandeau de situation : connexions, assistant, état des services, prochaine action ----
@@ -581,15 +580,17 @@ async function load() {
     $("#profile").innerHTML = ""; view("signin"); return;
   }
   view("app"); ME = me;
-  const who = me.email || "Collaborateur non identifié";
-  $("#profile").innerHTML = `<span class="avatar" aria-hidden="true">${me.email ? esc(me.email[0].toUpperCase()) : ico("key", "icon sm")}</span>`
-    + `<span class="id"><strong title="${esc(who)}">${esc(who)}</strong><small>${me.sso ? `via Microsoft Entra ID${me.sso === "mock" ? " (simulé)" : ""}` : "Clé personnelle de ce navigateur"}</small></span>`
+  const who = me.name || me.email || "Collaborateur non identifié"; // prénom Entra (given_name), sinon nom complet, sinon adresse
+  $("#profile").innerHTML = `<span class="avatar" aria-hidden="true">${me.name || me.email ? esc(who[0].toUpperCase()) : ico("key", "icon sm")}</span>`
+    + `<span class="id"><strong title="${esc(me.email || who)}">${esc(who)}</strong><small>${me.sso ? `via Microsoft Entra ID${me.sso === "mock" ? " (simulé)" : ""}` : "Clé personnelle de ce navigateur"}</small></span>`
     + (me.sso ? `<button class="iconbtn" type="button" onclick="logout()" aria-label="Se déconnecter" title="Se déconnecter">${ico("logout", "icon sm")}</button>` : "");
   paintSystems();
   $("#mcp-url").textContent = me.mcpUrl;
+  // Accès en ligne actif : connecteur Claude d'abord, le pont mcp-remote de Claude Desktop n'a plus lieu d'être.
+  $("#tab-claude").hidden = !me.online; $("#tab-desktop").hidden = !!me.online;
+  if (me.online) $("#online-url").textContent = me.online;
+  if (!clientTab || $(`#tab-${clientTab}`).hidden) showClient(me.online ? "claude" : "desktop");
   paintCfg(); paintSummary(); renderTabs(); loadStatus(); openLinked();
-  $("#config-section").hidden = !me.config;
-  if (me.config) $("#config").innerHTML = me.config.map((v) => `<tr><td><i class="on-dot ${v.value ? "on" : ""}"></i>${esc(v.name)}</td><td>${v.value ? esc(v.value) : "— vide (défaut ou mode simulé)"}</td></tr>`).join("");
 }
 
 // ---- Exemples de questions par domaine, selon les applications présentes ----

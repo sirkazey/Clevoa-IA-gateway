@@ -77,7 +77,9 @@ test("Connexion SSO : redirection Entra (S256, openid profile email, sans prompt
   const m = await me(marie);
   assert.equal(m.sso, "mock"); assert.equal(m.email, "marie@charlois.example"); assert.equal(m.key, marie); assert.equal(m.systems.length, 5);
   const u = hub.readUsers()[marie];
-  assert.deepEqual([u.sso.sub, u.sso.tid, u.sso.upn, u.sso.name], ["oid-marie", "common", "marie@charlois.example", "Marie"]);
+  assert.deepEqual([u.sso.sub, u.sso.tid, u.sso.upn, u.sso.name, u.sso.given], ["oid-marie", "common", "marie@charlois.example", "Marie Exemple", "Marie"]);
+  assert.equal(m.name, "Marie", "le portail affiche le prénom (revendication facultative given_name)");
+  assert.equal(m.config, undefined, "plus de configuration de l'instance dans le portail");
   assert.ok(!JSON.stringify(u).includes("ms-token-") && !JSON.stringify(u).includes("ms-refresh-"), "aucun jeton SSO conservé");
   assert.ok((await listTools(marie)).includes("sagex3_query"), "la clé liée sert les clients MCP");
 

@@ -161,5 +161,5 @@ Composants annexes : [bouchon d'entreprise](clevoa-mcp-stub/README.md), [backend
 
 Logiciel propriétaire de Clevoa SASU : [LICENSE.md](LICENSE.md). Les dépendances open source conservent leurs licences
 (MIT, ISC, BSD). Versions : [CHANGELOG.md](CHANGELOG.md) et
-[releases GitHub](https://github.com/sirkazey/Clevoa-IA-gateway/releases) ; version courante **1.7.0-rc.4** (`hub/version.js`), affichée sur le portail et dans les journaux de démarrage. Tests réels
+[releases GitHub](https://github.com/sirkazey/Clevoa-IA-gateway/releases) ; version courante **1.7.0-rc.5** (`hub/version.js`), affichée sur le portail et dans les journaux de démarrage. Tests réels
 restants avant la production : [état des fonctionnalités](docs/validation/etat-des-fonctionnalites.md).

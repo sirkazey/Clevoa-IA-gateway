@@ -7,6 +7,18 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
+## [1.7.0-rc.5] – 2026-11-05
+
+Version candidate du portail, préparée pour l'accès en ligne : parcours de branchement et identité du collaborateur.
+
+### Ajouté
+- « Brancher votre assistant » : avec `CLOUDFLARE_TUNNEL=1`, onglet « Claude » en premier (Paramètres → Connecteurs → Connecter, compte Microsoft, ni clé ni fichier) ; le bloc `mcp-remote` de Claude Desktop ne s'affiche plus que sans accès en ligne.
+- Prénom du collaborateur à la place de l'adresse (revendication facultative `given_name` d'Entra ID, sinon nom complet) ; adresse au survol, « via Microsoft Entra ID » inchangé.
+
+### Retiré
+- Tableau « Configuration de l'instance » du portail et champ `config` de `/api/me` : l'administrateur dispose du journal de démarrage et du diagnostic.
+- Mention de ChatGPT et Copilot dans l'onglet « Claude Code et autres » : ces clients n'ont pas été vérifiés.
+
 ## [1.7.0-rc.4] – 2026-11-05
 
 Version candidate de finition de l'accès en ligne : présentation du connecteur dans les assistants et nouvelle identité visuelle.
