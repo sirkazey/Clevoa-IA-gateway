@@ -564,3 +564,26 @@ test("Instance : nom de serveur MCP et libellé par défaut, puis surchargés pa
   try { assert.equal((await (await fetch(`${bad.url}/api/me`)).json()).serverName, "clevoa-gateway", "nom invalide ignoré : défaut"); }
   finally { await bad.stop(); }
 });
+
+test("CONNECTORS_ENABLED : seuls les connecteurs listés sont proposés (portail, outils MCP, connexion) ; nom inconnu refusé au démarrage", async () => {
+  const h = await startHub({ upstreamUrl: up.url, env: { CONNECTORS_ENABLED: " SageX3 , sharepoint" } });
+  try {
+    const me = await fetch(`${h.url}/api/me`);
+    const c = `mcp_key=${me.headers.get("set-cookie").match(/mcp_key=([^;]+)/)[1]}`;
+    assert.deepEqual((await (await fetch(`${h.url}/api/me`, { headers: { cookie: c } })).json()).systems.map((s) => s.id), ["sagex3", "sharepoint"]);
+    for (const system of ["salesforce", "dropbox"]) { // connecteurs OAuth écartés : le routeur ne les connaît plus
+      const a = await fetch(`${h.url}/auth/${system}`, { headers: { cookie: c }, redirect: "manual" });
+      assert.equal(a.status, 400, system); assert.match(await a.text(), /Système inconnu/);
+    }
+    assert.equal((await fetch(`${h.url}/auth/sharepoint`, { headers: { cookie: c }, redirect: "manual" })).status, 302, "connecteur gardé : départ OAuth");
+    // Outils MCP : clé du portail branchée sur /mcp.
+    await fetch(`${h.url}/api/sagex3/apikey`, { method: "POST", headers: { cookie: c, "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: "syr-key-alice" }) });
+    const r = await fetch(`${h.url}/mcp`, { method: "POST", headers: { Authorization: `Bearer ${c.slice(8)}`, "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }) });
+    const text = await r.text(), data = text.split("\n").find((l) => l.startsWith("data: "));
+    const names = JSON.parse(data ? data.slice(6) : text).result.tools.map((t) => t.name);
+    assert.ok(names.some((n) => n.startsWith("sagex3_")) && names.some((n) => n.startsWith("sharepoint_")), names.join(","));
+    assert.ok(!names.some((n) => /^(salesforce|dropbox|myreport)_/.test(n)), names.join(","));
+  } finally { await h.stop(); }
+  await assert.rejects(startHub({ upstreamUrl: up.url, env: { CONNECTORS_ENABLED: "sagex3,myrepot" } }), /connecteur inconnu \(myrepot\)/);
+});
