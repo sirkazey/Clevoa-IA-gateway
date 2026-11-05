@@ -19,7 +19,9 @@ chaque client. Le compte donne aussi la main sur la route vers le hub interne du
       adresses IP autorisées si possible), un par usage, inventoriés dans le coffre.
 - [ ] Notifications : santé des tunnels (tunnel tombé ou dégradé) vers l'adresse d'exploitation de Clevoa.
 - [ ] Journal d'audit du compte relu chaque mois (création de membres, de jetons, modification de tunnels ou de règles).
-- [ ] Zero Trust : nom d'équipe choisi, offre gratuite activée (un moyen de paiement peut être demandé : à vérifier).
+- [ ] Zero Trust : nom d'équipe choisi (`clevoa`, domaine `clevoa.cloudflareaccess.com`), offre gratuite activée.
+- [ ] Le nouvel assistant de création de tunnel n'autorise « Continuer » qu'une fois un connecteur en marche : copier le
+      jeton, quitter l'assistant sans « Annuler », puis ajouter la route depuis la fiche du tunnel une fois `cloudflared` démarré.
 
 ## 2. Domaine et zone
 
@@ -36,16 +38,16 @@ Zone du domaine du prestataire, gérée par Cloudflare (DNS complet). Le site et
 - [ ] Aucun export de journaux (Logpush) contenant les corps des requêtes.
 
 **Nommage** : le certificat gratuit couvre un seul niveau sous le domaine (`*.domaine`). Un nom par client et par
-environnement : `<client>-mcp.<domaine>` (production) et `<client>-mcp-preprod.<domaine>` ; jamais
-`mcp.<client>.<domaine>`.
+environnement : `<client>.<domaine>` (production) et `<client>-test.<domaine>` (pré-production), par exemple
+`charlois-test.clevoa.fr` ; jamais `mcp.<client>.<domaine>`.
 
 ## 3. Tunnel d'un client (par environnement)
 
-- [ ] Zero Trust → Réseaux → Tunnels → créer un tunnel *Cloudflared* nommé `<client>-prod` ou `<client>-preprod`. Un tunnel
+- [ ] Zero Trust → Réseaux → Tunnels → créer un tunnel *Cloudflared* nommé `<client>-prod` ou `<client>-test`. Un tunnel
       par client et par environnement, jamais partagé.
 - [ ] Copier le **jeton** du tunnel directement dans le `.env` du serveur du client (`TUNNEL_TOKEN`) et dans le coffre ;
       jamais dans un e-mail, un ticket, une conversation ni le dépôt.
-- [ ] Nom d'hôte public : `<client>-mcp.<domaine>` → service `http://mcp-hub:8090`. **Une seule route** ; règle finale
+- [ ] Nom d'hôte public : `<client>.<domaine>` ou `<client>-test.<domaine>` → service `http://mcp-hub:8090`. **Une seule route** ; règle finale
       « tout le reste » en 404. Ne jamais router vers `:8080` (le hub refuse de toute façon, 403, mais la règle doit être juste).
 - [ ] Démarrage côté client : `docker-compose.online.yml` ([accès en ligne § 5](acces-en-ligne.md#5-hub--variables-et-démarrage)) ;
       le tunnel passe « Healthy » dans le tableau de bord.

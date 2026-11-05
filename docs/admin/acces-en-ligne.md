@@ -41,26 +41,35 @@ sans clé à copier. Statut : **expérimental**, désactivé par défaut (`ONLIN
 
 * SSO Entra du portail actif (`SSO_MODE=entra`) : même locataire, même identité ([guide](sso-entra.md)).
 * Le compte Cloudflare **de Clevoa**, qui exploite le service managé, et une zone DNS gérée par Cloudflare pour le nom public
-  (ex. `<client>-mcp.<domaine>`) ; un tunnel et un nom d'hôte par client. Compte à sécuriser comme une production :
+  (ex. `<client>.<domaine>`) ; un tunnel et un nom d'hôte par client. Compte à sécuriser comme une production :
   [responsabilités](../developer/architecture.md#9-service-managé--qui-exploite-quoi).
 * Claude **Team** ou **Enterprise** : seul l'Owner ajoute le connecteur pour l'organisation.
 * Avis du DPO : Cloudflare termine le HTTPS et **voit les échanges en clair** (questions et réponses, données métier
   comprises). Cloudflare devient sous-traitant ultérieur de Clevoa, à prévoir au contrat ; la localisation des données en UE
   est réservée à l'offre Enterprise de Cloudflare.
 
-## 3. Entra ID : inscription « connecteur Claude »
+## 3. Entra ID : application pour Claude
 
-Une **inscription d'application distincte** de celle du portail et de SharePoint : son secret est confié à Anthropic (saisi dans
-Claude), il doit pouvoir être révoqué seul. Libellés du centre d'administration Entra **à vérifier**.
+Deux possibilités ; le secret de cette application est confié à Anthropic (saisi dans Claude) :
 
-1. Inscriptions d'applications → Nouvelle inscription : nom « Clevoa – connecteur Claude », comptes de **cet annuaire
+* **application dédiée** (recommandée en production) : le secret confié à Anthropic n'ouvre que le scope `mcp` ;
+* **application du portail réutilisée** (choix de la pré-production Charlois le 05/11/2026) : rien à créer, mais le secret
+  confié à Anthropic appartient à une application qui a aussi les droits SharePoint délégués avec consentement
+  administrateur. Créer alors un **secret dédié à Claude**, révocable sans toucher à celui du hub, et `ONLINE_CLIENT_ID` =
+  `MS_CLIENT_ID`.
+
+Les étapes sont les mêmes ; seule la première change (nouvelle inscription, ou ajout de l'URI de retour à l'application
+existante). Libellés du centre d'administration Entra **à vérifier**.
+
+1. Inscriptions d'applications → Nouvelle inscription (ou l'application existante) : comptes de **cet annuaire
    uniquement**, URI de redirection *Web* `https://claude.ai/api/mcp/auth_callback`.
 2. Exposer une API : URI d'ID d'application `api://<ID d'application>`, scope `mcp` (« Accéder au hub Clevoa en lecture »,
    consentement par les administrateurs et les utilisateurs).
 3. Manifeste : `"requestedAccessTokenVersion": 2` (sous `api`). Sans cela, Entra émet des jetons v1 que le hub refuse.
 4. Certificats et secrets : nouveau secret client ; noter sa **valeur** (pas son identifiant) et sa date d'expiration.
-5. Consentement administrateur pour le scope `mcp` (et `offline_access`), pour éviter l'écran de consentement à chaque
-   collaborateur.
+5. API autorisées : ajouter le scope `mcp` (onglet « Mes API », ou « API utilisées par mon organisation ») et
+   `offline_access`, puis « Accorder un consentement d'administrateur ». Application réutilisée : ce consentement couvre
+   aussi les droits Graph du portail, qui doivent tous être déclarés dans la liste (sinon le consentement les retire).
 6. Recommandé : Applications d'entreprise → cette application → Propriétés → **Affectation requise** = Oui, puis affecter les
    collaborateurs ou un groupe. Les autres comptes de l'annuaire ne pourront pas se connecter.
 7. Recommandé : une stratégie d'accès conditionnel (double authentification) ciblant cette application.
@@ -68,7 +77,7 @@ Claude), il doit pouvoir être révoqué seul. Libellés du centre d'administrat
 ## 4. Cloudflare : tunnel et règles
 
 Procédure complète, contrôles et rotations : [runbook Cloudflare](cloudflare.md). En bref : compte Clevoa sécurisé (§ 1),
-un tunnel et un nom d'hôte par client et par environnement, à un seul niveau sous le domaine (`<client>-mcp.<domaine>`),
+un tunnel et un nom d'hôte par client et par environnement, à un seul niveau sous le domaine (`<client>.<domaine>`),
 une seule route vers `http://mcp-hub:8090` (§ 3), chemins autorisés seulement et `/mcp` et `/token` réservés aux adresses
 d'Anthropic (§ 4), contrôles après chaque modification (§ 5).
 
@@ -77,7 +86,7 @@ d'Anthropic (§ 4), contrôles après chaque modification (§ 5).
 Dans `.env`, en plus de la configuration existante :
 
 ```
-ONLINE_URL=https://<client>-mcp.<domaine>
+ONLINE_URL=https://<client>.<domaine>
 ONLINE_CLIENT_ID=<ID d'application de l'inscription « connecteur Claude »>
 ONLINE_CLIENT_SECRET=<valeur du secret>
 TUNNEL_TOKEN=<jeton du tunnel Cloudflare>
@@ -89,8 +98,8 @@ Démarrage, en ajoutant le complément `docker-compose.online.yml` à la stack e
 docker compose -f docker-compose.prod.yml -f docker-compose.online.yml up -d
 ```
 
-Contrôle : ligne de journal `[online] accès en ligne actif : https://<client>-mcp.<domaine>/mcp (port 8090, annuaire …)`, puis
-`https://<client>-mcp.<domaine>/.well-known/oauth-authorization-server` répond depuis un navigateur. Le hub refuse de démarrer sans SSO,
+Contrôle : ligne de journal `[online] accès en ligne actif : https://<client>.<domaine>/mcp (port 8090, annuaire …)`, puis
+`https://<client>.<domaine>/.well-known/oauth-authorization-server` répond depuis un navigateur. Le hub refuse de démarrer sans SSO,
 sans identifiant ou secret, avec une adresse non https en production, ou avec le même port que le portail.
 
 Retour arrière : relancer la stack **sans** `docker-compose.online.yml` ; le tunnel tombe, le portail interne est inchangé.
@@ -100,7 +109,7 @@ Supprimer ensuite le nom d'hôte public dans Cloudflare.
 
 Paramètres de l'organisation → Connecteurs → Ajouter un connecteur personnalisé (libellés **à vérifier**) :
 
-* URL : `https://<client>-mcp.<domaine>/mcp` (exactement, chemin compris) ;
+* URL : `https://<client>.<domaine>/mcp` (exactement, chemin compris) ;
 * paramètres avancés : identifiant client = `ONLINE_CLIENT_ID`, secret client = `ONLINE_CLIENT_SECRET`.
 
 Chaque collaborateur clique ensuite **Connecter**, se connecte avec son compte Microsoft de l'entreprise, et retrouve le

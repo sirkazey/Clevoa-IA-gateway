@@ -95,6 +95,30 @@ Non vérifié : `sharepoint_list`, `sharepoint_search` et `sharepoint_read` un p
 collaborateurs réels ; connexion SharePoint transparente pour un collègue (consentement administrateur non accordé) ;
 compte invité.
 
+## 2026-11-05 · Pré-production sur le serveur du client (Portainer, systèmes réels)
+
+Serveur Docker du client, stack déployée par Portainer depuis un tag (1.6.0-rc1, puis 1.7.0-rc.1), `docker-compose.dev.yml`,
+derrière le reverse-proxy nginx déjà en place chez le client (https, certificat du client, un fichier de site dédié). D'abord
+sur le bouchon, puis Sage X3 (CHREC), Salesforce sandbox `preprod`, SharePoint et SSO Entra réels. Un seul compte réel : celui
+du DSI, administrateur ; les deux comptes fictifs du bouchon pour le cloisonnement.
+
+| # | Test | Résultat | Suite donnée |
+|---|---|---|---|
+| P1 | Déploiement Portainer depuis le tag, nginx existant (`proxy_pass` vers le port publié du hub) | `/health` 200 en https ; portail PRE-PROD | OK |
+| P2 | `CONNECTORS_ENABLED=sagex3,salesforce,sharepoint` | trois applications au portail, outils des trois seuls systèmes | OK |
+| P3 | Bouchon : Claude Desktop (`mcp-remote`, https) puis cloisonnement entre les deux comptes fictifs | réponses ; dossier restreint visible pour le seul compte autorisé | OK ; le bouchon expose sur PINVOICE un statut de règlement absent du vrai Sage : à aligner |
+| P4 | SSO Entra (`SSO_MODE=entra`) | identité Entra au portail ; clés antérieures invalidées | OK |
+| P5 | SharePoint juste après le SSO | authentification interactive au lieu de la connexion silencieuse | application sans consentement administrateur sur `Files.Read.All` et `Sites.Read.All` : permissions déclarées et consenties ; journaliser la raison du refus silencieux (à faire) |
+| P6 | Sage X3 réel, identifiant et mot de passe Syracuse | « Accès vérifié », 6 représentations, aucune absente | liste par défaut de la 1.5.2 confirmée ; libellé « jeton personnel » du portail inexact (à corriger) |
+| P7 | Salesforce sandbox réelle | « Accès vérifié », 6 outils SObject Reads | OK |
+| P8 | Claude Desktop : « combien de comptes Salesforce ? » | total exact par `SELECT COUNT()`, plusieurs milliers, au-delà de la borne de 200 | correctif de la 1.4 confirmé |
+| P9 | Claude Desktop : « décris PINVOICE » | `PIHTYP` présent dans les colonnes de liste sur CHREC ; consigne factures et avoirs suivie | test laissé en attente en 1.5.2 : fait |
+| P10 | Claude Desktop : dossiers du site SharePoint DSI | dossiers listés selon les droits du compte | OK |
+| P11 | Mise à jour de la stack 1.6.0-rc1 → 1.7.0-rc.1 depuis Portainer (référence de tag), accès en ligne non activé | connexions conservées, assistant toujours branché | OK ; message Portainer « Unable to retrieve stack file » sans effet, levé par *Pull and redeploy* |
+
+Non vérifié : retour arrière sous Portainer ; accès en ligne (tunnel, connecteur Claude) ; compte non administrateur ;
+lecture et recherche de documents SharePoint.
+
 ## Tests non encore réalisés
 
 Liste tenue à jour dans [l'état des fonctionnalités § 3](etat-des-fonctionnalites.md#3-tests-restant-à-réaliser).
