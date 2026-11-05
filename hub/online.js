@@ -31,7 +31,8 @@ const ISSUER = `${LOGIN}/${TENANT}/v2.0`; // jetons d'accès v2 (requestedAccess
 if (ENABLED) {
   const fail = (m) => { console.error(`[online] ${m}`); process.exit(1); };
   if (!sso.MODE) fail("CLOUDFLARE_TUNNEL=1 (ONLINE) exige le SSO Entra du portail (SSO_MODE=entra, ou mock en pré-production) : même annuaire, même identité");
-  if (!/^https?:\/\/[^/]+$/.test(BASE)) fail("CLOUDFLARE_PUBLIC_URL (ONLINE_URL) doit être l'adresse publique sans chemin, ex. https://charlois-test.clevoa.fr");
+  // La valeur reçue est citée (adresse publique, pas un secret) : une variable mal nommée dans Portainer arrive vide.
+  if (!/^https?:\/\/[^/]+$/.test(BASE)) fail(`CLOUDFLARE_PUBLIC_URL (ONLINE_URL) doit être l'adresse publique sans chemin, ex. https://charlois-test.clevoa.fr ; reçu : ${BASE ? JSON.stringify(BASE) : "vide (variable absente ou mal nommée dans la stack ?)"}`);
   if (IS_PROD && !BASE.startsWith("https://")) fail("CLOUDFLARE_PUBLIC_URL (ONLINE_URL) doit être en https en production");
   if (!/^https:\/\/|^http:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(BASE)) fail("CLOUDFLARE_PUBLIC_URL (ONLINE_URL) doit être en https (http seulement en local)");
   if (!CLIENT_ID || !CLIENT_SECRET) fail("ENTRAID_CLAUDE_CLIENT_ID et ENTRAID_CLAUDE_CLIENT_SECRET (ONLINE_CLIENT_ID et ONLINE_CLIENT_SECRET dans le conteneur) sont requis");

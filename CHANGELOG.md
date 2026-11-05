@@ -7,6 +7,16 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
+## [1.7.0-rc.3] – 2026-11-05
+
+Version candidate corrective de la 1.7.0-rc.2, issue de la mise en route du tunnel en pré-production. Sans
+`CLOUDFLARE_TUNNEL=1`, seul change le démarrage plus rapide du contrôle de santé du hub.
+
+### Corrigé
+- `cloudflared` démarre seul après un redéploiement : contrôle de santé du hub rapproché au démarrage (`start_interval: 5s`), le hub est « healthy » en quelques secondes au lieu d'une minute.
+- Tunnel en HTTP/2 sur TCP 443 par défaut (`CLOUDFLARE_TUNNEL_PROTOCOL`) : plus d'état « Dégradé » ni d'erreurs QUIC derrière un pare-feu qui bloque l'UDP 7844.
+- Message de démarrage du hub : l'adresse publique reçue est citée, « vide » si la variable est absente ou mal nommée dans la stack.
+
 ## [1.7.0-rc.2] – 2026-11-05
 
 Version candidate corrective de la 1.7.0-rc.1, issue de la première mise en place sous Portainer : Portainer CE ne permet pas

@@ -85,6 +85,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+      start_interval: 5s        # contrôles rapprochés au démarrage : le hub est « healthy » en quelques secondes et cloudflared (depends_on) démarre seul
     # Durcissement commun à toutes les stacks (démonstration et scan ZAP compris) : pré-prod et production l'héritent par extends.
     user: "node"                               # processus sans privilèges (déjà imposé par l'image, rappelé ici)
     read_only: true                            # système de fichiers en lecture seule ; seuls /data (volume, droits 700) et /tmp sont inscriptibles
@@ -122,7 +123,7 @@ services:
                                 # Sans elle, il faudrait soit exécuter la copie sous l'utilisateur node et imposer un BACKUP_DIR appartenant à l'uid 1000
                                 # (chown à faire par l'administrateur, fragile sous Portainer), soit relâcher les droits 700 du volume : jugé disproportionné (docs/admin/exploitation.md).
 
-  # Tunnel Cloudflare de l'accès en ligne : aucun conteneur sans CLOUDFLARE_TUNNEL=1. Connexion SORTANTE seulement (443 et 7844) ; le nom
+  # Tunnel Cloudflare de l'accès en ligne : aucun conteneur sans CLOUDFLARE_TUNNEL=1. Connexion SORTANTE seulement (TCP 443 en HTTP/2 par défaut) ; le nom
   # public est routé, dans le tableau de bord Cloudflare, vers http://mcp-hub:8090. Le portail (8080) refuse toute requête relayée par
   # Cloudflare. Runbook : docs/admin/cloudflare.md.
   cloudflared:
@@ -130,6 +131,7 @@ services:
     command: tunnel --no-autoupdate run
     environment:
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}   # jeton du tunnel (après --token dans la commande Docker de Cloudflare), jamais commité
+      TUNNEL_TRANSPORT_PROTOCOL: ${CLOUDFLARE_TUNNEL_PROTOCOL:-http2}   # HTTP/2 sur TCP 443 : passe les pare-feu qui bloquent l'UDP 7844 (QUIC) ; « auto » ou « quic » si l'UDP est ouvert
     deploy:
       replicas: ${CLOUDFLARE_TUNNEL:-0}
     depends_on:
