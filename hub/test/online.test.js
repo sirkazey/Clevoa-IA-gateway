@@ -206,9 +206,19 @@ test("Verrous de démarrage : SSO absent, secret absent ou trop court, URL inval
   for (const [over, err] of cases) await assert.rejects(startHub({ upstreamUrl: up.url, env: { ...env, ONLINE_PORT: String(await freePort()), ...over } }), err, JSON.stringify(over));
 });
 
-test("Désactivé par défaut : sans ONLINE=on, aucun port public n'est ouvert", async () => {
+test("Activation par CLOUDFLARE_TUNNEL=1 (ONLINE=1 dans le conteneur), comme ONLINE=on", async () => {
   const p = await freePort();
-  const h = await startHub({ upstreamUrl: up.url, env: { ONLINE_PORT: String(p), ONLINE_URL: `http://127.0.0.1:${p}`, ONLINE_CLIENT_ID: CLIENT, ONLINE_CLIENT_SECRET: SECRET } });
+  const h = await startHub({ upstreamUrl: up.url, env: { APP_ENV: "preprod", SSO_MODE: "mock", ONLINE: "1", ONLINE_PORT: String(p), ONLINE_URL: `http://127.0.0.1:${p}`, ONLINE_CLIENT_ID: CLIENT, ONLINE_CLIENT_SECRET: SECRET } });
+  try {
+    for (let i = 0; i < 100; i++) { try { if ((await fetch(`http://127.0.0.1:${p}/health`)).ok) break; } catch { /* pas encore ouvert */ } await new Promise((r) => setTimeout(r, 50)); }
+    assert.equal((await fetch(`http://127.0.0.1:${p}/health`)).status, 200);
+    assert.match(h.logs(), /\[online\] accès en ligne actif/);
+  } finally { await h.stop(); }
+});
+
+test("Désactivé par défaut : sans ONLINE=on (ou avec ONLINE=0, valeur par défaut de Compose), aucun port public n'est ouvert", async () => {
+  const p = await freePort();
+  const h = await startHub({ upstreamUrl: up.url, env: { ONLINE: "0", ONLINE_PORT: String(p), ONLINE_URL: `http://127.0.0.1:${p}`, ONLINE_CLIENT_ID: CLIENT, ONLINE_CLIENT_SECRET: SECRET } });
   try {
     await assert.rejects(fetch(`http://127.0.0.1:${p}/health`));
     assert.ok(!h.logs().includes("[online]"));

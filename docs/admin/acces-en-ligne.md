@@ -2,7 +2,7 @@
 
 Public : l'administrateur du hub et l'administrateur Entra ID du client. Objet : permettre aux collaborateurs d'utiliser le hub
 depuis Claude **hors du réseau de l'entreprise** (téléphone, ordinateur en déplacement), sans ouvrir de port sur le pare-feu et
-sans clé à copier. Statut : **expérimental**, désactivé par défaut (`ONLINE=on`), testé sur bouchon seulement
+sans clé à copier. Statut : **expérimental**, désactivé par défaut (`CLOUDFLARE_TUNNEL=1` l'active), testé sur bouchon seulement
 ([état des fonctionnalités](../validation/etat-des-fonctionnalites.md)). Choix et alternatives écartées :
 [étude](../etudes/connexion-un-clic.md#9-décision-du-3-novembre-2026--entra-seul-relais-oauth-du-sdk-et-cloudflare-tunnel).
 
@@ -55,7 +55,7 @@ Deux possibilités ; le secret de cette application est confié à Anthropic (sa
 * **application dédiée** (recommandée en production) : le secret confié à Anthropic n'ouvre que le scope `mcp` ;
 * **application du portail réutilisée** (choix de la pré-production Charlois le 05/11/2026) : rien à créer, mais le secret
   confié à Anthropic appartient à une application qui a aussi les droits SharePoint délégués avec consentement
-  administrateur. Créer alors un **secret dédié à Claude**, révocable sans toucher à celui du hub, et `ONLINE_CLIENT_ID` =
+  administrateur. Créer alors un **secret dédié à Claude**, révocable sans toucher à celui du hub, et `ENTRAID_CLAUDE_CLIENT_ID` =
   `MS_CLIENT_ID`.
 
 Les étapes sont les mêmes ; seule la première change (nouvelle inscription, ou ajout de l'URI de retour à l'application
@@ -83,34 +83,35 @@ d'Anthropic (§ 4), contrôles après chaque modification (§ 5).
 
 ## 5. Hub : variables et démarrage
 
-Dans `.env`, en plus de la configuration existante :
+Le tunnel et le port en ligne font partie des stacks de pré-production et de production (depuis la 1.7.0-rc.2) : rien à
+ajouter à la stack, seulement des variables (Portainer : *Environment variables*, puis *Update the stack*).
 
-```
-ONLINE_URL=https://<client>.<domaine>
-ONLINE_CLIENT_ID=<ID d'application de l'inscription « connecteur Claude »>
-ONLINE_CLIENT_SECRET=<valeur du secret>
-TUNNEL_TOKEN=<jeton du tunnel Cloudflare>
-```
+| Variable de la stack | Valeur |
+|---|---|
+| `CLOUDFLARE_TUNNEL` | `1` : démarre `cloudflared` et ouvre le port 8090 du hub ; vide ou `0` : accès en ligne désactivé |
+| `CLOUDFLARE_TUNNEL_TOKEN` | le jeton du tunnel : le long texte après `--token` dans la commande Docker affichée par Cloudflare (pas l'ID du tunnel) |
+| `CLOUDFLARE_PUBLIC_URL` | le nom public, sans chemin, ex. `https://<client>-test.<domaine>` |
+| `ENTRAID_CLAUDE_CLIENT_ID` | l'ID d'application Entra utilisée par Claude (celle du portail si elle est réutilisée) |
+| `ENTRAID_CLAUDE_CLIENT_SECRET` | la valeur du secret réservé à Claude |
 
-Démarrage, en ajoutant le complément `docker-compose.online.yml` à la stack existante (Portainer : *Additional paths*) :
+Facultatives : `ENTRAID_CLAUDE_REDIRECT_URIS` (vide = `https://claude.ai/api/mcp/auth_callback`), `CLOUDFLARE_TRUST_PROXY`
+(défaut 1). Dans le conteneur, le hub les reçoit sous les noms `ONLINE`, `ONLINE_URL`, `ONLINE_CLIENT_ID`,
+`ONLINE_CLIENT_SECRET`, `ONLINE_REDIRECT_URIS` et `ONLINE_TRUST_PROXY`.
 
-```bash
-docker compose -f docker-compose.prod.yml -f docker-compose.online.yml up -d
-```
+Contrôle : un conteneur `cloudflared-preprod` (ou `-prod`) en marche ; ligne de journal du hub `[online] accès en ligne actif :
+https://<client>-test.<domaine>/mcp (port 8090, annuaire …)` ; le tunnel « Healthy » dans Cloudflare ; puis
+`https://<client>-test.<domaine>/.well-known/oauth-authorization-server` répond depuis un navigateur. Le hub refuse de démarrer
+sans SSO, sans identifiant ou secret, avec une adresse non https en production, ou avec le même port que le portail.
 
-Contrôle : ligne de journal `[online] accès en ligne actif : https://<client>.<domaine>/mcp (port 8090, annuaire …)`, puis
-`https://<client>.<domaine>/.well-known/oauth-authorization-server` répond depuis un navigateur. Le hub refuse de démarrer sans SSO,
-sans identifiant ou secret, avec une adresse non https en production, ou avec le même port que le portail.
-
-Retour arrière : relancer la stack **sans** `docker-compose.online.yml` ; le tunnel tombe, le portail interne est inchangé.
-Supprimer ensuite le nom d'hôte public dans Cloudflare.
+Retour arrière : `CLOUDFLARE_TUNNEL=0` puis *Update the stack* ; le conteneur `cloudflared` disparaît, le portail interne est
+inchangé. Supprimer ensuite le nom d'hôte public dans Cloudflare.
 
 ## 6. Claude : ajout du connecteur par l'Owner
 
 Paramètres de l'organisation → Connecteurs → Ajouter un connecteur personnalisé (libellés **à vérifier**) :
 
 * URL : `https://<client>.<domaine>/mcp` (exactement, chemin compris) ;
-* paramètres avancés : identifiant client = `ONLINE_CLIENT_ID`, secret client = `ONLINE_CLIENT_SECRET`.
+* paramètres avancés : identifiant client = `ENTRAID_CLAUDE_CLIENT_ID`, secret client = `ENTRAID_CLAUDE_CLIENT_SECRET`.
 
 Chaque collaborateur clique ensuite **Connecter**, se connecte avec son compte Microsoft de l'entreprise, et retrouve le
 connecteur dans claude.ai, l'application de bureau et l'application mobile.

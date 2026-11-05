@@ -45,11 +45,11 @@ environnement : `<client>.<domaine>` (production) et `<client>-test.<domaine>` (
 
 - [ ] Zero Trust → Réseaux → Tunnels → créer un tunnel *Cloudflared* nommé `<client>-prod` ou `<client>-test`. Un tunnel
       par client et par environnement, jamais partagé.
-- [ ] Copier le **jeton** du tunnel directement dans le `.env` du serveur du client (`TUNNEL_TOKEN`) et dans le coffre ;
+- [ ] Copier le **jeton** du tunnel directement dans la variable `CLOUDFLARE_TUNNEL_TOKEN` de la stack du client et dans le coffre ;
       jamais dans un e-mail, un ticket, une conversation ni le dépôt.
 - [ ] Nom d'hôte public : `<client>.<domaine>` ou `<client>-test.<domaine>` → service `http://mcp-hub:8090`. **Une seule route** ; règle finale
       « tout le reste » en 404. Ne jamais router vers `:8080` (le hub refuse de toute façon, 403, mais la règle doit être juste).
-- [ ] Démarrage côté client : `docker-compose.online.yml` ([accès en ligne § 5](acces-en-ligne.md#5-hub--variables-et-démarrage)) ;
+- [ ] Démarrage côté client : `CLOUDFLARE_TUNNEL=1` et les variables de l'[accès en ligne § 5](acces-en-ligne.md#5-hub--variables-et-démarrage) ;
       le tunnel passe « Healthy » dans le tableau de bord.
 
 ## 4. Règles de sécurité du nom d'hôte
@@ -94,15 +94,15 @@ nombre : à vérifier). Remplacer `<hote>` ; recopier les adresses d'Anthropic d
 ## 6. Rotations
 
 - **Jeton du tunnel** (au départ d'un exploitant, en cas de doute, et chaque année) : dans le tableau de bord, faire tourner
-  le jeton du tunnel ; mettre à jour `TUNNEL_TOKEN` chez le client ; redémarrer `cloudflared` ; contrôle 6. L'ancien jeton
+  le jeton du tunnel ; mettre à jour `CLOUDFLARE_TUNNEL_TOKEN` dans la stack du client ; *Update the stack* ; contrôle 6. L'ancien jeton
   ne doit plus connecter (à vérifier selon la méthode de rotation proposée).
-- **Secret Entra du connecteur Claude** (avant son expiration) : nouveau secret dans Entra, puis `ONLINE_CLIENT_SECRET` chez le
+- **Secret Entra du connecteur Claude** (avant son expiration) : nouveau secret dans Entra, puis `ENTRAID_CLAUDE_CLIENT_SECRET` chez le
   client et le secret du connecteur dans Claude (Owner), puis suppression de l'ancien secret dans Entra.
 - **Jetons d'API Cloudflare** : durée de validité courte, renouvelés à échéance, révoqués au départ de leur titulaire.
 
 ## 7. Retrait d'un client ou d'un environnement
 
-1. Retirer `docker-compose.online.yml` de la stack du client et redémarrer : le tunnel tombe, le portail interne reste.
+1. `CLOUDFLARE_TUNNEL=0` dans la stack du client, puis *Update the stack* : le tunnel tombe, le portail interne reste.
 2. Supprimer le nom d'hôte public, puis le tunnel, puis les règles du nom d'hôte.
 3. Révoquer le secret Entra du connecteur Claude ; l'Owner retire le connecteur dans Claude.
 4. Consigner le retrait (date, client, environnement).
