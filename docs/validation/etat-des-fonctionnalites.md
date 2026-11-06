@@ -1,90 +1,103 @@
 # État des fonctionnalités et limites connues
 
-Version 1.7.0-rc.5 (05/11/2026 : portail, prénom du collaborateur, connecteur Claude présenté en premier quand l'accès en ligne est actif, configuration de l'instance retirée ; 1.7.0-rc.4 : présentation du connecteur, titre, description, logo et titres des outils, nouveau logo du portail ; 1.7.0-rc.3 : démarrage du tunnel fiabilisé, HTTP/2 par défaut, adresse reçue citée en cas d'erreur ; 1.7.0-rc.2 : accès en ligne activable par une variable, sans fichier Compose supplémentaire ; 1.7.0-rc.1 : accès en ligne pour Claude, expérimental ; 1.6.0-rc.1 : connecteurs proposés au choix, `CONNECTORS_ENABLED` ; 1.5.2 : type de pièce `PIHTYP`, liste Sage X3 par défaut sans `SINVOICE` ni `GACCENTRY`), déployée le 05/11/2026 sur le serveur de pré-production du client (Portainer, systèmes réels, [journal P1–P11](journal-tests-reels.md)) ; toujours sans avoir passé le cloisonnement avec un compte non administrateur ni une restauration réelle : à faire avant toute production (Node 24 ; base d'exploitation SQLite : disponibilité, usage, journal d'audit facultatif ; OpenID Connect et limites de débit par des composants éprouvés). Statuts selon [les conventions](../CONTRIBUTING.md#statut-des-fonctionnalités) : **disponible** (vérifié
-sur le système réel), **testé sur bouchon** (tests automatisés et simulateur seulement), **expérimental**, **prévu**, **non planifié**.
-Évolutions : [roadmap produit](../roadmap-produit.md). Preuves : [journal des tests réels](journal-tests-reels.md), [campagne de charge](charge-v1.2.1.md), CI.
+Public : DSI, recette, direction. Objet : ce qui est vérifié en version 1.7.0-rc.5, ce qui reste à prouver avant la
+production, et les limites connues.
+
+La 1.7.0-rc.5 tourne depuis le 05/11/2026 sur le serveur de pré-production du client (Portainer, systèmes réels,
+[journal P1–P11](journal-tests-reels.md)). Avant toute production manquent le cloisonnement avec un compte non
+administrateur et une restauration réelle. Statuts : [conventions](../CONTRIBUTING.md#statut-des-fonctionnalités).
+Historique : [`CHANGELOG.md`](../../CHANGELOG.md). Évolutions : [roadmap produit](../roadmap-produit.md).
 
 ## 1. Fonctionnalités
 
+### Connecteurs et SSO
+
 | Fonctionnalité | Statut | Preuve | Reste à faire |
 |---|---|---|---|
-| Sage X3 24R1, identifiant et mot de passe Syracuse (`basic`) | disponible | préproduction 4CAD Cloud, 23/10/2026 (S1–S19) | test avec un compte X3 restreint ; production |
+| Sage X3 24R1, identifiant et mot de passe Syracuse | disponible | pré-production, 23/10/2026 (S1–S19) | compte restreint ; production |
 | Sage X3, OAuth2 ou clé d'API `bearer` | testé sur bouchon | tests hub | un vrai IdP Syracuse |
-| Salesforce, serveur MCP hébergé SObject Reads | disponible (sandbox) | sandbox `preprod`, 23/10/2026 (F1–F6) | org de production ; expiration réelle du JWT (durée annoncée par Salesforce, non mesurée) et rotation du refresh token ; compte restreint |
-| SharePoint / OneDrive (Graph délégué) | disponible (pré-prod, un compte) | locataire Charlois, 26/10/2026 ([E1–E8](journal-tests-reels.md)) : connexion, liste des sites ; serveur de pré-production le 05/11 (P5, P10), consentement administrateur accordé | lister, chercher, lire un document ; second collaborateur ; revue des permissions `Files.Read.All` et `Sites.Read.All` ; consentement administrateur |
-| Dropbox (serveur MCP officiel) | testé sur bouchon | tests hub, bouchon aligné sur les schémas du serveur officiel (22/10/2026) | acceptation par `mcp.dropbox.com` d'un jeton d'app tierce |
-| MyReport (proxy MCP SSE) | testé sur bouchon | plomberie SSE et liste blanche seulement | serveur MCP de l'éditeur, non livré ; outils réels inconnus |
-| SSO Microsoft Entra ID (`entra`) | disponible (pré-prod, un compte) | locataire Charlois, 26/10/2026 ([E5–E8](journal-tests-reels.md)) ; `hub/test/sso.test.js` | cloisonnement entre deux collaborateurs réels ; compte invité |
-| Portail, diagnostic, blocs de configuration, exemples de questions | disponible | usage quotidien en préproduction ; refonte v1.3.1 validée sur bouchon ([compte rendu](../history/portail-v1.3.1.md)) | revue sur le portail de préproduction réel |
-| Portail 1.4.0 : une ligne par application par domaine, colonne « Service », assistant en colonne, questions par domaine | testé sur bouchon | tests du portail, captures et axe-core sur bouchon ([compte rendu](portail-v1.4.md)) | revue par des collaborateurs sur la préproduction réelle |
-| Comptages exacts : aucun `LIMIT` ajouté aux agrégats SOQL ; listes coupées signalées au modèle (Salesforce, Sage X3) | testé sur bouchon | `mcp.test.js` | « combien de comptes » sur la sandbox (16 610 attendus) ; format réel de la réponse SObject Reads pour l'avertissement ; `$links.$next` de Syracuse sur une longue liste |
-| Base d'exploitation `hub.db` : disponibilité sur 30 jours (portail, supervision), usage mensuel, outil `admin.js` | testé sur bouchon | `db.test.js` | quelques semaines de fonctionnement en pré-production ; chiffres de disponibilité comparés à la supervision de Charlois |
-| Journal d'audit (`AUDIT=on`) | testé sur bouchon | `db.test.js` | avis du DPO, information des collaborateurs, export réel relu |
-| Sauvegarde et restauration de `hub.db` | testé sur bouchon | `backup.test.js`, CI `backup-restore` et `rollback` | restauration en pré-production chez le client |
-| Portail « Assistant : branché » d'après les appels MCP réels | testé sur bouchon | `mcp.test.js` | un assistant réel branché sur la pré-production |
-| État des systèmes (appels de la dernière heure, vérification HEAD sans identifiant en semaine de 7 h à 19 h) | testé sur bouchon | `health.test.js` | vérification vers Sage X3 et MyReport sur le réseau de Charlois, accord de l'équipe réseau |
-| Supervision du hub (`/metrics` Prometheus, `/metrics/prtg` PRTG, jeton dédié) | testé sur bouchon | `health.test.js` | capteur HTTP Data Advanced sur le PRTG de Charlois |
-| Claude Desktop via `mcp-remote` | disponible | vérifié le 23/10/2026 sur Windows | |
-| Claude Code, ChatGPT, Copilot (MCP HTTP + en-tête) | testé sur bouchon | tests de transport du hub ; Claude Code déclaré vérifié sans entrée au journal ; ChatGPT et Copilot non exercés | une session réelle par assistant, consignée au journal |
-| Claude.ai web et mobile, hors réseau : accès en ligne (`CLOUDFLARE_TUNNEL=1`, relais OAuth du SDK vers Entra, Cloudflare Tunnel) | expérimental | `online.test.js` sur Entra simulé ; décision du 3/11/2026 ([guide](../admin/acces-en-ligne.md)) | premier essai réel (tunnel, Entra, claude.ai, mobile) ; avis du DPO ; test d'intrusion ; connexion des systèmes sans le portail interne |
-| Protocole MCP : révisions 2024-10-07 à 2025-11-25 négociées (SDK `@modelcontextprotocol/sdk` 1.32.1), outils annotés `readOnlyHint`, erreurs JSON-RPC propres, reconnexion SSE | testé sur bouchon | `hub/test/compat.test.js` (échanges JSON-RPC bruts) ; Claude Desktop vérifié en réel | une session réelle par assistant autre que Claude Desktop |
-| Transports Streamable HTTP et SSE | disponible | tests hub, campagne de charge | retrait du SSE quand les assistants cibles seront tous en Streamable HTTP |
-| Chiffrement `users.json`, clé MCP en en-tête, limitation de débit, en-têtes de sécurité | disponible | tests hub, ZAP passif | |
-| Diagnostic exportable (`node diagnostic.js`), contrôle de santé du conteneur | testé sur bouchon | `hub/test/diagnostic.test.js` ; exécuté dans le conteneur de la stack pré-prod locale (24/10/2026) | un diagnostic sur l'installation du client |
-| Versions figées (tag Git, image de base par empreinte), mise à jour choisie par l'administrateur, retour arrière | testé sur bouchon | CI `rollback` (`ops/test-rollback.sh`), `hub/test/release.test.js` ; exécuté en local sous Docker le 24/10/2026 | une mise à jour et un retour arrière sur la pré-production du client |
-| Sauvegarde automatique, restauration scriptée | testé sur bouchon | CI (`ops/test-backup-restore.sh`), `hub/test/backup.test.js` | une restauration sur un serveur du client, puis une par trimestre |
-| Reverse proxy nginx (profil `proxy`) | testé sur bouchon | `docker compose config` en local ; non exercé en CI (Trivy n'analyse que la configuration des fichiers Compose) | déploiement réel ; `COMPOSE_PROFILES` sous Portainer |
-| Télémétrie Clevoa : identifiant d'installation, envoi toutes les 6 h, statistiques par connecteur, fiche et historique persistés | testé sur bouchon | tests hub, bouchon et backend, sans AWS (DynamoDB simulée) | déploiement AWS, nom de domaine `clevoa.fr`, validation juridique ([sécurité § 4](../admin/securite.md#4-télémétrie-clevoa)) |
-| Incidents et e-mails (erreurs du système, authentification refusée pour tous, silence de 14 h), à l'ouverture et à la fermeture seulement | testé sur bouchon | tests backend avec un envoi SNS simulé | sujet SNS abonné, premier incident réel reçu |
-| Console de suivi Clevoa (installations, incidents, graphiques sur 30 jours), en lecture seule | testé sur bouchon | tests sur données de démonstration ; image Docker construite et lancée en démonstration, refus propre avec de faux identifiants AWS | table réelle, utilisateur IAM de lecture, installation sur le NAS |
-| Capacité 50 collaborateurs | démontrée sur bouchons | [campagne de charge](charge-v1.2.1.md) | recette de charge sur la préproduction réelle |
-| Mini-portail d'administration, connecteurs MCP déclaratifs | non planifié | gel fonctionnel de la 1.3.1 ([roadmap](../roadmap-produit.md#5-hors-roadmap)) | |
+| Salesforce, SObject Reads | disponible (sandbox) | 23/10/2026 (F1–F6) | production ; expiration du JWT et rotation du refresh token ; compte restreint |
+| SharePoint / OneDrive (Graph délégué) | disponible (un compte) | 26/10 (E1–E8) et 05/11 (P5, P10) : connexion, liste des sites | lister, chercher, lire ; second collaborateur ; revue de `Files.Read.All` et `Sites.Read.All` |
+| Dropbox (serveur MCP officiel) | testé sur bouchon | tests hub | acceptation par `mcp.dropbox.com` d'un jeton d'app tierce |
+| MyReport (proxy MCP SSE) | testé sur bouchon | plomberie SSE et liste blanche | serveur de l'éditeur, non livré |
+| SSO Entra ID (`entra`) | disponible (un compte) | 26/10 (E5–E8), `sso.test.js` | deux collaborateurs réels ; compte invité |
+| Comptages exacts, listes coupées signalées (Salesforce, Sage X3) | testé sur bouchon | `mcp.test.js` | un comptage sur la sandbox ; `$links.$next` de Syracuse |
+
+### Assistants et protocole
+
+| Fonctionnalité | Statut | Preuve | Reste à faire |
+|---|---|---|---|
+| Claude Desktop via `mcp-remote` | disponible | 23/10/2026, Windows | |
+| Claude Code, ChatGPT, Copilot | testé sur bouchon | tests de protocole seulement | une session réelle chacun, consignée au journal |
+| claude.ai web et mobile : accès en ligne (`CLOUDFLARE_TUNNEL=1`) | expérimental | `online.test.js`, Entra simulé ([guide](../admin/acces-en-ligne.md)) | premier essai réel ; avis du DPO ; test d'intrusion |
+| Protocole MCP 2024-10-07 à 2025-11-25, `readOnlyHint`, reconnexion SSE | testé sur bouchon | `compat.test.js` | |
+| Transports Streamable HTTP et SSE | disponible | tests hub, charge | |
+
+### Portail, sécurité, exploitation
+
+| Fonctionnalité | Statut | Preuve | Reste à faire |
+|---|---|---|---|
+| Portail : connexion aux outils, diagnostic, blocs de configuration | disponible | pré-production | |
+| Portail : lignes par domaine, colonne « Service », prénom, assistant à brancher, « Assistant : branché » | testé sur bouchon | tests du portail, axe-core ([compte rendu 1.4](portail-v1.4.md)) | revue par des collaborateurs |
+| Chiffrement `users.json`, clé en en-tête, limitation de débit, en-têtes de sécurité | disponible | tests hub, ZAP passif | |
+| État des systèmes, supervision (`/metrics`, `/metrics/prtg`) | testé sur bouchon | `health.test.js` | vérification HEAD sur le réseau du client ; capteur de supervision |
+| Base d'exploitation `hub.db`, `admin.js` | testé sur bouchon | `db.test.js` | quelques semaines en pré-production |
+| Journal d'audit (`AUDIT=on`) | testé sur bouchon | `db.test.js` | avis du DPO, information des collaborateurs |
+| Sauvegarde automatique, restauration scriptée | testé sur bouchon | CI `backup-restore` | restauration sur un serveur du client, puis une par trimestre |
+| Versions figées, retour arrière | testé sur bouchon | CI `rollback` | retour arrière sous Portainer |
+| Diagnostic exportable, contrôle de santé | testé sur bouchon | `diagnostic.test.js` | un diagnostic chez le client |
+| Reverse proxy nginx (profil `proxy`) | testé sur bouchon | `docker compose config` | déploiement réel |
+| Capacité 50 collaborateurs | testé sur bouchon | [campagne de charge](charge-v1.2.1.md) | recette de charge en pré-production |
+
+### Service Clevoa
+
+| Fonctionnalité | Statut | Preuve | Reste à faire |
+|---|---|---|---|
+| Télémétrie toutes les 6 h ([sécurité § 4](../admin/securite.md#4-télémétrie-clevoa)) | testé sur bouchon | tests sans AWS | déploiement AWS, validation juridique |
+| Incidents et e-mails | testé sur bouchon | SNS simulé | premier incident réel |
+| Console de suivi | testé sur bouchon | données de démonstration | table réelle, installation sur le NAS |
+| Mini-portail d'administration, connecteurs déclaratifs | non planifié | [roadmap § 5](../roadmap-produit.md#5-hors-roadmap) | |
 
 ## 2. Limites connues
 
-* **Cloisonnement sur les systèmes réels** observé avec un compte administrateur seulement. Le test avec un compte
-  restreint sur Sage X3 et Salesforce est la première preuve manquante.
-* **Sage X3** : seules les colonnes de liste sont renvoyées par `sagex3_query` ; type de pièce de PINVOICE
-  (`PIHTYP`) publié sur les dossiers de recette seulement, lu par le hub en liste sur CHREC le 05/11 (règle du numéro conservée tant qu'il n'est pas en production) ;
-  statut de règlement (`GACCDUDATE`), `SINVOICE` et `GACCENTRY` absents en standard : développement spécifique à chiffrer ; fiche
-  complète de 60 à 130 000 caractères (paramètre `champs`) ; délai de 30 s par requête ; enregistrements techniques
-  en tête sans tri.
-* **Salesforce** : une session MCP vers SObject Reads par appel d'outil (trois requêtes HTTP) ; un 429 amont est rendu
-  sans statut ni consigne ; usage facturable en crédits Flex (`SF_MAX_PER_MIN`).
-* **MyReport** : plafond global de 20 appels par minute pour tous les collaborateurs, première limite atteinte en
-  charge ; outils réels inconnus.
-* **SSO** : un compte désactivé dans Entra garde sa clé MCP jusqu'à régénération ; aucun outil ne retire une entrée
-  de `users.json` ; activer le SSO sur une instance existante invalide toutes les clés antérieures.
-* **Sessions SSE** abandonnées sans fermeture TCP : pas de délai d'inactivité propre au hub ; non mesuré.
-* **Délais d'attente amont** : explicite pour Sage X3 seulement (30 s par requête) ; SharePoint (Graph) et les proxys
-  MCP (Salesforce, Dropbox, MyReport) s'en remettent aux délais par défaut de Node et du client du SDK MCP ; non mesurés
-  sur les systèmes réels.
-* **Routes MCP** : plafond de 300 requêtes par minute et par clé (1.5) ; plafond par système seulement pour MyReport
-  et Salesforce.
-* **Mémoire** : stable sur 27 minutes de charge (RSS ≤ 132 Mo), non démontrée sur une journée.
-* **Capacité réelle** : latences et quotas des systèmes réels non mesurés ; throttling Graph 429 non testé.
-* **Claude.ai web et mobile** : seulement par l'accès en ligne, expérimental, jamais essayé en réel ; un seul annuaire Entra ;
-  connexion des systèmes encore sur le portail interne ; Cloudflare voit les échanges en clair.
-* **Rapports de test** : les tests réels ont été faits par une seule personne, avec un seul profil.
+* **Cloisonnement** observé avec un compte administrateur seulement : c'est la première preuve manquante.
+* **Sage X3** : `sagex3_query` renvoie les colonnes de liste seulement. `PIHTYP` (type de pièce) n'est publié que sur
+  les dossiers de recette ; la règle du numéro reste la référence. `GACCDUDATE`, `SINVOICE` et `GACCENTRY` sont absents
+  en standard (développement spécifique à chiffrer). Fiche complète de 60 à 130 000 caractères (paramètre `champs`).
+  Délai de 30 s par requête. Enregistrements techniques en tête, sans tri.
+* **Salesforce** : une session MCP par appel (trois requêtes HTTP). Un 429 amont est rendu sans consigne. Usage
+  facturé en crédits Flex (`SF_MAX_PER_MIN`).
+* **MyReport** : 20 appels par minute pour tous les collaborateurs, première limite atteinte en charge.
+* **SSO** : un compte désactivé dans Entra garde sa clé MCP jusqu'à régénération. Aucun outil ne retire une entrée de
+  `users.json`. Activer le SSO sur une instance
+  existante invalide toutes les clés.
+* **Délais amont** : explicite pour Sage X3 seulement ; les autres suivent les défauts de Node et du SDK MCP. Sessions
+  SSE abandonnées sans délai d'inactivité propre.
+* **Débit MCP** : 300 requêtes par minute et par clé.
+* **Charge** : mémoire stable sur 27 minutes (RSS ≤ 132 Mo), pas sur une journée ; quotas réels et 429 Graph non
+  mesurés.
+* **claude.ai** : accès en ligne jamais essayé en réel ; un seul annuaire Entra ; Cloudflare voit les échanges en
+  clair.
+* **Tests réels** : une seule personne, un seul profil.
 
 ## 3. Tests restant à réaliser
 
-| Test | Pourquoi il compte | Prérequis |
-|---|---|---|
-| Cloisonnement avec un compte **non administrateur** (Sage et Salesforce) | seule preuve que le hub n'élargit pas les droits | un compte de test restreint sur chaque système |
-| Expiration et renouvellement réels du jeton Salesforce (JWT ~ 2 h, rotation du refresh token) | vérifié sur le bouchon seulement | laisser une session ouverte plus de 2 h puis interroger |
-| Révocation : mot de passe Syracuse changé, autorisation Salesforce révoquée | voyant rouge et message de reconnexion attendus | action volontaire sur chaque système |
-| Salesforce production | même procédure, serveurs d'écriture désactivés | confirmation de l'intégrateur |
-| Dropbox sur un vrai compte | jamais branché | app Dropbox |
-| SharePoint : lister, chercher, lire un document ; second collaborateur | connexion et liste des sites vérifiées le 26/10 | un collègue de la DSI |
-| MyReport | serveur MCP annoncé, non livré | éditeur |
-| SSO Entra avec deux collaborateurs réels (cloisonnement) | vérifié le 26/10 avec un seul compte | un second compte Charlois |
-| Restauration sur un serveur du client (`sudo ops/restore.sh`) | jouée en CI à chaque commit, pas sur un serveur réel | accès au serveur, `ENCRYPTION_KEY` du coffre |
-| Recette de charge en préproduction réelle (`loadtest/run.js` adapté) | latences et quotas réels, 429 Graph | comptes de test, jamais la production |
-| Exactitude financière sur un jeu de référence (factures, avoirs, signes, devises, dates) | réponses attendues approuvées par la Finance | jeu de référence |
-| Injection de prompts et contenus non fiables dans les données relayées | aucun accès supplémentaire ni exfiltration | cas de test documentés |
-| Comparaison croisée Sage + Salesforce dans une même réponse | vérifie la consigne par défaut du serveur MCP | |
-| Claude Code, ChatGPT, Copilot : une session réelle chacun, consignée au journal | seul Claude Desktop est prouvé ; les autres ne sont testés qu'au niveau du protocole | poste avec l'assistant, clé MCP |
-| Backend de télémétrie déployé sur AWS (DynamoDB, SNS, rapport horaire) et `clevoa.fr`, console sur le NAS de Clevoa | testé localement sans AWS | compte AWS Clevoa, nom de domaine, validation juridique |
-| Mise à jour puis retour arrière sur la pré-production du client, depuis Portainer (référence de tag) | mise à jour faite sous Portainer le 05/11 (1.6.0-rc1 → 1.7.0-rc.1, connexions conservées) ; retour arrière jamais sous Portainer | tag de la version à recetter, stack reconfigurée sur un tag |
-| Diagnostic exporté depuis l'installation du client et relu | exécuté sur la stack pré-prod locale seulement | accès administrateur au serveur |
+| Test | Prérequis |
+|---|---|
+| Cloisonnement avec un compte **non administrateur** (Sage X3, Salesforce) : seule preuve que le hub n'élargit pas les droits | un compte restreint sur chaque système |
+| Expiration et renouvellement du jeton Salesforce (JWT ~ 2 h) | session ouverte plus de 2 h |
+| Révocation : mot de passe Syracuse changé, autorisation Salesforce révoquée | action volontaire sur chaque système |
+| Salesforce production | confirmation de l'intégrateur |
+| Dropbox sur un vrai compte | app Dropbox |
+| SharePoint : lister, chercher, lire ; second collaborateur | un collègue de la DSI |
+| MyReport | serveur MCP de l'éditeur |
+| SSO Entra avec deux collaborateurs réels | un second compte du client |
+| Restauration sur un serveur du client (`sudo ops/restore.sh`) | accès au serveur, `ENCRYPTION_KEY` du coffre |
+| Recette de charge en pré-production (`loadtest/run.js` adapté) | comptes de test, jamais la production |
+| Exactitude financière (factures, avoirs, signes, devises, dates) | jeu de référence approuvé par la Finance |
+| Injection de prompts par les données relayées | cas de test documentés |
+| Comparaison croisée Sage X3 + Salesforce dans une réponse | |
+| Claude Code, ChatGPT, Copilot : une session réelle chacun | poste avec l'assistant, clé MCP |
+| Backend de télémétrie sur AWS, console sur le NAS | compte AWS Clevoa, validation juridique |
+| Retour arrière sous Portainer (la mise à jour a été faite le 05/11) | stack sur un tag |
+| Diagnostic exporté chez le client et relu | accès administrateur au serveur |

@@ -1,168 +1,131 @@
 # Installation
 
-Pour l'administrateur qui déploie Clevoa AI Gateway. Trois façons de lancer le hub : sur un poste avec Docker Desktop
-(démonstration, développement), sur un serveur Linux avec Portainer (déploiement recommandé, deux environnements),
-ou à la main avec Docker Compose. L'exploitation quotidienne (sauvegarde, restauration, reverse proxy, pannes) est dans
-[exploitation](exploitation.md) ; les connecteurs dans [configuration](configuration.md).
+Pour l'administrateur qui déploie Clevoa AI Gateway : sur un poste (démonstration), avec Portainer (recommandé) ou à la
+main avec Docker Compose. Exploitation : [exploitation](exploitation.md) ; connecteurs : [configuration](configuration.md).
 
 ## 1. Prérequis
 
-| Élément | Valeur |
-|---|---|
-| Serveur | Linux, Docker Engine et Docker Compose v2 ; Portainer pour le déploiement GitOps (recommandé) |
-| Ressources | le hub tient dans 150 Mo de RAM et une fraction de cœur pour 50 collaborateurs ([campagne de charge](../validation/charge-v1.2.1.md)) |
-| Réseau | sortie HTTPS du hub vers Salesforce, Microsoft (login et Graph), Dropbox, MyReport Server et `clevoa.fr` ; entrée des collaborateurs sur le reverse proxy https |
-| Nom DNS et certificat | un nom par environnement (ex. `mcp-preprod.` et `mcp.`), certificat de l'autorité interne ou publique ; en production, `PUBLIC_URL` doit être en https |
-| Secrets | `ENCRYPTION_KEY` générée une fois par environnement (`openssl rand -hex 32`) et rangée dans un coffre ; identifiants des applications OAuth ; `CLEVOA_KEY` fournie par Clevoa pour la production |
-
-Le hub n'est pas conçu pour être exposé sur internet : réseau interne ou VPN. Les callbacks OAuth passent par le
-navigateur du collaborateur, un nom interne convient.
+* **Serveur** : Linux, Docker Engine et Docker Compose v2 ; Portainer pour le déploiement GitOps (recommandé).
+* **Ressources** : 150 Mo de RAM et une fraction de cœur pour 50 collaborateurs ([campagne de charge](../validation/charge-v1.2.1.md)).
+* **Réseau sortant** : HTTPS vers Salesforce, Microsoft (login et Graph), Dropbox, MyReport Server et `clevoa.fr`.
+* **Réseau entrant** : les collaborateurs joignent le reverse proxy https, en réseau interne ou VPN (pas d'exposition
+  sur internet ; un nom interne suffit).
+* **Nom DNS et certificat** : un nom par environnement (ex. `mcp-preprod.` et `mcp.`) ; en production, `PUBLIC_URL` en https.
+* **Secrets** : `ENCRYPTION_KEY` générée une fois par environnement (`openssl rand -hex 32`) et rangée au coffre ;
+  identifiants des applications OAuth ; `CLEVOA_KEY` fournie par Clevoa pour la production.
 
 ## 2. Démarrage sur un poste (Docker Desktop)
 
-Avec le **bouchon d'entreprise** `clevoa-mcp-stub` : aucun compte réel, un jeu de données fictif, deux collaborateurs
-aux droits différents (Marie, DAF ; Paul, commercial).
+Le **bouchon d'entreprise** `clevoa-mcp-stub` fournit des données fictives et deux collaborateurs (Marie, DAF ; Paul,
+commercial).
 
 ```bash
 cp .env.example .env        # renseigner ENCRYPTION_KEY ; PUBLIC_URL=http://localhost:8080 est déjà là
 docker compose -f docker-compose.dev.yml up -d --build
-open http://localhost:8080  # EXACTEMENT l'adresse de PUBLIC_URL (pas 127.0.0.1) : cookie et callbacks y sont liés
+open http://localhost:8080  # EXACTEMENT l'adresse de PUBLIC_URL (pas 127.0.0.1) : cookie et retours OAuth y sont liés
 ```
 
-Les boutons « Se connecter » ouvrent les mires du bouchon sur `http://localhost:4000`. Identifiants fictifs : Sage X3
-`MDUPONT` / `SYR-MARIE-2026`, MyReport `MR-MARIE-2026` (détail dans [le README du bouchon](../../clevoa-mcp-stub/README.md)).
-Renseigner une variable réelle dans `.env` (ex. `SF_LOGIN_URL`, `SF_CLIENT_ID`) rebranche ce seul système sur le vrai.
+Les mires du bouchon s'ouvrent sur `http://localhost:4000`. Identifiants fictifs : Sage X3 `MDUPONT` / `SYR-MARIE-2026`,
+MyReport `MR-MARIE-2026` ([README du bouchon](../../clevoa-mcp-stub/README.md)). Renseigner une variable réelle
+(ex. `SF_LOGIN_URL`, `SF_CLIENT_ID`) rebranche ce seul système sur le vrai.
 
-Règles du fichier `.env` : jamais de commentaire sur la même ligne qu'une valeur vide (Docker Compose le lirait comme
-la valeur) ; une variable vide garde la valeur par défaut du fichier Compose.
+Règles du `.env` : jamais de commentaire sur la même ligne qu'une valeur vide (Compose le lirait comme la valeur) ;
+une variable vide garde la valeur par défaut du fichier Compose.
 
-Si une ancienne version dont le volume appartenait à root (avant l'utilisateur `node`) a tourné sur ce poste, supprimer
-son volume avant
-(`docker compose -f docker-compose.dev.yml down -v`, **sur un poste de développement uniquement** : sur un serveur,
-`down -v` détruit `users.json`).
+Volume hérité d'une ancienne version (propriétaire root) : `docker compose -f docker-compose.dev.yml down -v`, **sur un
+poste de développement uniquement** (sur un serveur, `down -v` détruit `users.json`).
 
-Sans bouchon (vrais comptes Salesforce, simulateurs internes Sage X3 et MyReport) : `docker compose up -d --build`.
+Sans bouchon (simulateurs internes Sage X3 et MyReport) : `docker compose up -d --build`.
 
 ## 3. Deux environnements étanches
 
-| Environnement | Référence Git déployée | Fichier Compose | Conteneurs | Particularités |
-|---|---|---|---|---|
-| Pré-production | tag de la version à recetter (`refs/tags/vX.Y.Z-rc.N` ou `vX.Y.Z`) ; `dev` seulement sur la plateforme d'intégration de Clevoa | `docker-compose.dev.yml` | `mcp-hub-preprod`, `mcp-stub`, `mcp-backup-preprod`, `mcp-proxy-preprod` (profil `proxy`) | `LOG_LEVEL=debug` ; toutes les API sortantes pointent par défaut vers le bouchon ; chaque variable renseignée rebranche un système réel |
-| Production | tag d'une version publiée (`refs/tags/vX.Y.Z`), jamais une branche | `docker-compose.prod.yml` | `mcp-hub-prod`, `mcp-backup-prod`, `mcp-proxy-prod` (profil `proxy`) | `APP_ENV=production` : `PUBLIC_URL` https obligatoire, `CLEVOA_KEY` obligatoire, télémétrie figée sur `https://clevoa.fr`, conteneur sans privilèges en lecture seule, journaux plafonnés, connecteur non configuré non exposé |
+| | Pré-production | Production |
+|---|---|---|
+| Référence Git | tag à recetter (`refs/tags/vX.Y.Z-rc.N` ou `vX.Y.Z`) | tag publié (`refs/tags/vX.Y.Z`), jamais une branche |
+| Fichier Compose | `docker-compose.dev.yml` | `docker-compose.prod.yml` |
+| Conteneurs | `mcp-hub-preprod`, `mcp-stub`, `mcp-backup-preprod`, `mcp-proxy-preprod` (profil `proxy`) | `mcp-hub-prod`, `mcp-backup-prod`, `mcp-proxy-prod` (profil `proxy`) |
+| Particularités | `LOG_LEVEL=debug` ; API sortantes vers le bouchon par défaut | `APP_ENV=production` : `PUBLIC_URL` https et `CLEVOA_KEY` obligatoires, télémétrie figée sur `https://clevoa.fr`, conteneur sans privilèges en lecture seule, connecteur non configuré non exposé |
 
-Les deux fichiers **étendent** `docker-compose.yml` (définitions communes ; lancé seul, il donne une démonstration avec
-les simulateurs internes, sans bouchon). Chaque stack a son
-propre volume `mcp-data`, donc ses propres `users.json` : les jetons de pré-production ne sont jamais visibles en
-production, et inversement.
+Les deux fichiers étendent `docker-compose.yml` (lancé seul : démonstration avec simulateurs internes). Chaque stack a
+son volume `mcp-data`, donc son `users.json` : les jetons d'un environnement ne sont jamais visibles dans l'autre.
 
 ## 4. Déploiement avec Portainer (GitOps)
 
-Une fois par environnement, **depuis Git uniquement** : les fichiers `ops/` doivent être présents à côté du compose,
-un compose collé à la main laisse `mcp-backup` sans script.
+Une fois par environnement, **depuis Git uniquement** : un compose collé à la main laisse `mcp-backup` sans les
+scripts `ops/`.
 
-1. **Stacks → Add stack → Repository** : URL du dépôt (identifiants Git s'il est privé), *Repository reference* =
-   le tag de la version choisie, par exemple `refs/tags/v1.5.0` (§ 6), *Compose path* = le fichier du tableau ci-dessus.
-2. **GitOps updates** : **désactivé** pour une installation client. La stack ne change que lorsque l'administrateur
-   choisit une autre version ([exploitation § 10](exploitation.md#10-mise-à-jour-et-retour-arrière)). Seule la
-   plateforme d'intégration de Clevoa suit la branche `dev` en continu (polling ou webhook GitHub).
-3. **Environment variables** : celles de `.env.example`. Obligatoires partout : `PUBLIC_URL`, `ENCRYPTION_KEY`,
-   `BACKUP_DIR` en chemin **absolu** et distinct par environnement (ex. `/srv/mcp/backups-prod`). En production :
-   `CLEVOA_KEY` (si `clevoa.fr` ne répond pas, le hub journalise `[telemetry] échec` et fonctionne normalement). En
-   pré-production avec le bouchon : `BROWSER_URL_REWRITE=http://mcp-stub:4000=>http://<hôte-préprod>:4000` (le navigateur
-   des collaborateurs doit joindre les mires du bouchon). Facultatif : `MCP_SERVER_NAME` et `INSTANCE_LABEL` pour nommer
-   l'instance ([configuration § 0](configuration.md#0-le-fichier-env-et-les-uri-de-rappel)).
-4. **https** : le nginx fourni (profil `proxy`, `HUB_PORT=127.0.0.1:8080`, `CERTS_DIR`, `COMPOSE_PROFILES=proxy`) ou un
-   reverse proxy existant : [exploitation § 6](exploitation.md#6-reverse-proxy-nginx-https). La prise en compte de
-   `COMPOSE_PROFILES` comme variable de stack est à vérifier sur votre Portainer.
-5. Premier démarrage : la ligne de journal `Hub MCP v1.5.0 · ENV: PRE-PROD · https://…` confirme la version et
-   l'environnement ; le portail affiche le badge correspondant ; le hub passe « healthy » dans Portainer.
+1. **Stacks → Add stack → Repository** : URL du dépôt (identifiants Git s'il est privé), *Repository reference* = le
+   tag choisi (ex. `refs/tags/vX.Y.Z`, § 6), *Compose path* = le fichier du § 3.
+2. **GitOps updates** : **désactivé**. La stack ne change que quand l'administrateur choisit une autre version
+   ([exploitation § 10](exploitation.md#10-mise-à-jour-et-retour-arrière)).
+3. **Environment variables** (liste commentée : [`.env.example`](../../.env.example)) :
+   * partout : `PUBLIC_URL`, `ENCRYPTION_KEY`, `BACKUP_DIR` en chemin **absolu**, distinct par environnement
+     (ex. `/srv/mcp/backups-prod`) ;
+   * en production : `CLEVOA_KEY` (si `clevoa.fr` ne répond pas, le hub journalise `[telemetry] échec` et continue) ;
+   * en pré-production avec le bouchon : `BROWSER_URL_REWRITE=http://mcp-stub:4000=>http://<hôte-préprod>:4000` ;
+   * facultatif : `MCP_SERVER_NAME` et `INSTANCE_LABEL` ([configuration § 0](configuration.md#0-le-fichier-env-et-les-uri-de-rappel)).
+4. **https** : nginx fourni (profil `proxy`) ou reverse proxy existant, voir
+   [exploitation § 6](exploitation.md#6-reverse-proxy-nginx-https).
+5. **Premier démarrage** : le journal affiche `Hub MCP vX.Y.Z · ENV: PRE-PROD · https://…`, le portail le badge de
+   l'environnement, et Portainer le hub « healthy ».
 
-**Pré-production avec des systèmes réels** : une variable **vide** garde le défaut vers le bouchon. Pour brancher un vrai
-système, renseigner explicitement : Microsoft (SharePoint et SSO) → `MS_LOGIN_URL=https://login.microsoftonline.com`,
-`GRAPH_URL=https://graph.microsoft.com/v1.0` ; Dropbox → `DROPBOX_AUTH_URL=https://www.dropbox.com`,
-`DROPBOX_API_URL=https://api.dropboxapi.com`, `DROPBOX_MCP_URL=https://mcp.dropbox.com/mcp` ; Clevoa → `CLEVOA_URL`.
-Sage X3 réel : garder dans `.env` les lignes `SAGE_OAUTH_*` présentes et vides ; sinon le portail propose l'IdP simulé
-du bouchon au lieu du formulaire Syracuse.
+**Pré-production avec des systèmes réels** : une variable vide garde le bouchon. Pour un vrai système, renseigner :
+
+* Microsoft (SharePoint et SSO) : `MS_LOGIN_URL=https://login.microsoftonline.com`, `GRAPH_URL=https://graph.microsoft.com/v1.0` ;
+* Dropbox : `DROPBOX_AUTH_URL=https://www.dropbox.com`, `DROPBOX_API_URL=https://api.dropboxapi.com`,
+  `DROPBOX_MCP_URL=https://mcp.dropbox.com/mcp` ;
+* Clevoa : `CLEVOA_URL` ;
+* Sage X3 : garder les lignes `SAGE_OAUTH_*` présentes et vides, sinon le portail propose l'IdP simulé du bouchon au
+  lieu du formulaire Syracuse.
 
 ## 5. Déploiement manuel (Docker Compose)
 
-Depuis un clone du dépôt positionné sur le tag de la version choisie, avec un fichier `.env` à côté :
+Depuis un clone du dépôt, avec un `.env` à côté :
 
 ```bash
-git fetch --tags && git checkout v1.5.0                          # une version publiée, jamais une branche
+git fetch --tags && git checkout vX.Y.Z                          # une version publiée, jamais une branche
 docker compose -f docker-compose.prod.yml up -d --build          # production
-docker compose --profile proxy -f docker-compose.prod.yml up -d  # avec le nginx fourni
+docker compose --profile proxy -f docker-compose.prod.yml up -d  # avec le nginx fourni (HUB_PORT=127.0.0.1:8080)
 docker compose -f docker-compose.prod.yml config                 # configuration résolue, sans rien déployer
 ```
 
-Avec le nginx fourni (profil `proxy`) devant le hub : `HUB_PORT=127.0.0.1:8080` dans `.env`, pour que seul nginx
-joigne le hub ([exploitation § 6](exploitation.md#6-reverse-proxy-nginx-https)).
-
-Après toute modification de `.env`, relancer `up -d` : les connexions des collaborateurs sont conservées (volume).
+Après toute modification de `.env`, relancer `up -d` : les connexions des collaborateurs sont conservées.
 
 ## 6. Cycle de livraison et versions
 
-Un seul code pour tous les clients ; chaque installation choisit sa version. `dev` est la branche d'intégration,
-`main` porte les versions validées en CI et en revue (versions candidates comprises) ; aucune installation client ne suit
-une branche. Une version est un **tag Git**
-`vX.Y.Z` (ou `vX.Y.Z-rc.N` pour une version candidate) posé sur `main`, accompagné d'une Release GitHub. Le numéro est
-affiché par le portail, les journaux, le diagnostic et la télémétrie : c'est la preuve de ce qui tourne. Par
-convention, un tag publié n'est jamais déplacé ni supprimé ; une correction donne une nouvelle version. Tant que la
-règle de protection des tags `v*` n'est pas posée sur GitHub (étape 6), cette immuabilité repose sur la discipline de
-Clevoa, pas sur un contrôle technique.
+* Un seul code pour tous les clients, sans branche ni fork par client. Chaque installation a sa stack, ses variables,
+  ses secrets, son volume et son identifiant d'installation ; elle ne change de version que sur décision de son administrateur.
+* Une version est un **tag Git** `vX.Y.Z` (ou `vX.Y.Z-rc.N`, version candidate) posé sur `main`, avec une Release
+  GitHub ; portail, journaux, diagnostic et télémétrie affichent ce numéro. Liste : Releases GitHub et
+  [`CHANGELOG.md`](../../CHANGELOG.md).
+* Un tag publié n'est jamais déplacé ni supprimé : convention seulement, tant que la protection des tags `v*` n'est pas
+  posée sur GitHub (Settings → Rules).
+* Le tag fige le code, les dépendances (`npm ci`) et l'image de base Node (par empreinte) : reconstruire un tag redonne
+  une image de même contenu. Le nginx optionnel suit l'étiquette `nginx:1.28-alpine`.
 
-Reproductibilité : le tag fige le code et les dépendances (`package-lock.json`, `npm ci`). À partir de la 1.3.2-rc.1,
-l'image de base Node est aussi figée par empreinte dans les `Dockerfile` et la stack : reconstruire un tag redonne une
-image de même contenu (pas identique au bit près). Les tags antérieurs utilisent l'étiquette flottante
-`node:22-alpine` : leur reconstruction prend l'image Node du moment.
-
-**Publier une version (Clevoa)**
-
-1. Modifier le code sur une branche de travail, avec ses tests ; PR vers `dev`.
-2. CI verte : tests du hub, du bouchon et du backend, sauvegarde et restauration, retour arrière, documentation.
-3. Contrôles de sécurité de la même CI : Semgrep, CodeQL, Gitleaks, Trivy sur le dépôt et sur l'image construite,
-   `npm audit` (niveau haut et critique). La CI tourne aussi chaque lundi sur `main`, sans commit, pour détecter les
-   vulnérabilités publiées depuis la dernière version.
-4. Préparer la version : numéro dans `hub/version.js`, `hub/package.json` et `hub/package-lock.json`, section du
-   `CHANGELOG.md` à ce numéro et à la date (le test `hub/test/release.test.js` vérifie la cohérence), empreinte de
-   l'image de base remplacée si le job `trivy-image` signale une faille corrigée dans une image Node plus récente.
-   L'image d'exécution ne contient ni npm, ni corepack, ni yarn (retirés après l'installation des dépendances). Le
-   proxy nginx optionnel garde l'étiquette `nginx:1.28-alpine`, qui reçoit les correctifs de la branche 1.28.
-5. Revue de la version, puis PR `dev` → `main`.
-6. Créer le tag et la Release sur `main` : GitHub → Releases → *Draft a new release* → tag `vX.Y.Z` sur `main`, texte du
-   changelog. Recommandé : une règle de protection des tags `v*` (GitHub → Settings → Rules) pour interdire déplacement
-   et suppression.
-7. Annoncer la version aux clients (notes de version, niveau d'urgence). Clevoa peut aussi déclarer une version
-   minimale dans le backend de télémétrie : les hubs en dessous l'écrivent dans leurs journaux.
+**Publier une version (Clevoa)** : livraison selon [contribuer § 1](../CONTRIBUTING.md#1-code) (CI verte, contrôles de
+sécurité compris, PR `dev` → `main`), puis GitHub → Releases → *Draft a new release* → tag `vX.Y.Z` sur `main`, texte du
+changelog. Annoncer la version aux clients avec son urgence. Clevoa peut déclarer une version minimale dans le backend
+de télémétrie : les hubs en dessous l'écrivent dans leurs journaux.
 
 **Installer une version chez un client (administrateur du client)**
 
-8. Pré-production : sauvegarde, puis *Repository reference* = le nouveau tag ([exploitation § 10](exploitation.md#10-mise-à-jour-et-retour-arrière)).
-9. Recette du client sur sa pré-production : portail, « Tester » chaque outil, quelques questions dans l'assistant.
-10. Production : même opération, puis contrôle après mise à jour (version, « healthy », tests des outils, diagnostic).
+1. Pré-production : sauvegarde, puis *Repository reference* = le nouveau tag ([exploitation § 10](exploitation.md#10-mise-à-jour-et-retour-arrière)).
+2. Recette : portail, « Tester » sur chaque outil, quelques questions dans l'assistant.
+3. Production : même opération, puis même contrôle.
 
-**Version corrective de sécurité** : quand une vulnérabilité haute ou critique corrigeable est signalée dans l'image de
-base ou une dépendance (job `trivy-image`, `trivy` ou `npm audit` en échec, y compris lors du passage hebdomadaire),
-Clevoa publie une version corrective `vX.Y.Z+1` (empreinte de l'image ou lockfile mis à jour, rien d'autre) et l'annonce
-aux clients avec son urgence. Délai cible : 15 jours, 72 heures pour une faille critique exploitable à distance ; à
-confirmer dans le contrat de maintenance.
-
-Aucune mise à jour n'est imposée : une installation reste sur sa version tant que son administrateur ne la change pas.
-Multi-client : chaque installation a sa stack, ses variables (`MCP_SERVER_NAME`, `INSTANCE_LABEL`, connecteurs), ses
-secrets (`ENCRYPTION_KEY`, `CLEVOA_KEY`), son volume et son identifiant d'installation. Aucune branche ni fork par
-client ; un connecteur demandé par un client reste désactivé tant qu'il n'est pas configuré.
-
-Tags publiés au 03/11/2026 : `v1.2.0`, `v1.2.1`, `v1.3.0`, `v1.3.1`, `v1.3.2-rc.1`, `v1.3.2-rc.2`, `v1.4.0-rc.1`,
-`v1.4.0-rc.2`, `v1.5.0-rc.1`, `v1.5.0`, `v1.5.1`, `v1.5.2`, `v1.6.0-rc1`, `v1.7.0-rc.1` (la 1.0.0 n'est pas publiée sur GitHub, la 1.1.0 n'a pas de tag ; aucune 1.3.2
-finale). Version courante : `1.7.0-rc.5` (tag à créer). Suivi du backlog : issues GitHub (modèles « Bug » et « Évolution ») et milestones
-par version.
+**Version corrective de sécurité** : une faille haute ou critique corrigeable signalée par la CI (Trivy, `npm audit`,
+y compris le passage hebdomadaire du lundi sur `main`) donne une version `vX.Y.Z+1` limitée à l'image ou au lockfile.
+Délai cible : 15 jours, 72 heures pour une faille critique exploitable à distance ; à confirmer dans le contrat de
+maintenance.
 
 ## 7. Première mise en service auprès des collaborateurs
 
-1. Choisir l'assistant autorisé (Claude Code, Claude Desktop, ChatGPT, Copilot), installé sur un poste du réseau ou en
-   VPN. Claude.ai web et mobile demandent l'[accès en ligne](acces-en-ligne.md), expérimental : à annoncer clairement.
-2. Informer les collaborateurs : le hub ne lit que ce qu'ils ont déjà le droit de voir, leurs jetons sont chiffrés et
-   individuels, une télémétrie réduite à des compteurs part vers Clevoa ([sécurité](securite.md)). Mettre à jour le
-   registre des traitements si la DSI le tient.
-3. Onboarding en trois gestes, décrits dans le [guide utilisateur](../user/guide-utilisateur.md) : se connecter aux
-   outils, vérifier les voyants, copier le bloc dans l'assistant.
+1. Choisir l'assistant autorisé, installé sur un poste du réseau ou en VPN. Seul Claude Desktop est vérifié en réel ;
+   Claude Code, ChatGPT et Copilot ne sont testés qu'au niveau du protocole
+   ([état des fonctionnalités](../validation/etat-des-fonctionnalites.md)). Claude.ai web et mobile demandent
+   l'[accès en ligne](acces-en-ligne.md), expérimental : à annoncer comme tel.
+2. Informer les collaborateurs (droits inchangés, jetons chiffrés et individuels, télémétrie réduite à des compteurs :
+   [sécurité](securite.md)) ; mettre à jour le registre des traitements si la DSI le tient.
+3. Onboarding en trois gestes ([guide utilisateur](../user/guide-utilisateur.md)) : se connecter aux outils, vérifier
+   les voyants, copier le bloc dans l'assistant.
