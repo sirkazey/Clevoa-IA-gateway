@@ -1,6 +1,6 @@
 # État des fonctionnalités et limites connues
 
-Public : DSI, recette, direction. Objet : ce qui est vérifié en version 1.7.0-rc.8, ce qui reste à prouver avant la
+Public : DSI, recette, direction. Objet : ce qui est vérifié en version 1.7.0-rc.9, ce qui reste à prouver avant la
 production, et les limites connues.
 
 Les versions candidates 1.7.0 tournent depuis le 05/11/2026 sur le serveur de pré-production du client (1.7.0-rc.5 depuis le 06/11 ; Portainer, systèmes réels,
@@ -32,7 +32,8 @@ Historique : [`CHANGELOG.md`](../../CHANGELOG.md). Évolutions : [roadmap produi
 | Fonctionnalité | Statut | Preuve | Reste à faire |
 |---|---|---|---|
 | Claude Desktop via `mcp-remote` | disponible | 23/10/2026, Windows | |
-| Claude Code, ChatGPT, Copilot | testé sur bouchon | tests de protocole seulement | une session réelle chacun, consignée au journal |
+| ChatGPT (web), par l'accès en ligne | expérimental | 06/11/2026 (G1–G4) : connexion Microsoft, Dropbox, lecture Word, Excel, PowerPoint ; compte personnel | abonnement d'entreprise, accord DSI et DPO ; PDF scannés non exploités |
+| Claude Code, Copilot | testé sur bouchon | tests de protocole seulement | une session réelle chacun, consignée au journal |
 | claude.ai web et mobile : accès en ligne (`CLOUDFLARE_TUNNEL=1`) | expérimental | 06/11/2026 (O1–O4) : connexion, web et mobile, un compte ; `online.test.js` ([guide](../admin/acces-en-ligne.md)) | critères 4 à 7 du premier essai ; avis du DPO ; test d'intrusion |
 | Protocole MCP 2024-10-07 à 2025-11-25, `readOnlyHint`, reconnexion SSE | testé sur bouchon | `compat.test.js` | |
 | Transports Streamable HTTP et SSE | disponible | tests hub, charge | |
@@ -105,7 +106,7 @@ Historique : [`CHANGELOG.md`](../../CHANGELOG.md). Évolutions : [roadmap produi
 | Exactitude financière (factures, avoirs, signes, devises, dates) | jeu de référence approuvé par la Finance |
 | Injection de prompts par les données relayées | cas de test documentés |
 | Comparaison croisée Sage X3 + Salesforce dans une réponse | |
-| Claude Code, ChatGPT, Copilot : une session réelle chacun | poste avec l'assistant, clé MCP |
+| Claude Code, Copilot : une session réelle chacun | poste avec l'assistant, clé MCP |
 | Backend de télémétrie sur AWS, console sur le NAS | compte AWS Clevoa, validation juridique |
 | Retour arrière sous Portainer (la mise à jour a été faite le 05/11) | stack sur un tag |
 | Diagnostic exporté chez le client et relu | accès administrateur au serveur |
