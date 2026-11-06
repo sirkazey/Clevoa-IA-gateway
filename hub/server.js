@@ -130,6 +130,8 @@ const INSTRUCTIONS = [
   has("dropbox") && "Dropbox : dropbox_call (search, list_folder), puis dropbox_read avec l'id du résultat.",
   (has("sharepoint") || has("dropbox")) && "Word, Excel, PowerPoint, PDF et texte sont lus ; les pages d'un PDF scanné sont jointes en image, 5 par appel (argument pages pour la suite).",
   has("myreport") && "Analyses MyReport : myreport_tools puis myreport_call.",
+  (has("sharepoint") || has("dropbox")) && `Une recherche vide ne prouve pas qu'un document n'existe pas (index en retard sur les dépôts récents, autre nom) : dire « introuvable par la recherche » et parcourir les dossiers probables (${[has("sharepoint") && "sharepoint_list", has("dropbox") && "list_folder"].filter(Boolean).join(", ")}) avant de conclure.`,
+  "Compte utilisé, connexions, panne d'un système : clevoa_mon_compte.",
   "Résultat « … aucune donnée n'a été lue. Action requise : … » : le collaborateur doit (re)connecter ce système ; relayer l'action et le lien tels quels, sans jamais en déduire une absence de données ni un total nul.",
 ].filter(Boolean).join(" ");
 /** Consignes de la session : générales, plus l'état des connexions du collaborateur à l'ouverture (systèmes à connecter et leur lien). */
@@ -148,23 +150,49 @@ function usage(c, t, key, ms, e) {
   db.audit({ user, who: u?.email || u?.sso?.upn || null, system: c.id, tool: t.name, outcome: e ? telemetry.category(e) : "ok", ms });
 }
 
-// Présentation du serveur aux assistants (MCP 2025-11-25 : titre, description, icônes). Icônes en data: URI : aucune adresse ni
-// règle WAF à ouvrir, valables sur le portail comme en ligne. Affichage selon l'assistant (Claude : globe générique à ce jour).
+// Présentation du serveur aux assistants (MCP 2025-11-25 : titre, description, site, icônes). Site : le portail, où le
+// collaborateur connecte ses applications. Icônes en data: URI, plus, avec l'accès en ligne, une adresse https pour les clients
+// qui n'acceptent que celle-ci. Affichage selon l'assistant (Claude : icône générique pour un connecteur personnalisé à ce jour).
 const brand = (f) => readFileSync(new URL(`./public/brand/${f}`, import.meta.url)).toString("base64");
 const SERVER_INFO = {
-  name: SERVER_NAME, version: VERSION, title: "Clevoa AI Gateway",
-  description: `Accès en lecture seule, avec les droits de chaque collaborateur : ${CONNECTORS.map((c) => c.label).join(", ")}.`,
+  name: SERVER_NAME, version: VERSION, title: "Clevoa AI Gateway", websiteUrl: PUBLIC_URL,
+  description: `Accès en lecture seule à ${CONNECTORS.map((c) => c.label).join(", ")}, avec les droits de chaque collaborateur. Première utilisation : connectez vos applications sur le portail ${PUBLIC_URL}`,
   icons: [
+    ...(online.ENABLED ? [{ src: online.ICON_URL, mimeType: "image/png", sizes: ["256x256"] }] : []),
     { src: `data:image/svg+xml;base64,${brand("clevoa-icone-app.svg")}`, mimeType: "image/svg+xml", sizes: ["any"] },
     { src: `data:image/png;base64,${brand("clevoa-icone-app-256.png")}`, mimeType: "image/png", sizes: ["256x256"] },
   ],
 };
+
+// « Mon compte » : identité, connexions et état du service vus depuis l'assistant. Constaté le 06/11/2026 : avec le connecteur en
+// ligne, rien n'indiquait dans Claude avec quel compte on était connecté, ni si un système était en panne. Aucune clé, aucun jeton.
+const SERVICE = { ok: "opérationnel", lent: "lent", erreurs: "en erreurs (incident en cours)", injoignable: "injoignable (incident en cours)", inconnu: "pas d'appel récent", simule: "simulateur (données fictives)" };
+function myAccount(key) {
+  const u = store.get(key) || {};
+  const name = u.sso?.name || u.sso?.given || null, email = u.email || u.sso?.upn || null;
+  return {
+    compte: u.sso ? { nom: name, email, identification: `Microsoft Entra ID${sso.MODE === "mock" ? " (simulé)" : ""}` } : { email, identification: "clé personnelle (sans compte Microsoft)" },
+    portail: PUBLIC_URL,
+    systemes: CONNECTORS.map((c) => {
+      const configured = c.mock || !!(c.oauth?.clientId || c.apiKey);
+      const connected = c.mock || hasCredential(u[c.id]);
+      return { systeme: c.label, connexion: !configured ? "non configuré par l'administrateur" : connected ? "connecté" : "à connecter",
+        ...(configured && !connected && !c.mock ? { lien: connectLink(c) } : {}), service: SERVICE[health.status(c).state] ?? "inconnu" };
+    }),
+    note: "Connexions aux applications : sur le portail, avec le compte de chaque application. « Incident en cours » : panne constatée par la passerelle pour tous les collaborateurs, inutile de se reconnecter.",
+  };
+}
 
 function buildServer(key) {
   const server = new McpServer(
     SERVER_INFO,
     { instructions: instructionsFor(key) },
   );
+  server.registerTool("clevoa_mon_compte", {
+    title: "Clevoa – mon compte et mes connexions",
+    description: "Compte avec lequel le collaborateur est identifié (Microsoft Entra ID ou clé personnelle), état de sa connexion à chaque système avec le lien pour (re)connecter, état du service (incident en cours). À appeler quand on demande avec quel compte on est connecté, ce qui est connecté, ou si un système est en panne.",
+    inputSchema: {}, annotations: { readOnlyHint: true },
+  }, async () => ({ content: [{ type: "text", text: JSON.stringify(myAccount(key)) }, { type: "text", text: `Source : Clevoa AI Gateway (${PUBLIC_URL})` }] }));
   for (const c of CONNECTORS) for (const t of c.tools) {
     server.registerTool(t.name, { title: t.title, description: t.description, inputSchema: t.input, annotations: { readOnlyHint: true } }, async (args) => {
       telemetry.count();

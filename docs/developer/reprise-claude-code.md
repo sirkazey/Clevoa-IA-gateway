@@ -81,7 +81,7 @@ pas d'un compte à l'autre : conversations, artifacts, tâches programmées, con
 
 ## 6. État et travaux en attente
 
-État au 6 novembre 2026 : `main` et `dev` en **1.7.0-rc.7** (tag `v1.7.0-rc.7` à poser par le propriétaire ; `v1.7.0-rc.5` déployée le 06/11). Pré-production sur le
+État au 6 novembre 2026 : `main` et `dev` en **1.7.0-rc.8** (tag `v1.7.0-rc.8` à poser par le propriétaire ; `v1.7.0-rc.7` déployée le 06/11). Pré-production sur le
 serveur du client depuis le 05/11 ([journal P1–P11](../validation/journal-tests-reels.md)). Recette réelle restante :
 [état des fonctionnalités § 3](../validation/etat-des-fonctionnalites.md#3-tests-restant-à-réaliser), en premier le
 cloisonnement avec un compte non administrateur.

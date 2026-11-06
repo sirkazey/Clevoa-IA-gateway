@@ -11,7 +11,7 @@ import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const TOOLS = ["salesforce_tools", "salesforce_call", "sagex3_representations", "sagex3_describe", "sagex3_query", "sagex3_get",
-  "sharepoint_sites", "sharepoint_list", "sharepoint_search", "sharepoint_read", "dropbox_tools", "dropbox_call", "dropbox_read", "myreport_tools", "myreport_call"];
+  "sharepoint_sites", "sharepoint_list", "sharepoint_search", "sharepoint_read", "dropbox_tools", "dropbox_call", "dropbox_read", "myreport_tools", "myreport_call", "clevoa_mon_compte"];
 const KEY_NO_REFRESH = "test-key-bob-no-refresh-token";
 const KEY_CAROL = "test-key-carol-0123456789";
 const KEY_DAN = "test-key-dan-apikey-0123456789";
@@ -154,7 +154,14 @@ test("Streamable HTTP (/mcp, Authorization: Bearer) : listTools et callTool", as
   const c = await httpClient();
   try {
     const { tools } = await c.listTools();
-    assert.equal(tools.length, 15);
+    assert.equal(tools.length, 16);
+    const me = JSON.parse((await c.callTool({ name: "clevoa_mon_compte", arguments: {} })).content[0].text);
+    assert.equal(me.compte.identification, "clé personnelle (sans compte Microsoft)");
+    assert.ok(me.portail.startsWith("http"));
+    assert.deepEqual(me.systemes.map((s) => s.systeme), ["Salesforce", "Sage X3", "SharePoint", "Dropbox", "MyReport"]);
+    assert.ok(me.systemes.every((s) => s.connexion && s.service), "connexion et état du service pour chaque système");
+    assert.ok(me.systemes.filter((s) => s.connexion === "à connecter").every((s) => s.lien?.includes("?connecter=")), "lien direct vers la ligne du portail");
+    assert.ok(!JSON.stringify(me).includes(KEY), "jamais la clé");
     const out = text(await sfQuery(c, "SELECT Id FROM Account"));
     assert.equal(out.records.length, 2);
     assert.equal(sfCalls("tools/call")[0].headers.authorization, "Bearer sf-token-alice");
