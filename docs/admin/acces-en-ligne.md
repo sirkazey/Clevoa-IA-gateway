@@ -121,7 +121,8 @@ Desktop » (`mcp-remote`) disparaît et la clé reste dans l'onglet « Clé pers
 
 Le hub annonce un titre (« Clevoa AI Gateway »), une description qui donne l'adresse du portail (où le collaborateur
 connecte ses applications), ce portail comme site (`websiteUrl`) et le logo Clevoa, intégré et par adresse https
-(`/icon.png`). Le 06/11/2026, Claude affichait une icône générique pour ce connecteur personnalisé.
+(`/icon.png`). Vérifié le 06/11/2026 (1.7.0-rc.8) : pour un connecteur personnalisé, Claude n'affiche que le nom saisi
+et l'URL, avec une icône générique ; ni logo, ni description, ni site. Les titres des 14 outils, eux, s'affichent.
 
 ## 7. Limites connues
 
