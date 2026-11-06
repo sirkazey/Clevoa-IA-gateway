@@ -444,7 +444,7 @@ function showClient(kind) {
   for (const k of ["claude", "desktop", "http"]) { const on = k === kind; $(`#tab-${k}`).setAttribute("aria-selected", String(on)); $(`#tab-${k}`).tabIndex = on ? 0 : -1; $(`#panel-${k}`).hidden = !on; }
 }
 
-// ---- Bandeau de situation : connexions, assistant, état des services, prochaine action ----
+// ---- Bandeau de situation : connexions, assistant, incident éventuel, prochaine action ----
 function paintSummary() {
   if (!ME) return;
   const real = ME.systems.filter((s) => !s.mock && (s.configured || s.apiKey)), ready = ME.systems.filter((s) => s.connected || s.mock).length, total = ME.systems.length;
@@ -453,8 +453,8 @@ function paintSummary() {
   const down = (STATUS?.systems ?? []).filter((x) => ["injoignable", "erreurs"].includes(x.state)).map((x) => ME.systems.find((s) => s.id === x.id)?.label).filter(Boolean);
   const action = !ready && real.length ? ["Connecter une application", "#outils"] : !copied && !used ? ["Brancher mon assistant", "#assistant"] : null;
   $("#summary").innerHTML = `<p><span><b>${ready}</b> application${ready > 1 ? "s" : ""} sur ${total} connectée${ready > 1 ? "s" : ""}</span><span class="sep" aria-hidden="true"></span>`
-    + `<span>Assistant : <b>${assistant}</b></span><span class="sep" aria-hidden="true"></span>`
-    + `<span>${down.length ? `<b class="alert">Incident : ${esc(down.join(", "))}</b>` : "Aucun incident signalé"}</span></p>`
+    + `<span>Assistant : <b>${assistant}</b></span>`
+    + (down.length ? `<span class="sep" aria-hidden="true"></span><span><b class="alert">Incident : ${esc(down.join(", "))}</b></span>` : "") + "</p>"; // rien à dire quand tout va bien
     + (action ? `<a class="btn primary" href="${action[1]}">${action[0]} ${ico("arrow", "icon sm")}</a>` : "");
 }
 
