@@ -4,8 +4,8 @@ Public : DSI, recette, direction. Objet : ce qui est vérifié en version 1.7.0-
 production, et les limites connues.
 
 Les versions candidates 1.7.0 tournent depuis le 05/11/2026 sur le serveur de pré-production du client (1.7.0-rc.5 depuis le 06/11 ; Portainer, systèmes réels,
-[journal P1–P11](journal-tests-reels.md)). Avant toute production manquent le cloisonnement avec un compte non
-administrateur et une restauration réelle. Statuts : [conventions](../CONTRIBUTING.md#statut-des-fonctionnalités).
+[journal P1–P11](journal-tests-reels.md)). Cloisonnement vérifié le 05/11 avec un compte non administrateur
+(Sage X3, Salesforce, SharePoint ; journal C1–C3) ; avant toute production manque encore une restauration réelle. Statuts : [conventions](../CONTRIBUTING.md#statut-des-fonctionnalités).
 Historique : [`CHANGELOG.md`](../../CHANGELOG.md). Évolutions : [roadmap produit](../roadmap-produit.md).
 
 ## 1. Fonctionnalités
@@ -91,14 +91,13 @@ Historique : [`CHANGELOG.md`](../../CHANGELOG.md). Évolutions : [roadmap produi
 
 | Test | Prérequis |
 |---|---|
-| Cloisonnement avec un compte **non administrateur** (Sage X3, Salesforce) : seule preuve que le hub n'élargit pas les droits | un compte restreint sur chaque système |
+| Cloisonnement sur la version finale : recherche SharePoint sans site et lecture d'un fichier réservé, avec le compte non administrateur du 05/11 (C1–C3 faits en rc.3) | le même compte |
 | Expiration et renouvellement du jeton Salesforce (JWT ~ 2 h) | session ouverte plus de 2 h |
 | Révocation : mot de passe Syracuse changé, autorisation Salesforce révoquée | action volontaire sur chaque système |
 | Salesforce production | confirmation de l'intégrateur |
 | Dropbox Business : dossiers d'équipe et cloisonnement avec un compte du client | application créée par l'administrateur de l'équipe Dropbox du client |
 | Lecture réelle d'un docx, d'un xlsx (chiffres, dates) et d'un pptx, comparée par le testeur | documents de test fictifs |
 | Lecture d'un contrat scanné par le connecteur en ligne (claude.ai, mobile) ; Claude Desktop vérifié le 06/11 | PDF scanné de test |
-| SharePoint : second collaborateur (cloisonnement) | un collègue de la DSI |
 | MyReport | serveur MCP de l'éditeur |
 | SSO Entra avec deux collaborateurs réels | un second compte du client |
 | Restauration sur un serveur du client (`sudo ops/restore.sh`) | accès au serveur, `ENCRYPTION_KEY` du coffre |

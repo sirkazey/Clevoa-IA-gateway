@@ -6,9 +6,9 @@ Document de validation : il consigne ce qui a été **réellement exécuté** co
 Chaque entrée dit ce qui a été exécuté contre les systèmes Charlois, avec quel résultat, et ce que le hub a dû corriger. Les tests automatisés (hub, bouchon, backend Clevoa, scénario CI de sauvegarde et restauration ; [inventaire](../developer/tests.md))
 tournent à chaque commit ; ils ne sont pas listés ici.
 
-Compte utilisé pour tous les tests : le DSI du Groupe Charlois, profil **administrateur** sur chaque système testé.
-Conséquence : le cloisonnement (un utilisateur restreint ne voit que ses données) n'est pas encore prouvé sur les vrais
-systèmes. C'est le test manquant prioritaire.
+Compte utilisé pour la plupart des tests : le DSI du Groupe Charlois, profil **administrateur** sur chaque système testé.
+Cloisonnement : vérifié le 05/11/2026 avec un compte collaborateur non administrateur (entrée C1–C3) sur Sage X3,
+Salesforce et SharePoint ; Dropbox reste à vérifier avec un compte de l'équipe Dropbox Business du client.
 
 ## 2026-10-23 · Sage X3 préproduction (4CAD Cloud, Syracuse 24R1)
 
@@ -118,6 +118,22 @@ du DSI, administrateur ; les deux comptes fictifs du bouchon pour le cloisonneme
 
 Non vérifié : retour arrière sous Portainer ; accès en ligne (tunnel, connecteur Claude) ; compte non administrateur ;
 lecture et recherche de documents SharePoint.
+
+## 2026-11-05 · Cloisonnement avec un compte non administrateur (1.7.0-rc.3)
+
+Une collaboratrice de la DSI, compte **non administrateur** sur chaque système, connectée au portail par le SSO Entra
+avec sa propre identité, puis à Sage X3 et Salesforce avec ses propres comptes ; Claude Desktop par clé. Compte rendu
+du propriétaire.
+
+| # | Test | Résultat | Suite donnée |
+|---|---|---|---|
+| C1 | Sage X3 : questions sur les données du dossier de pré-production | réponses limitées à ses droits Syracuse | OK |
+| C2 | Salesforce (sandbox) : questions sur les comptes et opportunités | réponses limitées à ses droits Salesforce | OK |
+| C3 | SharePoint : dossiers du site de la DSI réservés au propriétaire | non visibles pour elle | OK |
+
+Depuis la rc.3, les mêmes jetons personnels portent les nouveaux chemins (recherche Microsoft Search, lecture par
+`driveId`, `dropbox_read`) ; Graph et Dropbox appliquent les droits du jeton. À refaire sur la version finale : une
+recherche SharePoint sans site, puis la lecture d'un fichier réservé, avec le même compte (cinq minutes).
 
 ## 2026-11-06 · Dropbox (compte personnel de test)
 
