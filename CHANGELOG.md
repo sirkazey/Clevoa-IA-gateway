@@ -16,7 +16,11 @@ Desktop depuis Dropbox et SharePoint, recherche SharePoint sur tous les sites v�
 - Recherche SharePoint vide : note qui rappelle le retard de l'index Microsoft Search sur les dépôts récents et invite à parcourir les dossiers ; description de l'outil complétée.
 - Consignes du serveur : une recherche vide ne prouve pas l'absence d'un document ; dire « introuvable par la recherche » et parcourir les dossiers probables.
 
+### Ajouté
+- Présentation du connecteur : adresse du portail dans la description et comme site (`websiteUrl`) ; logo aussi par adresse https (`/icon.png`, à autoriser dans la règle WAF 1).
+
 ### Modifié
+- Accès en ligne vérifié de bout en bout sur claude.ai (06/11/2026) : connexion Microsoft relayée, 13 outils en lecture seule ; doc de l'Owner, nom « (test) », affectation Entra requise.
 - État des fonctionnalités : lecture Dropbox, PDF scannés (Claude Desktop) et recherche SharePoint sur tous les sites passent à « disponible ».
 
 ## [1.7.0-rc.7] – 2026-11-06

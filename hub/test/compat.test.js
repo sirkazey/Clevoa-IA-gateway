@@ -49,8 +49,9 @@ test("Négociation : une révision inconnue reçoit la plus récente du serveur 
 test("Identité : nom d'instance, version du hub, titre, description, icônes, capacité outils, consignes de citation de la source", async () => {
   const { body } = await init(LATEST_PROTOCOL_VERSION);
   const { icons, description, ...info } = body.result.serverInfo;
-  assert.deepEqual(info, { name: "client-test", version: VERSION, title: "Clevoa AI Gateway" });
-  assert.match(description, /^Accès en lecture seule, avec les droits de chaque collaborateur : .*Sage X3/);
+  assert.deepEqual(info, { name: "client-test", version: VERSION, title: "Clevoa AI Gateway", websiteUrl: hub.url });
+  assert.match(description, /^Accès en lecture seule à .*Sage X3.*, avec les droits de chaque collaborateur\. Première utilisation : connectez vos applications sur le portail http/);
+  assert.ok(description.endsWith(hub.url), "le lien du portail termine la description (aucun point collé à l'adresse)");
   assert.deepEqual(icons.map((i) => [i.mimeType, i.sizes]), [["image/svg+xml", ["any"]], ["image/png", ["256x256"]]]);
   for (const i of icons) assert.ok(i.src.startsWith(`data:${i.mimeType};base64,`) && i.src.length > 500, `icône ${i.mimeType} intégrée`);
   assert.ok(body.result.capabilities.tools);

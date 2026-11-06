@@ -149,13 +149,15 @@ function usage(c, t, key, ms, e) {
   db.audit({ user, who: u?.email || u?.sso?.upn || null, system: c.id, tool: t.name, outcome: e ? telemetry.category(e) : "ok", ms });
 }
 
-// Présentation du serveur aux assistants (MCP 2025-11-25 : titre, description, icônes). Icônes en data: URI : aucune adresse ni
-// règle WAF à ouvrir, valables sur le portail comme en ligne. Affichage selon l'assistant (Claude : globe générique à ce jour).
+// Présentation du serveur aux assistants (MCP 2025-11-25 : titre, description, site, icônes). Site : le portail, où le
+// collaborateur connecte ses applications. Icônes en data: URI, plus, avec l'accès en ligne, une adresse https pour les clients
+// qui n'acceptent que celle-ci. Affichage selon l'assistant (Claude : icône générique pour un connecteur personnalisé à ce jour).
 const brand = (f) => readFileSync(new URL(`./public/brand/${f}`, import.meta.url)).toString("base64");
 const SERVER_INFO = {
-  name: SERVER_NAME, version: VERSION, title: "Clevoa AI Gateway",
-  description: `Accès en lecture seule, avec les droits de chaque collaborateur : ${CONNECTORS.map((c) => c.label).join(", ")}.`,
+  name: SERVER_NAME, version: VERSION, title: "Clevoa AI Gateway", websiteUrl: PUBLIC_URL,
+  description: `Accès en lecture seule à ${CONNECTORS.map((c) => c.label).join(", ")}, avec les droits de chaque collaborateur. Première utilisation : connectez vos applications sur le portail ${PUBLIC_URL}`,
   icons: [
+    ...(online.ENABLED ? [{ src: online.ICON_URL, mimeType: "image/png", sizes: ["256x256"] }] : []),
     { src: `data:image/svg+xml;base64,${brand("clevoa-icone-app.svg")}`, mimeType: "image/svg+xml", sizes: ["any"] },
     { src: `data:image/png;base64,${brand("clevoa-icone-app-256.png")}`, mimeType: "image/png", sizes: ["256x256"] },
   ],
