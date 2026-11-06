@@ -14,8 +14,8 @@ portail par leur compte Microsoft (`SSO_MODE=entra`), et basculer une instance e
   n'accepte que des jetons Graph du **même compte** que l'identité du portail.
 * Sans `SSO_MODE`, le portail crée une clé au premier passage dans le navigateur.
 
-Statut : vérifié avec un seul compte réel ([journal](../validation/journal-tests-reels.md)) ; cloisonnement entre deux
-collaborateurs réels à vérifier ([état des fonctionnalités](../validation/etat-des-fonctionnalites.md)).
+Statut : vérifié avec le compte du propriétaire et une collaboratrice non administratrice, chacun avec ses propres
+connexions ([journal C1–C3](../validation/journal-tests-reels.md)).
 
 ## Mode `entra` : ce qu'il faut dans Entra ID
 

@@ -7,6 +7,9 @@ un petit conteneur, à héberger sur un poste ou un NAS de Clevoa, **sur le rés
 La console lit la table DynamoDB en lecture seule. Elle n'écrit rien, n'envoie rien aux hubs et n'a aucun accès aux
 installations des clients : elle affiche ce que les hubs ont envoyé (compteurs, sans donnée métier ni identité).
 
+Jamais déployée. La procédure ci-dessous (NAS, table AWS) décrit le code actuel ; la console doit passer derrière
+Cloudflare Access, données en D1, sans compte AWS ([roadmap § 3](../docs/roadmap-produit.md#3-axe-2--observabilité-et-maintenance)).
+
 | Zone | Contenu |
 |---|---|
 | Synthèse | installations suivies, en incident, silencieuses ; sièges ; appels de la dernière période |

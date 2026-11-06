@@ -1,5 +1,9 @@
 # Clevoa backend (AWS Lambda)
 
+> Jamais déployé. Ce document décrit le code actuel, écrit pour AWS (Lambda, DynamoDB, SNS). Décision du 06/11/2026 :
+> le backend passera sur Cloudflare (Worker, Cron Trigger, D1), sans compte AWS ([roadmap § 3](../docs/roadmap-produit.md#3-axe-2--observabilité-et-maintenance)).
+> Ne pas lancer `serverless deploy` d'ici là.
+
 Public : Clevoa (éditeur). Objet : recevoir la télémétrie des hubs Clevoa AI Gateway (toutes les 6 heures), tenir une
 fiche et un historique par installation, et prévenir Clevoa par e-mail **seulement** quand un incident s'ouvre ou se
 ferme chez un client. Le suivi au quotidien se fait dans la [console](../clevoa-console/README.md), en lecture seule. Données envoyées par le hub, finalité et

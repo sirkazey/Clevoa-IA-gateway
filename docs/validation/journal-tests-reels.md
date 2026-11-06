@@ -199,3 +199,12 @@ documents fictifs du compte Dropbox de test.
 | G2 | « Connecter », page Microsoft ouverte | refusé sans trace au journal : secret mal recopié | 1.7.0-rc.9 : refus de `/token` et `/authorize` écrits au journal ; secret accepté en en-tête |
 | G3 | Liste et recherche Dropbox | dossier et 4 fichiers trouvés, sources citées | OK |
 | G4 | Lecture Word, Excel, PowerPoint ; PDF scanné | Office lus, incohérence entre deux documents relevée ; PDF scanné non exploité | Office : OK ; PDF scanné : limite de ChatGPT |
+
+## 2026-11-06 · Restauration réelle et second collaborateur (1.7.0-rc.8)
+
+Serveur de pré-production du client, accès SSH du propriétaire, scripts `ops/` de la version déployée.
+
+| # | Test | Résultat | Suite donnée |
+|---|---|---|---|
+| R1 | `ops/backup.sh`, déconnexion volontaire de Dropbox au portail, puis `ops/restore.sh` sur la sauvegarde | « OK : le hub a démarré avec les données restaurées. » ; Dropbox de nouveau « Connecté » sans reconnexion ; Claude répond | restauration vérifiée ; `ENCRYPTION_KEY` de la pré-production au coffre : à confirmer |
+| K1 | Essai d'un second collaborateur de la DSI | conforme (compte rendu du propriétaire) | périmètre détaillé à consigner lors des tests de la semaine du 09/11 |

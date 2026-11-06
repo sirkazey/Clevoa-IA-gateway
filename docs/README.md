@@ -5,7 +5,7 @@ source de vérité, les autres documents y renvoient.
 
 | Dossier | Public | Documents |
 |---|---|---|
-| `user/` | collaborateur | [guide utilisateur](user/guide-utilisateur.md) |
+| `user/` | collaborateur | [démarrage rapide](user/demarrage-rapide.md) (une page, le premier jour), [guide utilisateur](user/guide-utilisateur.md) |
 | `admin/` | administrateur | [installation](admin/installation.md), [configuration des connecteurs](admin/configuration.md), [SSO Entra ID](admin/sso-entra.md), [accès en ligne pour Claude](admin/acces-en-ligne.md), [Cloudflare (service managé)](admin/cloudflare.md), [exploitation](admin/exploitation.md), [sécurité](admin/securite.md) |
 | `developer/` | développeur | [architecture](developer/architecture.md), [écrire un connecteur](developer/connecteurs.md), [tests et analyses](developer/tests.md), [dépendances](developer/dependances.md), [contribuer](CONTRIBUTING.md), [reprise dans Claude Code](developer/reprise-claude-code.md) |
 | `validation/` | DSI, recette | [état des fonctionnalités et limites](validation/etat-des-fonctionnalites.md), [journal des tests réels](validation/journal-tests-reels.md), [campagne de charge v1.2.1](validation/charge-v1.2.1.md), [portail 1.4](validation/portail-v1.4.md) |

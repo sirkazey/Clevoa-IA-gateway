@@ -7,6 +7,21 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
+## [1.7.0] – 2026-11-06
+
+Version stable. Reprend les versions candidates 1.6.0-rc.1 et 1.7.0-rc.1 à rc.9 (détail ci-dessous), sans changement de
+code depuis la 1.7.0-rc.9. Première version stable depuis la 1.5.2.
+
+### Ajouté
+- Accès en ligne (expérimental, `CLOUDFLARE_TUNNEL=1`) : Claude web, bureau et mobile, et ChatGPT, par un tunnel Cloudflare sortant et la connexion Microsoft Entra relayée ; outil « mon compte et mes connexions ».
+- Lecture des documents SharePoint et Dropbox : Word, Excel, PowerPoint, PDF, pages de PDF scannés jointes en image ; recherche SharePoint sur tous les sites.
+- Connecteurs proposés au choix (`CONNECTORS_ENABLED`) ; présentation du serveur aux assistants (titre, description, logo, titres des outils).
+
+### Modifié
+- Portail : nouvelle identité Clevoa, prénom du collaborateur, parcours « Claude » en premier avec l'accès en ligne, configuration de l'instance retirée.
+- Documentation allégée d'un tiers ; procédures Cloudflare, Entra, Claude Team, ChatGPT et Dropbox vérifiées en réel.
+- Recette en pré-production le 06/11/2026 : cloisonnement, restauration, accès en ligne, lecture des documents ([journal](docs/validation/journal-tests-reels.md)).
+
 ## [1.7.0-rc.9] – 2026-11-06
 
 Version candidate issue du premier essai de ChatGPT par l'accès en ligne (journal G1–G4).

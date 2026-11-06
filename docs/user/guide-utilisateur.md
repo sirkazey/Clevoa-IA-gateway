@@ -4,6 +4,7 @@ Public : le collaborateur qui interroge Salesforce, Sage X3, SharePoint, Dropbox
 Objet : connecter ses comptes une fois sur le portail, brancher Claude, lire les réponses. Tout se fait **avec vos droits,
 en lecture seule**.
 
+Pour démarrer en trois étapes : [démarrage rapide](demarrage-rapide.md).
 ## 1. Connecter vos applications sur le portail
 
 1. Ouvrez l'adresse du portail donnée par votre service informatique (exemple : `https://mcp.<entreprise>.fr`). Avec le
@@ -33,8 +34,8 @@ Pour claude.ai, l'application de bureau et le téléphone, sans clé à copier :
 3. Connectez-vous avec votre compte Microsoft professionnel.
 
 S'il n'apparaît pas, demandez à l'administrateur Claude de l'ajouter
-([accès en ligne § 6](../admin/acces-en-ligne.md#6-claude--ajout-du-connecteur-par-lowner)). Libellés **à vérifier** au
-premier essai. L'autre onglet, **Clé personnelle**, sert aux usages techniques (voir plus bas).
+([accès en ligne § 6](../admin/acces-en-ligne.md#6-claude--ajout-du-connecteur-par-lowner)). Libellés **à vérifier**.
+L'autre onglet, **Clé personnelle**, sert aux usages techniques (voir plus bas).
 
 ### Onglet « Claude Desktop » (sans accès en ligne)
 

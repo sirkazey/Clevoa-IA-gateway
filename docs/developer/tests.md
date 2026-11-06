@@ -9,8 +9,8 @@ rapides pour la charge. Aucun outil n'est lancé contre un système réel.
 
 | Suite | Commande | Contenu |
 |---|---|---|
-| Hub, pré-production | `cd hub && npm test` | 181 tests `node:test` (180 exécutés, 1 réservé à la production) |
-| Hub, production | `cd hub && APP_ENV=production npm test` | même suite (179 exécutés, 2 réservés à la pré-production) |
+| Hub, pré-production | `cd hub && npm test` | 182 tests `node:test` (181 exécutés, 1 réservé à la production) |
+| Hub, production | `cd hub && APP_ENV=production npm test` | même suite (180 exécutés, 2 réservés à la pré-production) |
 | Backend Clevoa | `cd clevoa-backend && npm test` | 21 tests sans AWS : validation, séparation des clients, incidents, e-mails, silence, pannes de DynamoDB et SNS |
 | Console de suivi | `cd clevoa-console && npm test` | 7 tests sur données de démonstration : authentification, lecture seule, CSP, états et historique |
 | Bouchon, bout en bout | `cd clevoa-mcp-stub && npm test` | 11 tests : le vrai hub branché sur le bouchon (OAuth, SSO, PKCE, droits de Marie et Paul, télémétrie) |
