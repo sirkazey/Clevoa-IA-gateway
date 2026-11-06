@@ -187,3 +187,15 @@ d'un compte Claude Team (pas encore dans l'organisation) ; compte du propriétai
 
 Restent les critères 4 à 7 du [premier essai](../admin/acces-en-ligne.md#8-premier-essai--critères) : compte non affecté
 refusé, compte désactivé, deux collaborateurs, journal sans e-mail ni jeton.
+
+## 2026-11-06 · ChatGPT par l'accès en ligne (1.7.0-rc.8)
+
+Compte ChatGPT personnel (Plus), serveur MCP personnalisé, même application Entra que Claude ; questions limitées aux
+documents fictifs du compte Dropbox de test.
+
+| # | Test | Résultat | Suite donnée |
+|---|---|---|---|
+| G1 | « Connecter » | refusé : la règle WAF 1 bloquait `/.well-known/openid-configuration` (403), ChatGPT abandonne | règle 1 ouverte à tout `/.well-known/` ([runbook § 4](../admin/cloudflare.md#4-règles-de-sécurité-du-nom-dhôte)) |
+| G2 | « Connecter », page Microsoft ouverte | refusé sans trace au journal : secret mal recopié | 1.7.0-rc.9 : refus de `/token` et `/authorize` écrits au journal ; secret accepté en en-tête |
+| G3 | Liste et recherche Dropbox | dossier et 4 fichiers trouvés, sources citées | OK |
+| G4 | Lecture Word, Excel, PowerPoint ; PDF scanné | Office lus, incohérence entre deux documents relevée ; PDF scanné non exploité | Office : OK ; PDF scanné : limite de ChatGPT |

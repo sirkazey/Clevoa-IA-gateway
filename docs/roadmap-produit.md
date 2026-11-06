@@ -4,7 +4,7 @@ Public : direction, Clevoa, DSI cliente. Objet : sur quoi le produit évolue, et
 roadmap active ; les précédentes sont archivées ([octobre 2026](history/roadmap-2026-10.md)).
 
 État : aucune instance en production. Versions candidates 1.7.0 en pré-production chez le premier client depuis le
-05/11/2026 (version courante : 1.7.0-rc.8). Statut de chaque fonction : [état des fonctionnalités](validation/etat-des-fonctionnalites.md).
+05/11/2026 (version courante : 1.7.0-rc.9). Statut de chaque fonction : [état des fonctionnalités](validation/etat-des-fonctionnalites.md).
 
 ## 1. Cadre
 
@@ -38,7 +38,8 @@ Objectif : passer de « testé sur bouchon » à « disponible » chez le premie
 | Cloisonnement avec des comptes non administrateurs (Sage X3, Salesforce, SharePoint) | fait le 05/11/2026 (journal C1–C3) ; Dropbox à faire | un compte restreint ne voit que ses données, preuve consignée |
 | Authentification et révocation (jeton Salesforce, mot de passe Syracuse, SSO `entra`) | à faire | voyant rouge et message de reconnexion constatés sur chaque système |
 | Sauvegarde et restauration sur un serveur du client | à faire | une restauration réelle, puis une par trimestre |
-| Accès en ligne pour Claude (expérimental) | à faire | premier essai réel consigné ([critères](admin/acces-en-ligne.md#8-premier-essai--critères)) |
+| Accès en ligne pour Claude (expérimental) | premier essai réel le 06/11/2026 (journal O1–O4) ; critères 4 à 7 à faire | [critères](admin/acces-en-ligne.md#8-premier-essai--critères) tous consignés |
+| Tout dans Claude, sans portail pour le collaborateur (décision du 06/11/2026) : liens de connexion utilisables hors réseau (pages de connexion derrière Cloudflare Access et Entra), SharePoint par On-Behalf-Of, inscription automatique du connecteur (CIMD), connexion des systèmes par le SSO Microsoft quand ils le permettent | prévu (1.8) | un collaborateur hors réseau connecte Sage X3 depuis le lien donné par Claude, sans VPN ni portail |
 | Analyses de sécurité en CI sur chaque PR | fait | CI verte avant toute fusion |
 | Compatibilité MCP : Claude Desktop | fait | journal S13–S19 et F4–F5 (23/10/2026) |
 | Compatibilité MCP : Claude Code, ChatGPT, Copilot | à faire | une session réelle par assistant, consignée au journal |
@@ -53,7 +54,9 @@ Objectif : Clevoa sait quelles installations tournent, en quelle version et avec
 
 | Sujet | Statut | Critère de sortie |
 |---|---|---|
-| Télémétrie éditeur, e-mails d'incident, [console de suivi](../clevoa-console/README.md) | fait (tests sans AWS) ; déploiement AWS et installation de la console à faire | validation juridique ([sécurité § 4](admin/securite.md#4-télémétrie-clevoa)) ; premier incident réel reçu et visible dans la console |
+| Télémétrie éditeur, e-mails d'incident, [console de suivi](../clevoa-console/README.md) | fait (tests sans AWS), jamais déployé | validation juridique ([sécurité § 4](admin/securite.md#4-télémétrie-clevoa)) ; premier incident réel reçu et visible dans la console |
+| Services éditeur sur Cloudflare, aucun compte AWS (décision du 06/11/2026) : télémétrie en Worker et Cron Trigger, données en D1 (stockage en Europe), e-mails d'incident envoyés par le Worker, console derrière Cloudflare Access ; même API pour le hub (`CLEVOA_URL`) | prévu, après la 1.7.0 | tests du backend repris sur D1 ; offre gratuite suffisante vérifiée ; premier incident réel reçu |
+| Compte Cloudflare de Clevoa : il porte les tunnels des clients et les services éditeur | à faire avant le premier client en production | clé de sécurité physique pour chaque membre, membres réduits au strict nécessaire, journal d'audit relu ; procédure du [runbook § 8](admin/cloudflare.md#8-incident--compte-cloudflare-compromis-ou-doute) éprouvée |
 | État des systèmes sur le portail, supervision par `/metrics` | fait (tests sur bouchon) ; branchement chez le client à faire | un incident réel vu sur le portail et dans la supervision |
 | Diagnostic exportable, relu avant envoi | fait | test automatisé de l'absence de valeur sensible |
 | Versions figées, retour arrière | fait ; protection des tags `v*` à poser | [installation § 6](admin/installation.md#6-cycle-de-livraison-et-versions), `ops/test-rollback.sh` |

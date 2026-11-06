@@ -56,16 +56,21 @@ Sécurité → WAF → Règles personnalisées, action **Bloquer**, deux règles
 
    ```
    (http.host eq "<hote>" and not (lower(http.request.uri.path) in {"/mcp" "/token" "/authorize" "/favicon.ico" "/icon.png"}
-     or starts_with(lower(http.request.uri.path), "/.well-known/oauth-")))
+     or starts_with(lower(http.request.uri.path), "/.well-known/")))
    ```
-2. **`/mcp` et `/token` réservés au cloud d'Anthropic** :
+2. **`/mcp` et `/token` réservés au cloud d'Anthropic** (et à celui d'OpenAI si ChatGPT est utilisé) :
 
    ```
    (http.host eq "<hote>" and lower(http.request.uri.path) in {"/mcp" "/token"}
-     and not ip.src in {<plages d'Anthropic>})
+     and not ip.src in {<plages d'Anthropic>} and not ip.src in $openai_chatgpt)
    ```
 
-`/authorize` (navigateur du collaborateur), `/favicon.ico` et `/icon.png` (logo) et `/.well-known/oauth-…` restent ouverts.
+   `$openai_chatgpt` : liste IP du compte (Configurations → Listes), importée depuis
+   `https://openai.com/chatgpt-connectors.json` (288 plages le 27/10/2026, trop pour une expression limitée à 4 000
+   caractères) ; à supprimer de la règle si ChatGPT n'est pas utilisé, à rafraîchir à chaque publication d'OpenAI.
+
+`/authorize` (navigateur du collaborateur), `/favicon.ico` et `/icon.png` (logo) et `/.well-known/…` restent ouverts. ChatGPT demande d'abord `/.well-known/openid-configuration` et abandonne sur un
+403 ; le hub y répond 404 et ChatGPT poursuit avec les métadonnées OAuth (constaté le 06/11/2026).
 Plages d'Anthropic : prendre les adresses **sortantes** (relevées le 06/11/2026 : `160.79.104.0/21`, `153.61.208.0/20`).
 
 - [ ] « Bot Fight Mode » et blocage des robots d'IA **désactivés** pour ces noms (sinon Claude est bloqué), au besoin

@@ -121,7 +121,30 @@ Desktop » (`mcp-remote`) disparaît et la clé reste dans l'onglet « Clé pers
 
 Le hub annonce un titre (« Clevoa AI Gateway »), une description qui donne l'adresse du portail (où le collaborateur
 connecte ses applications), ce portail comme site (`websiteUrl`) et le logo Clevoa, intégré et par adresse https
-(`/icon.png`). Le 06/11/2026, Claude affichait une icône générique pour ce connecteur personnalisé.
+(`/icon.png`). Vérifié le 06/11/2026 (1.7.0-rc.8) : pour un connecteur personnalisé, Claude n'affiche que le nom saisi
+et l'URL, avec une icône générique ; ni logo, ni description, ni site. Les titres des 14 outils, eux, s'affichent.
+
+### ChatGPT (vérifié le 06/11/2026, compte personnel Plus)
+
+Même hub, même application Entra, même secret. Avant tout usage sur des données réelles : accord de la DSI et du DPO du
+client, et un abonnement ChatGPT d'entreprise (les données lues partent chez OpenAI).
+
+1. ChatGPT (web) → Plugins → **Ajouter** → **Ajouter un serveur MCP personnalisé** : nom `Clevoa – <client> (test)`,
+   description, icône (`https://<hote>/icon.png`), connexion « URL du serveur » `https://<hote>/mcp`, authentification
+   OAuth.
+2. **Paramètres OAuth avancés** : identifiants saisis (ni DCR, ni CIMD) ; identifiant = `ENTRAID_CLAUDE_CLIENT_ID`,
+   secret = `ENTRAID_CLAUDE_CLIENT_SECRET` copié depuis la stack (un secret mal recopié est refusé : journal
+   `[online] /token refusé (400) : invalid_client`) ; méthode `client_secret_post` (`client_secret_basic` accepté depuis
+   la 1.7.0-rc.9) ; portée par défaut `mcp` ; OIDC désactivé.
+3. Relever l'**URL de rappel** affichée (`https://chatgpt.com/connector/oauth/<id>`, stable pour un même compte) et
+   l'ajouter, avec `https://chatgpt.com/connector_platform_oauth_redirect`, dans Entra (plateforme Web) et dans
+   `ENTRAID_CLAUDE_REDIRECT_URIS`, à la suite de celle de Claude ; redéployer.
+4. Cloudflare : liste IP `openai_chatgpt` (plages de `https://openai.com/chatgpt-connectors.json`) ajoutée à la règle 2,
+   et règle 1 ouverte à tout `/.well-known/` ([runbook § 4](cloudflare.md#4-règles-de-sécurité-du-nom-dhôte)).
+5. **Connecter** → compte Microsoft.
+
+ChatGPT affiche le nom, la description et l'icône saisis. Constaté : Word, Excel et PowerPoint lus ; pages d'un PDF scanné
+non exploitées (Claude les lit).
 
 ## 7. Limites connues
 
