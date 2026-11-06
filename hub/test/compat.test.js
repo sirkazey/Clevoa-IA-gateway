@@ -77,11 +77,11 @@ test("Consignes : question sur un nom ou un document → tous les systèmes conn
 test("Outils : schéma d'entrée objet, description, annotation readOnlyHint sur chacun", async () => {
   const { body } = await rpc({ jsonrpc: "2.0", id: 2, method: "tools/list" });
   const tools = body.result.tools;
-  assert.equal(tools.length, 15);
+  assert.equal(tools.length, 16);
   for (const t of tools) {
     assert.match(t.name, /^[a-z0-9_]{1,64}$/, t.name);
     assert.ok(t.description?.length > 20, `${t.name} : description`);
-    assert.match(t.title ?? "", /^(Sage X3|Salesforce|SharePoint|Dropbox|MyReport) – \S/, `${t.name} : titre lisible`);
+    assert.match(t.title ?? "", /^(Sage X3|Salesforce|SharePoint|Dropbox|MyReport|Clevoa) – \S/, `${t.name} : titre lisible`);
     assert.equal(t.inputSchema.type, "object", `${t.name} : schéma objet`);
     assert.equal(t.annotations?.readOnlyHint, true, `${t.name} : lecture seule annoncée`);
   }
@@ -111,7 +111,7 @@ test("Reconnexion SSE : un client qui ferme puis rouvre sa session avec la même
   for (let i = 0; i < 3; i++) {
     const c = new Client({ name: "reconnexion", version: "1.0.0" });
     await c.connect(new SSEClientTransport(new URL(`${hub.url}/sse`), { requestInit: { headers: { Authorization: `Bearer ${KEY}` } } }));
-    assert.equal((await c.listTools()).tools.length, 15, `connexion ${i + 1}`);
+    assert.equal((await c.listTools()).tools.length, 16, `connexion ${i + 1}`);
     await c.close();
   }
 });

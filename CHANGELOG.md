@@ -17,6 +17,7 @@ Desktop depuis Dropbox et SharePoint, recherche SharePoint sur tous les sites v�
 - Consignes du serveur : une recherche vide ne prouve pas l'absence d'un document ; dire « introuvable par la recherche » et parcourir les dossiers probables.
 
 ### Ajouté
+- Outil « Clevoa – mon compte et mes connexions » (`clevoa_mon_compte`) : compte Microsoft utilisé, connexion de chaque système avec son lien, état du service (incident en cours), depuis l'assistant.
 - Présentation du connecteur : adresse du portail dans la description et comme site (`websiteUrl`) ; logo aussi par adresse https (`/icon.png`, à autoriser dans la règle WAF 1).
 
 ### Modifié

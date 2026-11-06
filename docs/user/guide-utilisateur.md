@@ -63,6 +63,8 @@ Votre clé ouvre tous vos outils connectés : ne la partagez jamais.
 
 ## 3. Poser des questions
 
+* « Avec quel compte suis-je connecté ? » ou « Qu'est-ce qui marche ? » : Claude indique votre compte Microsoft, les
+  applications connectées (avec le lien pour connecter les autres) et un éventuel incident en cours.
 * La section **Questions qui fonctionnent** du portail donne des exemples à copier d'un clic.
 * Chaque réponse se termine par **« Source : … »** (système, dossier ou environnement) : vérifiez d'où vient la donnée.
 * Si une application n'est pas connectée, Claude vous donne un lien vers la bonne ligne du portail. Connectez-vous,

@@ -149,6 +149,9 @@ test("/mcp : un collaborateur jamais passé par le portail reçoit une clé lié
   const me = await fetch(`${hub.url}/api/me`, { headers: { cookie: `mcp_key=${keys[0][0]}` } }).then((r) => r.json());
   assert.equal(me.name, "Paul", "sans revendication given_name, le portail affiche le nom complet");
   assert.equal(me.online, `${base}/mcp`, "accès en ligne actif : le portail présente le connecteur Claude et son adresse");
+  const acc = await rpc(paul, { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "clevoa_mon_compte", arguments: {} } });
+  const mine = JSON.parse(acc.body.result.content[0].text);
+  assert.deepEqual(mine.compte, { nom: "Paul", email: "paul@charlois.example", identification: "Microsoft Entra ID (simulé)" }, "Claude peut dire avec quel compte Microsoft le collaborateur est connecté");
 });
 
 test("/mcp refuse les jetons qui ne sont pas des jetons délégués d'Entra pour le connecteur Claude de ce locataire", async () => {

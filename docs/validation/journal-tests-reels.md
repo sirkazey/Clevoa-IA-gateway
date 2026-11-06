@@ -171,3 +171,19 @@ Reste à vérifier en réel : chiffres et dates d'un xlsx, texte d'un docx et d'
 ## Tests non encore réalisés
 
 Liste tenue à jour dans [l'état des fonctionnalités § 3](etat-des-fonctionnalites.md#3-tests-restant-à-réaliser).
+
+## 2026-11-06 · Accès en ligne (1.7.0-rc.7, Cloudflare, connecteur Claude)
+
+Tunnel Cloudflare et règles WAF du runbook sur un domaine de secours acheté chez Cloudflare (le changement de serveurs DNS
+du domaine prévu restait bloqué chez son registraire) ; connecteur personnalisé ajouté dans les connecteurs personnels
+d'un compte Claude Team (pas encore dans l'organisation) ; compte du propriétaire.
+
+| # | Test | Résultat | Suite donnée |
+|---|---|---|---|
+| O1 | Contrôles du runbook Cloudflare § 5 | métadonnées 200 ; `/mcp` sans jeton 401 ; portail 403 ; `/mcp` hors Anthropic 403 | OK |
+| O2 | Ajout du connecteur et « Connecter » sur claude.ai (critère 1) | connexion Microsoft relayée ; 13 outils rangés en « lecture seule », titres lisibles | OK ; secret client obligatoire bien que Claude le dise facultatif |
+| O3 | Application mobile (critères 2 et 3) | authentification demandée au premier usage, puis question Sage X3 et Salesforce servie, sources citées | OK |
+| O4 | Compte rattaché, logo | rien n'indique dans Claude le compte Microsoft utilisé ; icône générique | 1.7.0-rc.8 : outil `clevoa_mon_compte`, logo par adresse https |
+
+Restent les critères 4 à 7 du [premier essai](../admin/acces-en-ligne.md#8-premier-essai--critères) : compte non affecté
+refusé, compte désactivé, deux collaborateurs, journal sans e-mail ni jeton.

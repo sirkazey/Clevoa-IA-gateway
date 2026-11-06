@@ -33,7 +33,7 @@ Historique : [`CHANGELOG.md`](../../CHANGELOG.md). Évolutions : [roadmap produi
 |---|---|---|---|
 | Claude Desktop via `mcp-remote` | disponible | 23/10/2026, Windows | |
 | Claude Code, ChatGPT, Copilot | testé sur bouchon | tests de protocole seulement | une session réelle chacun, consignée au journal |
-| claude.ai web et mobile : accès en ligne (`CLOUDFLARE_TUNNEL=1`) | expérimental | `online.test.js`, Entra simulé ([guide](../admin/acces-en-ligne.md)) | premier essai réel ; avis du DPO ; test d'intrusion |
+| claude.ai web et mobile : accès en ligne (`CLOUDFLARE_TUNNEL=1`) | expérimental | 06/11/2026 (O1–O4) : connexion, web et mobile, un compte ; `online.test.js` ([guide](../admin/acces-en-ligne.md)) | critères 4 à 7 du premier essai ; avis du DPO ; test d'intrusion |
 | Protocole MCP 2024-10-07 à 2025-11-25, `readOnlyHint`, reconnexion SSE | testé sur bouchon | `compat.test.js` | |
 | Transports Streamable HTTP et SSE | disponible | tests hub, charge | |
 
@@ -80,7 +80,7 @@ Historique : [`CHANGELOG.md`](../../CHANGELOG.md). Évolutions : [roadmap produi
 * **Débit MCP** : 300 requêtes par minute et par clé.
 * **Charge** : mémoire stable sur 27 minutes (RSS ≤ 132 Mo), pas sur une journée ; quotas réels et 429 Graph non
   mesurés.
-* **claude.ai** : accès en ligne jamais essayé en réel ; un seul annuaire Entra ; Cloudflare voit les échanges en
+* **claude.ai** : accès en ligne essayé en réel le 06/11/2026 avec un seul compte (journal O1–O4) ; un seul annuaire Entra ; Cloudflare voit les échanges en
   clair.
 * **Documents** : 25 Mo par fichier, 200 000 caractères de texte. PDF scanné : pas de reconnaissance de caractères
   dans le hub, 5 pages en image par demande, qualité selon le scan, coût en usage Claude. Images, anciens formats Office
