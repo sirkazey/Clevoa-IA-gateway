@@ -58,10 +58,24 @@ test("Identité : nom d'instance, version du hub, titre, description, icônes, c
   assert.match(body.result.instructions, /Source : …/);
 });
 
+test("Consignes : question sur un nom ou un document → tous les systèmes connectés, Dropbox compris ; lecture par sharepoint_read et dropbox_read", async () => {
+  const { instructions } = (await init(LATEST_PROTOCOL_VERSION)).body.result;
+  assert.match(instructions, /sans nommer le système : chercher dans tous les systèmes connectés \(Salesforce, Sage X3, SharePoint, Dropbox, et MyReport s'il est pertinent\)/);
+  assert.match(instructions, /sharepoint_read avec l'itemId et le driveId/); assert.match(instructions, /dropbox_read avec l'id/);
+  const only = await startHub({ upstreamUrl: up.url, users: { [KEY]: connectedUser(up.url) }, env: { CONNECTORS_ENABLED: "sagex3,dropbox" } });
+  try {
+    const r = await fetch(`${only.url}/mcp`, { method: "POST", headers: { Authorization: `Bearer ${KEY}`, "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: LATEST_PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: "c", version: "1" } } }) }).then((x) => x.text());
+    const text = JSON.parse(r.split("\n").find((l) => l.startsWith("data: ")).slice(6)).result.instructions;
+    assert.match(text, /tous les systèmes connectés \(Sage X3, Dropbox\)/);
+    assert.doesNotMatch(text, /Salesforce :|salesforce_|SharePoint|sharepoint_|MyReport/, "seuls les connecteurs proposés sont cités");
+  } finally { await only.stop(); }
+});
+
 test("Outils : schéma d'entrée objet, description, annotation readOnlyHint sur chacun", async () => {
   const { body } = await rpc({ jsonrpc: "2.0", id: 2, method: "tools/list" });
   const tools = body.result.tools;
-  assert.equal(tools.length, 14);
+  assert.equal(tools.length, 15);
   for (const t of tools) {
     assert.match(t.name, /^[a-z0-9_]{1,64}$/, t.name);
     assert.ok(t.description?.length > 20, `${t.name} : description`);
@@ -95,7 +109,7 @@ test("Reconnexion SSE : un client qui ferme puis rouvre sa session avec la même
   for (let i = 0; i < 3; i++) {
     const c = new Client({ name: "reconnexion", version: "1.0.0" });
     await c.connect(new SSEClientTransport(new URL(`${hub.url}/sse`), { requestInit: { headers: { Authorization: `Bearer ${KEY}` } } }));
-    assert.equal((await c.listTools()).tools.length, 14, `connexion ${i + 1}`);
+    assert.equal((await c.listTools()).tools.length, 15, `connexion ${i + 1}`);
     await c.close();
   }
 });

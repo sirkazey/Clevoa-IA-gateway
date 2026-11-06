@@ -68,6 +68,8 @@ Votre clé ouvre tous vos outils connectés : ne la partagez jamais.
 * Si une application n'est pas connectée, Claude vous donne un lien vers la bonne ligne du portail. Connectez-vous,
   puis reposez la question.
 * Sage X3 : une question sur beaucoup de pièces est lente. Restreignez la période ou le périmètre.
+* Documents SharePoint et Dropbox : Claude lit les Word, Excel, PowerPoint et PDF. Un PDF scanné lui est transmis en
+  images, 5 pages à la fois : demandez la suite au besoin ; la lecture dépend de la qualité du scan.
 
 ## 4. Gérer votre clé et vos connexions
 

@@ -9,16 +9,41 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { z } from "zod";
 import { createHash } from "node:crypto";
+import * as docs from "./docs.js";
 
-/** Serveur MCP Dropbox simulé : 2 outils lecture + 1 outil d'écriture (qui ne doit jamais être atteignable via le hub). */
+/** Documents servis par Graph (/dl/<id>) et par l'API Dropbox (files/download) : contenus inventés, construits au démarrage.
+ *  size : taille annoncée dans les métadonnées (sinon celle du contenu). */
+const FILES = {
+  "01A": { name: "Budget 2026.xlsx", data: docs.xlsx({ shared: ["<t>Poste</t>", "<t>Montant</t>"], sheets: [{ name: "Budget", rows: [['<c r="A1" t="s"><v>0</v></c>', '<c r="B1" t="s"><v>1</v></c>'], ['<c r="A2" t="inlineStr"><is><t>Loyer</t></is></c>', '<c r="B2"><v>1200</v></c>']] }] }) },
+  "01C": { name: "notes.txt", data: new TextEncoder().encode("Hypothèses budget : croissance 4 %, EBITDA 12 %.") },
+  "01D": { name: "Note de synthèse.docx", data: docs.docx({ paragraphs: ["Synthèse &amp; perspectives", "Marge brute en hausse"], table: [["Indicateur", "Valeur"], ["Marge", "31 %"]] }) },
+  "01P": { name: "Rapport annuel.pdf", data: docs.pdf(["Rapport annuel fictif page un", "Perspectives page deux"]) },
+  "01S": { name: "Page blanche.pdf", data: docs.pdf([""]) },
+  "01K": { name: "Contrat scanne.pdf", data: docs.pdf(Array.from({ length: 7 }, (_, i) => ({ image: docs.scan(800, 1100, i + 1) }))) },
+  "01X": { name: "Archive.pdf", data: new TextEncoder().encode("%PDF-1.4 tronqué") },
+  "01G": { name: "Gros classeur.xlsx", data: new Uint8Array(10), size: 30 * 1024 * 1024 },
+  "01I": { name: "photo.png", data: new Uint8Array([0x89, 0x50, 0x4e, 0x47]) },
+};
+/** Fichiers Dropbox simulés : chemin → id de FILES. */
+const DBX = { "/Finance/Budget 2026.xlsx": "01A", "/Finance/Note de synthèse.docx": "01D", "/Finance/Rapport annuel.pdf": "01P", "/Finance/Gros classeur.xlsx": "01G", "/Finance/Contrat scanne.pdf": "01K" };
+
+/** Serveur MCP Dropbox simulé : outils de lecture, fetch (que le hub ne transmet pas) et un outil d'écriture (jamais atteignable via
+ *  le hub). La liste des outils est servie en deux pages (nextCursor), comme un serveur qui pagine. */
 function dropboxMcp() {
   const srv = new McpServer({ name: "dropbox-mock", version: "1.0.0" });
   srv.registerTool("who_am_i", { description: "Compte courant", inputSchema: {} }, async () => ({ content: [{ type: "text", text: "Alice Martin <alice@dropbox.example> (team Charlois)" }] }));
   srv.registerTool("list_folder", { description: "Liste un dossier", inputSchema: { path: z.string() } }, async ({ path }) =>
     path === "/Secret" ? { isError: true, content: [{ type: "text", text: "path/not_found: accès refusé" }] }
       : { content: [{ type: "text", text: JSON.stringify([{ name: "Budget 2026.xlsx", path: `${path}/Budget 2026.xlsx` }, { name: "Clôtures", path: `${path}/Clôtures`, folder: true }]) }] });
-  srv.registerTool("file_preview", { description: "Aperçu image", inputSchema: { path: z.string() } }, async () => ({ content: [{ type: "image", data: "iVBORw0KGgo=", mimeType: "image/png" }] }));
+  srv.registerTool("fetch", { description: "Contenu d'un fichier", inputSchema: { id: z.string() } }, async () => ({ content: [{ type: "text", text: "contenu" }] }));
   srv.registerTool("delete", { description: "Supprime (écriture)", inputSchema: { path: z.string() } }, async () => ({ content: [{ type: "text", text: "deleted" }] }));
+  srv.registerTool("search", { description: "Recherche", inputSchema: { query: z.string(), include_folders: z.boolean().optional() } }, async ({ query, include_folders }) =>
+    ({ content: [{ type: "text", text: JSON.stringify({ query, include_folders, results: [{ id: "id:dbx-01D", path_display: "/Finance/Note de synthèse.docx" }] }) }] }));
+  const list = srv.server._requestHandlers.get("tools/list"); // pagination simulée : 3 outils, puis le reste
+  srv.server._requestHandlers.set("tools/list", async (req, extra) => {
+    const { tools } = await list(req, extra);
+    return req.params?.cursor === "page-2" ? { tools: tools.slice(3) } : { tools: tools.slice(0, 3), nextCursor: "page-2" };
+  });
   return srv;
 }
 
@@ -163,14 +188,22 @@ export async function startUpstream() {
         return json(res, 200, { value: [it("01A", "Budget 2026.xlsx", false), it("01B", "Clôtures", true), it("01C", "notes.txt", false)] });
       }
       if (/\/root\/search\(q='/.test(path)) return json(res, 200, { value: [it("01A", "Budget 2026.xlsx", false)] });
-      m = path.match(/^\/v1.0\/(?:me\/drive|sites\/[^/]+\/drive)\/items\/(\w+)(\/content)?$/);
-      if (m && !m[2]) return json(res, 200, m[1] === "01B" ? it("01B", "Clôtures", true) : it(m[1], m[1] === "01A" ? "Budget 2026.xlsx" : "notes.txt", false));
+      if (path === "/v1.0/search/query" && req.method === "POST") { // Microsoft Search : tous les sites et le OneDrive de l'utilisateur
+        const q = JSON.parse(rawBody).requests[0];
+        const hit = (id, site, driveId) => ({ hitId: id, rank: 1, summary: "…", resource: { "@odata.type": "#microsoft.graph.driveItem", ...it(id, FILES[id].name, false), size: FILES[id].data.length,
+          webUrl: `https://sp.example/${site}/Documents/${encodeURIComponent(FILES[id].name)}`, parentReference: { driveId, siteId: "site-x" } } });
+        return json(res, 200, { value: [{ searchTerms: q.query.queryString.split(" "), hitsContainers: [{ total: 2, moreResultsAvailable: false,
+          hits: [hit("01D", "sites/Direction", "b!drive-direction"), hit("01P", "personal/alice_example_com", "b!drive-onedrive")] }] }] });
+      }
+      m = path.match(/^\/v1.0\/(?:me\/drive|sites\/[^/]+\/drive|drives\/[^/]+)\/items\/(\w+)(\/content)?$/);
+      if (m && !m[2]) return json(res, 200, m[1] === "01B" ? it("01B", "Clôtures", true) : FILES[m[1]] ? { ...it(m[1], FILES[m[1]].name, false), size: FILES[m[1]].size ?? FILES[m[1]].data.length } : it(m[1], "notes.txt", false));
       if (m && m[1] === "EVIL") { res.writeHead(302, { Location: "http://evil.example.invalid/steal" }); return res.end(); } // redirection hors Microsoft : doit être refusée
       if (m) { res.writeHead(302, { Location: `${base}/dl/${m[1]}` }); return res.end(); }
       return json(res, 404, { error: { code: "itemNotFound" } });
     }
     if (path.startsWith("/dl/")) { // URL de téléchargement pré-authentifiée (pas d'en-tête Authorization attendu)
-      if (path === "/dl/01A") { res.writeHead(200, { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }); return res.end("PK..."); }
+      const f = FILES[path.slice(4)];
+      if (f) { res.writeHead(200, { "Content-Type": "application/octet-stream" }); return res.end(f.data); }
       res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" }); return res.end("Hypothèses budget : croissance 4 %, EBITDA 12 %.");
     }
     // ---- Serveur MCP MyReport simulé (SSE) : GET /myreport/sse puis POST /myreport/messages?sessionId= ----
@@ -185,6 +218,19 @@ export async function startUpstream() {
       const t = sseSessions.get(query.sessionId);
       if (!t) return json(res, 404, { error: "session inconnue" });
       return t.handlePostMessage(req, res, JSON.parse(rawBody));
+    }
+    // ---- API HTTP Dropbox : métadonnées et téléchargement (lecture d'un fichier par dropbox_read) ----
+    if (path === "/2/files/get_metadata" || path === "/2/files/download") {
+      if (!bearer?.startsWith("dbx-token-")) return json(res, 401, { error_summary: "invalid_access_token/.." });
+      const arg = path.endsWith("download") ? req.headers["dropbox-api-arg"] : rawBody;
+      if (path.endsWith("download") && /[^\x20-\x7e]/.test(arg || "")) return json(res, 400, { error_summary: "Dropbox-API-Arg non ASCII" }); // exigence réelle de Dropbox
+      const p = JSON.parse(arg).path, id = p.startsWith("id:dbx-") ? p.slice(7) : DBX[p];
+      if (p === "/Finance") return json(res, 200, { ".tag": "folder", name: "Finance", path_display: "/Finance", id: "id:dbx-dir" });
+      if (!FILES[id]) return json(res, 409, { error_summary: "path/not_found/..", error: { ".tag": "path", path: { ".tag": "not_found" } } });
+      const f = FILES[id], name = Object.keys(DBX).find((k) => DBX[k] === id) ?? `/${f.name}`;
+      if (path.endsWith("metadata")) return json(res, 200, { ".tag": "file", name: f.name, path_display: name, id: `id:dbx-${id}`, size: f.size ?? f.data.length, server_modified: "2026-10-01T08:00:00Z" });
+      res.writeHead(200, { "Content-Type": "application/octet-stream", "Dropbox-API-Result": JSON.stringify({ name: f.name }).replace(/[^\x20-\x7e]/g, "?") });
+      return res.end(f.data);
     }
     // ---- Serveur MCP Dropbox simulé (Streamable HTTP, sans état) ----
     if (path === "/dropbox-mcp") {

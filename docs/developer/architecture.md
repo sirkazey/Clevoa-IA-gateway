@@ -54,6 +54,7 @@ quotidienne, conteneur `mcp-backup` ([exploitation § 4](../admin/exploitation.m
 | `store.js`, `crypto.js` | `users.json` chiffré (AES-256-GCM, `ENCRYPTION_KEY`), pseudonymes HMAC |
 | `cache.js` | structure des tables, par utilisateur, expirée à 03:00 |
 | `mcpclient.js` | client MCP des connecteurs proxy |
+| `extract.js`, `png.js` | texte des documents (Word, Excel, PowerPoint par `fflate`, PDF par `unpdf`) pour SharePoint et Dropbox ; pages de PDF scanné en PNG |
 | `db.js`, `admin.js` | `hub.db` (disponibilité, usage, audit) et sa lecture par l'administrateur |
 | `health.js` | état des systèmes : appels de la dernière heure, HEAD sans identifiant (lun-ven 7-19 h) |
 | `telemetry.js` | compteurs envoyés à Clevoa toutes les 6 h |
