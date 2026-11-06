@@ -3,8 +3,8 @@
 Pour l'administrateur qui branche les systèmes de l'entreprise sur le hub, connecteur par connecteur. Statuts :
 [état des fonctionnalités](../validation/etat-des-fonctionnalites.md) ; SSO du portail : [SSO Entra ID](sso-entra.md).
 
-Sage X3 et Salesforce sont vérifiés sur les vrais systèmes, SharePoint sur un locataire réel ; Dropbox et MyReport,
-testés sur bouchon seulement, ont des procédures « à vérifier ».
+Sage X3 et Salesforce sont vérifiés sur les vrais systèmes, SharePoint sur un locataire réel, Dropbox sur un compte
+personnel ; MyReport, testé sur bouchon seulement, a une procédure « à vérifier ».
 
 ## 0. Le fichier `.env` et les URI de rappel
 
@@ -171,8 +171,12 @@ Refaire les étapes dans l'org de production : nouvelle application, `SF_LOGIN_U
 ## 3. SharePoint / OneDrive (Microsoft Graph) — vérifié en pré-production (un compte)
 
 Application Entra ID à **permissions déléguées** : Graph répond avec les droits du collaborateur (dossier invisible
-pour lui = 403). Outils : `sharepoint_sites`, `sharepoint_list`, `sharepoint_search`, `sharepoint_read` (texte, csv,
-json ; métadonnées et lien pour les binaires).
+pour lui = 403). Outils : `sharepoint_sites`, `sharepoint_list`, `sharepoint_search`, `sharepoint_read`.
+
+* `sharepoint_search` sans `site` : Microsoft Search (`POST /search/query`, une recherche sans écriture), sur tous les
+  sites et le OneDrive que le collaborateur peut ouvrir, 25 résultats avec leur `driveId`. Avec `site` : ce site seul.
+* `sharepoint_read` (avec le `driveId` d'un résultat) lit Word, Excel, PowerPoint, PDF et les fichiers texte ; les
+  pages d'un PDF scanné sont jointes en image ([lecture des documents](#lecture-des-documents)). Testé sur bouchon.
 
 Création (libellés Entra **à vérifier**) :
 
@@ -195,22 +199,56 @@ SP_SITE=<hôte>.sharepoint.com:/sites/<site>
 ([installation § 4](installation.md#4-déploiement-avec-portainer-gitops)). Portail → Se connecter → Tester : `GET /me`
 sur Graph, vert avec votre identité.
 
-## 4. Dropbox (serveur MCP officiel) — à vérifier sur un vrai compte
+## 4. Dropbox — vérifié sur un compte personnel (06/11/2026)
 
-Le hub est client du serveur MCP officiel `https://mcp.dropbox.com/mcp` avec le jeton OAuth du collaborateur. Outils :
-`dropbox_tools` (liste blanche lecture seule) et `dropbox_call`. Les outils d'écriture (`create_*`, `move`, `copy`,
-`delete`) sont refusés avant tout appel.
+Le hub utilise le jeton OAuth du collaborateur ; Dropbox applique ses droits. Outils :
 
-Procédure attendue (libellés de l'App Console **à vérifier**) :
+* `dropbox_tools` et `dropbox_call` : serveur MCP officiel `https://mcp.dropbox.com/mcp`, liste blanche en lecture
+  (`who_am_i`, `list_folder`, `search`, `get_file_metadata`, `list_shared_links`, `get_shared_link_metadata`). Les
+  outils d'écriture sont refusés avant tout appel.
+* `dropbox_read` : lecture d'un fichier par son id ou son chemin, via l'API Dropbox (`files/get_metadata`, puis
+  `files/download` sur `https://content.dropboxapi.com`). Le serveur MCP officiel n'expose ni `fetch` ni
+  `file_preview` à une application tierce. Formats : [lecture des documents](#lecture-des-documents).
 
-1. https://www.dropbox.com/developers/apps → Create app → « Scoped access », « Full Dropbox » (ou « App folder »), nom.
-2. Permissions : `account_info.read`, `files.metadata.read`, `files.content.read`, `sharing.read`. Aucun scope d'écriture.
-3. Settings → OAuth 2 → Redirect URIs → `<PUBLIC_URL>/auth/dropbox/callback` ; relever App key et App secret.
-4. `.env` : `DROPBOX_APP_KEY`, `DROPBOX_APP_SECRET` (pré-production : aussi les trois URL réelles,
-   [installation § 4](installation.md#4-déploiement-avec-portainer-gitops)). Portail → Se connecter → Tester.
+Création de l'application (vérifiée le 06/11/2026 sur un compte personnel) :
 
-À confirmer au premier essai : `mcp.dropbox.com` accepte-t-il un jeton issu de votre propre app ? En cas de refus, le
-diagnostic l'affiche et le connecteur reste inactif sans effet sur les autres.
+1. https://www.dropbox.com/developers/apps → Create app → « Scoped access », « Full Dropbox », nom.
+2. Onglet Permissions : `account_info.read`, `files.metadata.read`, `files.content.read`, `sharing.read`, et rien
+   d'autre. **Aucune autorisation d'équipe** (`team_*`, `members.*`) : elles donnent accès aux fichiers de tous les
+   membres. OpenID est inutile.
+3. Onglet Settings → OAuth 2 :
+   * Redirect URIs : `<PUBLIC_URL>/auth/dropbox/callback` ;
+   * « Autoriser les clients publics » : **à activer**. Le hub envoie PKCE et Dropbox le refuse sinon
+     (« PKCE disallowed for this app »). Risque faible : l'adresse de retour est fixée.
+   * Ne pas utiliser « Générer un jeton d'accès » : chaque collaborateur se connecte depuis le portail.
+4. Relever App key et App secret ; `.env` : `DROPBOX_APP_KEY`, `DROPBOX_APP_SECRET`.
+5. Portail → Se connecter → Tester : la liste des outils s'affiche.
+
+Une application « en développement » n'accepte que son créateur. Pour les autres collaborateurs : « Activer des utilisateurs
+supplémentaires », ou « Demander à passer en production » (démarche **à vérifier**). En production, l'application est créée par
+l'administrateur de l'équipe Dropbox Business du client.
+
+Pré-production : renseigner les URL réelles `DROPBOX_AUTH_URL`, `DROPBOX_API_URL`, `DROPBOX_MCP_URL` et
+`DROPBOX_CONTENT_URL` ([installation § 4](installation.md#4-déploiement-avec-portainer-gitops)) ; vides, elles
+pointent vers le bouchon.
+
+### Lecture des documents
+
+`sharepoint_read` et `dropbox_read` renvoient le texte des documents, sans fichier temporaire :
+
+| Format | Rendu |
+|---|---|
+| Word (`.docx`) | paragraphes ; tableaux à une ligne par rangée, cellules séparées par des tabulations |
+| Excel (`.xlsx`) | une section par feuille ; une ligne par rangée ; valeur calculée des formules ; dates (jj/mm/aaaa) et pourcentages selon le format de la cellule, montants sans séparateur ni devise |
+| PowerPoint (`.pptx`) | une section par diapositive, avec les notes de l'orateur |
+| PDF avec texte | texte page par page (« --- Page 3 --- »), 300 pages et 20 s au plus |
+| PDF scanné | pages jointes en image à Claude, 5 par demande (argument `pages`, ex. `6-10`) |
+| Texte (`txt`, `csv`, `json`, `md`, `xml`…) | contenu UTF-8 |
+
+Le hub ne fait pas de reconnaissance de caractères : Claude lit l'image lui-même, la qualité dépend du scan et chaque
+page compte dans l'usage Claude. Les images (`png`, `jpg`), les anciens formats (`doc`, `xls`) et les PDF protégés par
+mot de passe ne sont pas lus : le résultat donne les métadonnées et le lien. Limites : fichier de 25 Mo, 60 Mo une
+fois décompressé, 200 000 caractères de texte, 4 Mo d'images par réponse.
 
 ## 5. MyReport (proxy MCP SSE) — serveur éditeur non livré
 

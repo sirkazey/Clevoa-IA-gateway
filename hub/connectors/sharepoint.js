@@ -1,14 +1,15 @@
 // Connecteur passif SharePoint / OneDrive : Microsoft Graph en délégué (jeton OAuth de l'utilisateur).
-// Lecture seule : uniquement des GET (sites, children, search, content). Graph applique les droits de
-// l'utilisateur : un dossier « Finance » qu'il ne voit pas dans SharePoint répond 403/404 ici aussi.
+// Lecture seule : des GET (sites, children, search, content) et un POST /search/query, qui est une recherche Microsoft Search
+// sans aucune écriture. Graph applique les droits de l'utilisateur : un dossier « Finance » qu'il ne voit pas dans SharePoint
+// répond 403/404 ici aussi, et la recherche ne renvoie que ce qu'il peut ouvrir.
 import { z } from "zod";
 import { unreachable } from "../mcpclient.js";
+import * as extract from "../extract.js";
 
 const LOGIN = (process.env.MS_LOGIN_URL || "https://login.microsoftonline.com").replace(/\/$/, "");
 const TENANT = process.env.MS_TENANT_ID || "common";
 const GRAPH = (process.env.GRAPH_URL || "https://graph.microsoft.com/v1.0").replace(/\/$/, "");
 const SITE = process.env.SP_SITE || ""; // site par défaut, ex. exemple.sharepoint.com:/sites/Finance (vide = OneDrive de l'utilisateur)
-const MAX_TEXT = 200_000;
 
 export const id = "sharepoint";
 export const label = "SharePoint";
@@ -35,10 +36,11 @@ function downloadUrl(location) {
   throw Object.assign(new Error(`SharePoint : redirection de téléchargement refusée vers ${l?.host || "une URL invalide"}`), { status: 502 });
 }
 
-async function get(tok, path, params = {}, raw = false) {
+async function get(tok, path, params = {}, raw = false, body) {
   const u = new URL(GRAPH + path);
   u.search = new URLSearchParams(params);
-  let r = await fetch(u, { headers: { Authorization: `Bearer ${tok.access_token}`, Accept: "application/json" }, redirect: "manual", signal: AbortSignal.timeout(30_000) }).catch((e) => { throw unreachable("SharePoint", u, e); });
+  const headers = { Authorization: `Bearer ${tok.access_token}`, Accept: "application/json", ...(body && { "Content-Type": "application/json" }) };
+  let r = await fetch(u, { method: body ? "POST" : "GET", headers, body: body && JSON.stringify(body), redirect: "manual", signal: AbortSignal.timeout(30_000) }).catch((e) => { throw unreachable("SharePoint", u, e); });
   if (r.status === 302) r = await fetch(downloadUrl(r.headers.get("location")), { signal: AbortSignal.timeout(30_000) }); // URL de téléchargement pré-authentifiée : jamais le jeton, hôte contrôlé
   if (!r.ok) throw Object.assign(new Error(`SharePoint ${r.status}: ${(await r.text()).slice(0, 300)}`), { status: r.status });
   return raw ? r : r.json();
@@ -47,6 +49,8 @@ async function get(tok, path, params = {}, raw = false) {
 /** Racine du lecteur : site SharePoint (id ou hostname:/sites/xxx) ou OneDrive de l'utilisateur. */
 const drive = (site = SITE) => (site ? `/sites/${site}${site.includes(":") ? ":" : ""}/drive` : "/me/drive");
 const item = (i) => ({ id: i.id, name: i.name, type: i.folder ? "dossier" : "fichier", size: i.size, modified: i.lastModifiedDateTime, webUrl: i.webUrl });
+/** Nom du site tiré de l'adresse du document (…/sites/Finance/…) ; OneDrive pour un espace personnel. */
+const siteName = (url = "") => { const m = /\/(?:sites|teams)\/([^/]+)\//.exec(url); return m ? decodeURIComponent(m[1]) : /\/personal\//.test(url) ? "OneDrive" : undefined; };
 
 export const identity = (tok) => get(tok, "/me").then((u) => u.mail || u.userPrincipalName);
 export const schema = async (tok) => ({ sites: (await get(tok, "/sites", { search: "*" })).value.map((s) => ({ id: s.id, name: s.displayName || s.name, webUrl: s.webUrl })) });
@@ -58,6 +62,7 @@ export async function ping(tok) {
 
 const siteArg = z.string().regex(/^(?!.*\.\.)[\w.,:/-]+$/).optional().describe("Site SharePoint (id Graph ou hostname:/sites/Nom) ; défaut : SP_SITE, sinon OneDrive");
 const pathArg = z.string().regex(/^(?!.*\.\.)[^#?]*$/).default("").describe("Chemin du dossier depuis la racine du lecteur");
+const pagesArg = z.string().regex(/^\d{1,4}(-\d{1,4})?$/).optional().describe(extract.PAGES_HELP);
 const encPath = (p) => p.replace(/^\/+|\/+$/g, "").split("/").map(encodeURIComponent).join("/");
 
 export const tools = [
@@ -78,22 +83,28 @@ export const tools = [
   },
   {
     name: "sharepoint_search", title: "SharePoint – rechercher des fichiers",
-    description: "Recherche de fichiers par mots-clés dans le site (ou OneDrive) avec les droits de l'utilisateur.",
-    input: { query: z.string(), site: siteArg },
-    run: async (tok, { query, site }) => (await get(tok, `${drive(site)}/root/search(q='${encodeURIComponent(query.replace(/'/g, "''"))}')`, { $top: 50 })).value.map(item),
+    description: "Recherche de fichiers par mots-clés avec les droits de l'utilisateur. Sans site : tous les sites SharePoint et le OneDrive qu'il peut ouvrir (Microsoft Search, 25 résultats) ; chaque résultat porte son driveId, à passer à sharepoint_read.",
+    input: { query: z.string().min(1).max(500), site: siteArg },
+    run: async (tok, { query, site }) => {
+      if (site) return (await get(tok, `${drive(site)}/root/search(q='${encodeURIComponent(query.replace(/'/g, "''"))}')`, { $top: 50 })).value.map(item);
+      const r = await get(tok, "/search/query", {}, false, { requests: [{ entityTypes: ["driveItem"], query: { queryString: query }, from: 0, size: 25 }] });
+      return (r.value ?? []).flatMap((v) => v.hitsContainers ?? []).flatMap((h) => h.hits ?? []).map(({ resource: i = {} }) =>
+        ({ ...item(i), driveId: i.parentReference?.driveId, site: siteName(i.webUrl) }));
+    },
   },
   {
     name: "sharepoint_read", title: "SharePoint – lire un fichier",
-    description: "Contenu texte d'un fichier (txt, csv, md, json, xml…) par son id. Les binaires renvoient leurs métadonnées.",
-    input: { itemId: z.string().regex(/^[\w!.-]+$/), site: siteArg },
-    run: async (tok, { itemId, site }) => {
-      const meta = item(await get(tok, `${drive(site)}/items/${itemId}`));
+    description: "Texte d'un fichier par son id : Word, Excel (une section par feuille), PowerPoint (une section par diapositive), PDF (page par page ; pages scannées jointes en image), texte (txt, csv, json…). Passer le driveId d'un résultat de sharepoint_search. Images et autres binaires : métadonnées et lien.",
+    input: { itemId: z.string().regex(/^[\w!.-]+$/), driveId: z.string().regex(/^[\w!.-]+$/).optional().describe("driveId d'un résultat de sharepoint_search (autre site ou OneDrive)"), site: siteArg, pages: pagesArg },
+    run: async (tok, { itemId, driveId, site, pages }) => {
+      const root = driveId ? `/drives/${driveId}` : drive(site);
+      const raw = await get(tok, `${root}/items/${itemId}`), meta = item(raw);
       if (meta.type === "dossier") throw new Error("C'est un dossier : utilisez sharepoint_list.");
-      const r = await get(tok, `${drive(site)}/items/${itemId}/content`, {}, true);
-      const ct = r.headers.get("content-type") || "";
-      if (!/^text\/|^application\/(json|xml|csv)\b|\+(json|xml)\b/.test(ct)) return { ...meta, contentType: ct, note: "Binaire (docx, xlsx, pdf…) : ouvrez webUrl." };
-      const text = await r.text();
-      return { ...meta, truncated: text.length > MAX_TEXT, text: text.slice(0, MAX_TEXT) };
+      const fmt = extract.format(meta.name, raw.file?.mimeType);
+      if (!fmt) return { ...meta, note: extract.unsupported(meta.name, meta.webUrl) };
+      extract.checkSize(meta.size ?? 0, meta.webUrl);
+      const data = await extract.readBody(await get(tok, `${root}/items/${itemId}/content`, {}, true), meta.webUrl);
+      return extract.toResult({ ...meta, ...(await extract.extract(data, fmt, meta.webUrl, pages)) });
     },
   },
 ];

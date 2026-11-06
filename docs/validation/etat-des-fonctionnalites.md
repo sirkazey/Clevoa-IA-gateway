@@ -1,6 +1,6 @@
 # État des fonctionnalités et limites connues
 
-Public : DSI, recette, direction. Objet : ce qui est vérifié en version 1.7.0-rc.6, ce qui reste à prouver avant la
+Public : DSI, recette, direction. Objet : ce qui est vérifié en version 1.7.0-rc.7, ce qui reste à prouver avant la
 production, et les limites connues.
 
 Les versions candidates 1.7.0 tournent depuis le 05/11/2026 sur le serveur de pré-production du client (1.7.0-rc.5 depuis le 06/11 ; Portainer, systèmes réels,
@@ -17,8 +17,11 @@ Historique : [`CHANGELOG.md`](../../CHANGELOG.md). Évolutions : [roadmap produi
 | Sage X3 24R1, identifiant et mot de passe Syracuse | disponible | pré-production, 23/10/2026 (S1–S19) | compte restreint ; production |
 | Sage X3, OAuth2 ou clé d'API `bearer` | testé sur bouchon | tests hub | un vrai IdP Syracuse |
 | Salesforce, SObject Reads | disponible (sandbox) | 23/10/2026 (F1–F6) | production ; expiration du JWT et rotation du refresh token ; compte restreint |
-| SharePoint / OneDrive (Graph délégué) | disponible (un compte) | 26/10 (E1–E8) et 05/11 (P5, P10) : connexion, liste des sites | lister, chercher, lire ; second collaborateur ; revue de `Files.Read.All` et `Sites.Read.All` |
-| Dropbox (serveur MCP officiel) | testé sur bouchon | tests hub | acceptation par `mcp.dropbox.com` d'un jeton d'app tierce |
+| SharePoint / OneDrive (Graph délégué) | disponible (un compte) | 26/10 (E1–E8) et 05/11 (P5, P10) : connexion, liste des sites | chercher, lire ; second collaborateur ; revue de `Files.Read.All` et `Sites.Read.All` |
+| SharePoint : recherche sur tous les sites (Microsoft Search), lecture Word, Excel, PowerPoint, PDF | testé sur bouchon | `docs.test.js`, `extract.test.js` | recherche sans site en réel (400 « Url specified is invalid » le 06/11 avec l'ancienne recherche) ; lecture réelle |
+| Dropbox (serveur MCP officiel, compte personnel) | disponible | 06/11/2026 (D1–D6) : connexion, 6 outils, recherche et liste | dossiers d'équipe Dropbox Business ; cloisonnement avec un compte du client |
+| Dropbox : lecture d'un fichier (`dropbox_read`, API `files/download`) | testé sur bouchon | `docs.test.js`, bouchon | lecture réelle d'un docx et d'un xlsx |
+| PDF scannés : pages jointes en image, lues par Claude | testé sur bouchon | `extract.test.js`, `docs.test.js` | **à vérifier en réel** : le client MCP doit transmettre les images au modèle |
 | MyReport (proxy MCP SSE) | testé sur bouchon | plomberie SSE et liste blanche | serveur de l'éditeur, non livré |
 | SSO Entra ID (`entra`) | disponible (un compte) | 26/10 (E5–E8), `sso.test.js` | deux collaborateurs réels ; compte invité |
 | Comptages exacts, listes coupées signalées (Salesforce, Sage X3) | testé sur bouchon | `mcp.test.js` | un comptage sur la sandbox ; `$links.$next` de Syracuse |
@@ -78,6 +81,9 @@ Historique : [`CHANGELOG.md`](../../CHANGELOG.md). Évolutions : [roadmap produi
   mesurés.
 * **claude.ai** : accès en ligne jamais essayé en réel ; un seul annuaire Entra ; Cloudflare voit les échanges en
   clair.
+* **Documents** : 25 Mo par fichier, 200 000 caractères de texte. PDF scanné : pas de reconnaissance de caractères
+  dans le hub, 5 pages en image par demande, qualité selon le scan, coût en usage Claude. Images, anciens formats Office
+  et PDF protégés par mot de passe non lus ([configuration](../admin/configuration.md#lecture-des-documents)).
 * **Tests réels** : une seule personne, un seul profil.
 
 ## 3. Tests restant à réaliser
@@ -88,8 +94,10 @@ Historique : [`CHANGELOG.md`](../../CHANGELOG.md). Évolutions : [roadmap produi
 | Expiration et renouvellement du jeton Salesforce (JWT ~ 2 h) | session ouverte plus de 2 h |
 | Révocation : mot de passe Syracuse changé, autorisation Salesforce révoquée | action volontaire sur chaque système |
 | Salesforce production | confirmation de l'intégrateur |
-| Dropbox sur un vrai compte | app Dropbox |
-| SharePoint : lister, chercher, lire ; second collaborateur | un collègue de la DSI |
+| Dropbox Business : dossiers d'équipe et cloisonnement avec un compte du client | application créée par l'administrateur de l'équipe Dropbox du client |
+| Lecture réelle d'un docx et d'un xlsx, sur SharePoint et sur Dropbox | documents de test fictifs |
+| Lecture réelle d'un contrat scanné (PDF) par Claude Desktop et par le connecteur en ligne : images transmises au modèle | PDF scanné de test |
+| SharePoint : chercher sans site (Microsoft Search), lire ; second collaborateur | un collègue de la DSI |
 | MyReport | serveur MCP de l'éditeur |
 | SSO Entra avec deux collaborateurs réels | un second compte du client |
 | Restauration sur un serveur du client (`sudo ops/restore.sh`) | accès au serveur, `ENCRYPTION_KEY` du coffre |

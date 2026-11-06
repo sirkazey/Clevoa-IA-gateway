@@ -6,7 +6,7 @@ métier d'une entreprise : Salesforce, Sage X3, SharePoint / OneDrive, Dropbox, 
 aucun compte technique.
 
 Édité par Clevoa SASU. Premier client : Groupe Charlois (direction financière). Qualification en cours sur sa
-pré-production ; aucune instance en production. Version courante : **1.7.0-rc.6** (`hub/version.js`).
+pré-production ; aucune instance en production. Version courante : **1.7.0-rc.7** (`hub/version.js`).
 
 ## Ce que fait la passerelle
 
@@ -34,8 +34,8 @@ des rôles : [architecture](docs/developer/architecture.md).
 |---|---|---|---|
 | Sage X3 24R1 | API REST Syracuse | `sagex3_representations`, `sagex3_describe`, `sagex3_query`, `sagex3_get` | disponible (pré-production) |
 | Salesforce | serveur MCP hébergé « SObject Reads » | `salesforce_tools`, `salesforce_call` | disponible (sandbox) |
-| SharePoint / OneDrive | Microsoft Graph (GET) | `sharepoint_sites`, `sharepoint_list`, `sharepoint_search`, `sharepoint_read` | disponible (pré-production, un compte) |
-| Dropbox | serveur MCP officiel | `dropbox_tools`, `dropbox_call` | testé sur bouchon |
+| SharePoint / OneDrive | Microsoft Graph, Microsoft Search | `sharepoint_sites`, `sharepoint_list`, `sharepoint_search`, `sharepoint_read` | disponible (pré-production, un compte) ; lecture des documents testée sur bouchon |
+| Dropbox | serveur MCP officiel, API `files/download` | `dropbox_tools`, `dropbox_call`, `dropbox_read` | disponible (compte personnel) ; lecture testée sur bouchon |
 | MyReport | serveur MCP SSE de l'éditeur | `myreport_tools`, `myreport_call` | testé sur bouchon (serveur éditeur non livré) |
 
 Détail, preuves et limites : [état des fonctionnalités](docs/validation/etat-des-fonctionnalites.md).

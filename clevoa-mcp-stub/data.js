@@ -71,6 +71,9 @@ export const DOCS = [
   { id: "01C", path: "Concours/podium-agility-2025.png", file: "podium-agility-2025.png", mime: "image/png" },
   { id: "01D", path: "Concours/podium-beaute-2024.png", file: "podium-beaute-2024.png", mime: "image/png" },
   { id: "01E", path: "Concours/inscrits-agility-2026.csv", file: "inscrits-agility-2026.csv", mime: "text/csv" },
+  { id: "01J", path: "Concours/rapport-agility-2025.docx", file: "rapport-agility-2025.docx", mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+  { id: "01K", path: "Concours/reglement-concours-2026.pdf", file: "reglement-concours-2026.pdf", mime: "application/pdf" },
+  { id: "01L", path: "Concours/contrat-scanne-2026.pdf", file: "contrat-scanne-2026.pdf", mime: "application/pdf" },
   { id: "01H", path: "Confidentiel", folder: true, restricted: true },
   { id: "01I", path: "Confidentiel/notes-tresorerie.txt", file: "notes-tresorerie.txt", mime: "text/plain", restricted: true },
 ];

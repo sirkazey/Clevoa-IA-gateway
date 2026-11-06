@@ -73,7 +73,7 @@ scripts `ops/`.
 
 * Microsoft (SharePoint et SSO) : `MS_LOGIN_URL=https://login.microsoftonline.com`, `GRAPH_URL=https://graph.microsoft.com/v1.0` ;
 * Dropbox : `DROPBOX_AUTH_URL=https://www.dropbox.com`, `DROPBOX_API_URL=https://api.dropboxapi.com`,
-  `DROPBOX_MCP_URL=https://mcp.dropbox.com/mcp` ;
+  `DROPBOX_MCP_URL=https://mcp.dropbox.com/mcp`, `DROPBOX_CONTENT_URL=https://content.dropboxapi.com` ;
 * Clevoa : `CLEVOA_URL` ;
 * Sage X3 : garder les lignes `SAGE_OAUTH_*` présentes et vides, sinon le portail propose l'IdP simulé du bouchon au
   lieu du formulaire Syracuse.

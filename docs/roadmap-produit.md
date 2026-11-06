@@ -4,7 +4,7 @@ Public : direction, Clevoa, DSI cliente. Objet : sur quoi le produit évolue, et
 roadmap active ; les précédentes sont archivées ([octobre 2026](history/roadmap-2026-10.md)).
 
 État : aucune instance en production. Versions candidates 1.7.0 en pré-production chez le premier client depuis le
-05/11/2026 (version courante : 1.7.0-rc.6). Statut de chaque fonction : [état des fonctionnalités](validation/etat-des-fonctionnalites.md).
+05/11/2026 (version courante : 1.7.0-rc.7). Statut de chaque fonction : [état des fonctionnalités](validation/etat-des-fonctionnalites.md).
 
 ## 1. Cadre
 
@@ -34,7 +34,7 @@ Objectif : passer de « testé sur bouchon » à « disponible » chez le premie
 
 | Sujet | Statut | Critère de sortie |
 |---|---|---|
-| Tests réels de SharePoint (list, search, read), Dropbox, MyReport | à faire | un appel réussi par outil sur un vrai compte, consigné au [journal](validation/journal-tests-reels.md) |
+| Tests réels de SharePoint (search, read), lecture Dropbox, MyReport | à faire | un appel réussi par outil sur un vrai compte, consigné au [journal](validation/journal-tests-reels.md) |
 | Cloisonnement avec des comptes non administrateurs (Sage X3, Salesforce) | à faire | un compte restreint ne voit que ses données, preuve consignée |
 | Authentification et révocation (jeton Salesforce, mot de passe Syracuse, SSO `entra`) | à faire | voyant rouge et message de reconnexion constatés sur chaque système |
 | Sauvegarde et restauration sur un serveur du client | à faire | une restauration réelle, puis une par trimestre |

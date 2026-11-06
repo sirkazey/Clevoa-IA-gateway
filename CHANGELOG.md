@@ -7,6 +7,20 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
+## [1.7.0-rc.7] – 2026-11-06
+
+Version candidate de lecture des documents, issue du test réel de Dropbox du 06/11/2026.
+
+### Ajouté
+- Lecture des Word, Excel (dates et pourcentages selon le format de la cellule), PowerPoint et PDF (`hub/extract.js`, dépendances `fflate` et `unpdf`) par `sharepoint_read` et le nouvel outil `dropbox_read` (API `files/download`, `DROPBOX_CONTENT_URL`).
+- PDF scannés : pages jointes en image PNG à Claude, 5 par appel (argument `pages`), sans reconnaissance de caractères dans le hub.
+- Garde-fous : 25 Mo par fichier avant téléchargement, 60 Mo décompressés, 300 pages et 20 s par PDF, 200 000 caractères, 4 Mo d'images.
+
+### Modifié
+- `sharepoint_search` sans `site` passe par Microsoft Search : tous les sites et le OneDrive visibles, avec le `driveId` de chaque résultat ; `sharepoint_read` accepte ce `driveId`.
+- Consignes du serveur : une question sur un nom ou un document sans système est cherchée dans tous les systèmes connectés, cités d'après `CONNECTORS_ENABLED`.
+- Dropbox : `fetch` et `file_preview` retirés de la liste blanche (absents pour une application tierce) ; liste des outils lue sur toutes les pages ; procédure de l'application réécrite.
+
 ## [1.7.0-rc.6] – 2026-11-06
 
 Version candidate de finition du portail et de la documentation, avant le premier essai de l'accès en ligne.

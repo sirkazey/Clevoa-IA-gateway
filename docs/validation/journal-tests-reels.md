@@ -119,6 +119,25 @@ du DSI, administrateur ; les deux comptes fictifs du bouchon pour le cloisonneme
 Non vérifié : retour arrière sous Portainer ; accès en ligne (tunnel, connecteur Claude) ; compte non administrateur ;
 lecture et recherche de documents SharePoint.
 
+## 2026-11-06 · Dropbox (compte personnel de test)
+
+Application Dropbox créée sur un compte personnel de test (trois documents fictifs), autorisations
+`account_info.read files.metadata.read files.content.read sharing.read`, hub de pré-production. Aucun
+compte Dropbox Business du client.
+
+| # | Test | Résultat | Suite donnée |
+|---|---|---|---|
+| D1 | Connexion depuis le portail | refusée tant que « Autoriser les clients publics » n'est pas activé (« PKCE disallowed for this app »), puis OK | [configuration § 4](../admin/configuration.md#4-dropbox--vérifié-sur-un-compte-personnel-06112026) |
+| D2 | Outils exposés par `mcp.dropbox.com` au jeton de l'application | 6 : `who_am_i`, `list_folder`, `search`, `get_file_metadata`, `list_shared_links`, `get_shared_link_metadata` | jeton d'une application tierce accepté |
+| D3 | Recherche et liste de dossier depuis Claude | résultats conformes aux droits du compte | OK |
+| D4 | `fetch` (lecture du contenu) | « unknown tool fetch » | 1.7.0-rc.7 : `dropbox_read` par l'API `files/download` |
+| D5 | `search` avec `include_folders` | argument refusé par le serveur Dropbox | le hub le transmet tel quel ; rien à corriger côté hub |
+| D6 | Question « informations sur <nom> » sans système | Claude n'a pas cherché dans Dropbox | 1.7.0-rc.7 : consignes du serveur, recherche dans tous les systèmes connectés |
+
+Même session, SharePoint : `sharepoint_search` sans site a répondu 400 « Url specified is invalid » (cause exacte non
+établie) ; 1.7.0-rc.7 passe par Microsoft Search. Lecture d'un docx ou xlsx : « Binaire : ouvrez webUrl » ; 1.7.0-rc.7
+extrait le texte.
+
 ## Tests non encore réalisés
 
 Liste tenue à jour dans [l'état des fonctionnalités § 3](etat-des-fonctionnalites.md#3-tests-restant-à-réaliser).
