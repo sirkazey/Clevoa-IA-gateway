@@ -9,29 +9,36 @@ Un conteneur Node 24, six dépendances directes ([dépendances](dependances.md))
 services.
 
 ```mermaid
-flowchart TB
-    D["Claude Desktop · Claude Code<br/>réseau interne ou VPN"]
-    M["claude.ai web · mobile<br/>hors réseau"]
-    C["Cloud Anthropic"]
-    T["Cloudflare · compte Clevoa<br/>WAF · tunnel"]
-    subgraph CH["Infrastructure du client · aucun port entrant"]
-        CD["cloudflared"]
-        P["mcp-hub port 8080<br/>portail · /mcp · /sse"]
-        O["mcp-hub port 8090<br/>OAuth relayé · /mcp"]
-        B["mcp-backup"]
-        X3["Sage X3 · MyReport"]
+flowchart LR
+    subgraph U["Collaborateurs"]
+        W["Claude<br/>web · bureau · mobile"]
+        D["Claude Code · Claude Desktop<br/>réseau interne"]
     end
-    SAAS["Entra ID · SharePoint<br/>Salesforce · Dropbox"]
-    CL["Clevoa : télémétrie,<br/>console de suivi"]
-    D -->|"MCP + clé personnelle"| P
-    M --> C -->|"MCP + jeton Entra"| T
-    T ---|"tunnel sortant"| CD --> O
-    B --- P
-    P --> X3
-    P --> SAAS
-    O -.->|"jetons relayés"| SAAS
-    P -.->|"compteurs, 6 h"| CL
+    T["Cloudflare<br/>WAF + tunnel"]
+    subgraph CL["Serveur du client · aucun port entrant"]
+        CD["cloudflared"]
+        H["Hub Clevoa<br/>8090 accès en ligne<br/>8080 portail"]
+    end
+    subgraph S["Systèmes · droits du collaborateur"]
+        X3["Sage X3 · MyReport"]
+        SA["Salesforce · SharePoint<br/>Dropbox"]
+    end
+    subgraph EXT["Services annexes"]
+        E["Microsoft Entra ID<br/>identité"]
+        CV["Clevoa<br/>compteurs anonymes"]
+    end
+
+    W -->|"jeton Entra"| T -->|"tunnel sortant"| CD --> H
+    D -->|"clé personnelle"| H
+    H ==>|"lecture seule"| X3
+    H ==>|"lecture seule"| SA
+    H -.-> E
+    H -.-> CV
 ```
+
+Les deux entrées mènent au même hub, aux mêmes outils et aux mêmes droits : le port 8090 (tunnel Cloudflare) identifie le
+collaborateur par son jeton Entra, le port 8080 (réseau interne) par sa clé personnelle. Non représentée : la sauvegarde
+quotidienne, conteneur `mcp-backup` ([exploitation § 4](../admin/exploitation.md#4-sauvegarde)).
 
 | Module (`hub/`) | Rôle |
 |---|---|
