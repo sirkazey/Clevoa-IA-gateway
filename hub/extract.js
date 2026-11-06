@@ -170,8 +170,9 @@ function xlsx(data) {
 }
 
 // ---------- PowerPoint : une section par diapositive (ordre de la présentation, sinon numérique), notes de l'orateur
-const drawing = (xml = "") => tidy(xml.replace(/<a:fld\b[\s\S]*?<\/a:fld>/g, "") // numéro de diapositive, date
-  .replace(/<a:t>([^<]*)<\/a:t>|<a:br\b[^>]*\/>|<\/a:p>|<[^>]+>/g, (m, t) => (t !== undefined ? decode(t) : m === "</a:p>" || m.startsWith("<a:br") ? "\n" : "")));
+// Seuls les textes <a:t>, sauts <a:br/> et fins de paragraphe sont gardés : rien d'autre du XML ne passe dans le résultat.
+const drawing = (xml = "") => tidy([...xml.replace(/<a:fld\b[\s\S]*?<\/a:fld>/g, "") // numéro de diapositive, date
+  .matchAll(/<a:t>([^<]*)<\/a:t>|<a:br\b[^>]*\/>|<\/a:p>/g)].map(([m, t]) => (t !== undefined ? decode(t) : "\n")).join(""));
 
 function pptx(data) {
   const files = unzip(data, (n) => /^ppt\/(presentation\.xml|_rels\/presentation\.xml\.rels|slides\/slide\d+\.xml|slides\/_rels\/slide\d+\.xml\.rels|notesSlides\/notesSlide\d+\.xml)$/.test(n));

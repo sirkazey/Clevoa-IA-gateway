@@ -2,7 +2,7 @@
 // Salesforce (REST + OAuth2), Microsoft (Entra + Graph), Dropbox (OAuth2 + serveur MCP Streamable HTTP),
 // Sage X3 Syracuse (REST + IdP OAuth2 / clé d'API / Basic), MyReport Server (serveur MCP SSE), Clevoa (télémétrie).
 import express from "express";
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHmac, randomBytes } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -13,6 +13,9 @@ import { authorizePage, approve, tokenEndpoint, bearerUser, sageUser, myreportUs
 
 const PORT = process.env.PORT || 4000;
 const FILES = new URL("./files/", import.meta.url);
+// Documents fictifs chargés une fois au démarrage : aucune lecture disque dans les routes.
+const FILE_CACHE = new Map(DOCS.filter((d) => d.file).map((d) => [d.file, readFileSync(new URL(d.file, FILES))]));
+const fileBytes = (name) => FILE_CACHE.get(name);
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false }));
@@ -93,7 +96,7 @@ app.get("/ms/:tenant/oauth2/v2.0/logout", (req, res) => { // fin de session Micr
   if (!back || !/^https?:$/.test(back.protocol)) return res.status(400).send("post_logout_redirect_uri invalide");
   res.redirect(back.href);
 });
-const docItem = (d, req) => ({ id: d.id, name: d.path.split("/").pop(), size: d.file ? statSync(new URL(d.file, FILES)).size : undefined, lastModifiedDateTime: "2026-10-01T08:00:00Z", webUrl: `${base(req)}/sharepoint/sites/Finance/${d.path}`, ...(d.folder ? { folder: { childCount: DOCS.filter((x) => x.path.startsWith(d.path + "/")).length } } : { file: { mimeType: d.mime } }) });
+const docItem = (d, req) => ({ id: d.id, name: d.path.split("/").pop(), size: d.file ? fileBytes(d.file).length : undefined, lastModifiedDateTime: "2026-10-01T08:00:00Z", webUrl: `${base(req)}/sharepoint/sites/Finance/${d.path}`, ...(d.folder ? { folder: { childCount: DOCS.filter((x) => x.path.startsWith(d.path + "/")).length } } : { file: { mimeType: d.mime } }) });
 const visible = (u) => DOCS.filter((d) => !d.restricted || USERS[u].confidentiel);
 app.use("/v1.0", (req, res) => {
   const u = bearerUser(req, "ms");
@@ -129,7 +132,7 @@ app.get("/dl/:id", (req, res) => {
   const d = DOCS.find((x) => x.id === req.params.id && x.file);
   if (!d) return res.sendStatus(404);
   if (req.query.sig !== sign(d.id)) return deny(res, 403, { error: "URL de téléchargement non signée ou expirée" });
-  res.type(d.mime).send(readFileSync(new URL(d.file, FILES)));
+  res.type(d.mime).send(fileBytes(d.file));
 });
 
 // ---------------------------------------------------------------- Dropbox (OAuth2 + serveur MCP officiel simulé)
@@ -138,7 +141,7 @@ app.post("/oauth2/token", tokenEndpoint("dbx"));
 const NS = "ns:4242"; // espace de noms d'équipe : les chemins renvoyés sont des ns_path, comme en vrai
 const norm = (p) => (p || "").replace(/^ns:\d+\/\//, "/").replace(/^id:(\w+)$/, (_, id) => "/" + (DOCS.find((d) => d.id === id)?.path ?? "?")).replace(/\/$/, "") || "/";
 const dbxFind = (u, p) => { const d = DOCS.find((x) => "/" + x.path === norm(p)); return !d ? null : d.restricted && !USERS[u].confidentiel ? "denied" : d; };
-const dbxSize = (d) => (d.file ? statSync(new URL(d.file, FILES)).size : undefined);
+const dbxSize = (d) => (d.file ? fileBytes(d.file).length : undefined);
 function dropboxMcp(u) {
   // Noms d'outils, arguments et formes de réponse alignés sur le serveur MCP officiel Dropbox (schémas relevés le 22/10/2026).
   // Comme le vrai serveur avec le jeton d'une application tierce (06/11/2026) : ni fetch ni file_preview.
@@ -190,7 +193,7 @@ app.post("/2/files/download", (req, res) => {
   let path; try { path = JSON.parse(arg).path; } catch { return res.status(400).type("text").send("Dropbox-API-Arg invalide"); }
   const d = dbxFind(u, path);
   if (!d || d === "denied" || d.folder) return dbxError(res, 409, d === "denied" ? "path/restricted_content/" : d ? "path/not_file/" : "path/not_found/");
-  res.set("Dropbox-API-Result", JSON.stringify({ name: d.path.split("/").pop(), id: `id:${d.id}` }).replace(/[^\x20-\x7e]/g, "?")).type("application/octet-stream").send(readFileSync(new URL(d.file, FILES)));
+  res.set("Dropbox-API-Result", JSON.stringify({ name: d.path.split("/").pop(), id: `id:${d.id}` }).replace(/[^\x20-\x7e]/g, "?")).type("application/octet-stream").send(fileBytes(d.file));
 });
 
 // ---------------------------------------------------------------- Sage X3 Syracuse (+ IdP OAuth2 générique)
