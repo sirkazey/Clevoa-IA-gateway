@@ -149,6 +149,9 @@ test("/mcp : un collaborateur jamais passé par le portail reçoit une clé lié
   const me = await fetch(`${hub.url}/api/me`, { headers: { cookie: `mcp_key=${keys[0][0]}` } }).then((r) => r.json());
   assert.equal(me.name, "Paul", "sans revendication given_name, le portail affiche le nom complet");
   assert.equal(me.online, `${base}/mcp`, "accès en ligne actif : le portail présente le connecteur Claude et son adresse");
+  const acc = await rpc(paul, { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "clevoa_mon_compte", arguments: {} } });
+  const mine = JSON.parse(acc.body.result.content[0].text);
+  assert.deepEqual(mine.compte, { nom: "Paul", email: "paul@charlois.example", identification: "Microsoft Entra ID (simulé)" }, "Claude peut dire avec quel compte Microsoft le collaborateur est connecté");
 });
 
 test("/mcp refuse les jetons qui ne sont pas des jetons délégués d'Entra pour le connecteur Claude de ce locataire", async () => {
@@ -173,7 +176,7 @@ test("/mcp refuse les jetons qui ne sont pas des jetons délégués d'Entra pour
   assert.match(h, /^[\x20-\x7e]+$/, "en-tête WWW-Authenticate en ASCII imprimable (RFC 6750) : Claude y lit resource_metadata pour se reconnecter");
 });
 
-test("Port public cloisonné : icône seulement ; ni portail, ni API du portail, ni SSE, ni supervision, ni diagnostic, ni départ OAuth des connecteurs", async () => {
+test("Port public cloisonné : icônes seulement ; ni portail, ni API du portail, ni SSE, ni supervision, ni diagnostic, ni départ OAuth des connecteurs", async () => {
   for (const path of ["/", "/index.html", "/favicon.svg", "/brand/clevoa-icone-app.svg", "/api/me", "/api/test/sagex3", "/sse", "/messages", "/metrics", "/metrics/prtg", "/auth/sso", "/auth/salesforce", "/register", "/revoke"]) {
     const r = await fetch(`${base}${path}`, noFollow);
     assert.equal(r.status, 404, `${path} : ${r.status}`);
@@ -183,6 +186,12 @@ test("Port public cloisonné : icône seulement ; ni portail, ni API du portail,
   assert.equal(ico.status, 200);
   assert.equal(ico.headers.get("content-type"), "image/x-icon");
   assert.deepEqual([...new Uint8Array(await ico.arrayBuffer()).slice(0, 4)], [0, 0, 1, 0], "fichier ICO");
+  const png = await fetch(`${base}/icon.png`);
+  assert.equal(png.status, 200); assert.equal(png.headers.get("content-type"), "image/png");
+  assert.deepEqual([...new Uint8Array(await png.arrayBuffer()).slice(1, 4)], [80, 78, 71], "logo PNG annoncé aux assistants");
+  const { body } = await rpc(entraToken(), { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "t", version: "1" } } });
+  assert.equal(body.result.serverInfo.icons[0].src, `${base}/icon.png`, "accès en ligne : logo par adresse https en premier, puis les icônes intégrées");
+  assert.equal(body.result.serverInfo.websiteUrl, hub.url, "site annoncé : le portail, où le collaborateur connecte ses applications");
   const h = (await fetch(`${base}/.well-known/oauth-authorization-server`)).headers;
   assert.equal(h.get("x-powered-by"), null);
   assert.equal(h.get("x-content-type-options"), "nosniff");

@@ -49,8 +49,9 @@ test("Négociation : une révision inconnue reçoit la plus récente du serveur 
 test("Identité : nom d'instance, version du hub, titre, description, icônes, capacité outils, consignes de citation de la source", async () => {
   const { body } = await init(LATEST_PROTOCOL_VERSION);
   const { icons, description, ...info } = body.result.serverInfo;
-  assert.deepEqual(info, { name: "client-test", version: VERSION, title: "Clevoa AI Gateway" });
-  assert.match(description, /^Accès en lecture seule, avec les droits de chaque collaborateur : .*Sage X3/);
+  assert.deepEqual(info, { name: "client-test", version: VERSION, title: "Clevoa AI Gateway", websiteUrl: hub.url });
+  assert.match(description, /^Accès en lecture seule à .*Sage X3.*, avec les droits de chaque collaborateur\. Première utilisation : connectez vos applications sur le portail http/);
+  assert.ok(description.endsWith(hub.url), "le lien du portail termine la description (aucun point collé à l'adresse)");
   assert.deepEqual(icons.map((i) => [i.mimeType, i.sizes]), [["image/svg+xml", ["any"]], ["image/png", ["256x256"]]]);
   for (const i of icons) assert.ok(i.src.startsWith(`data:${i.mimeType};base64,`) && i.src.length > 500, `icône ${i.mimeType} intégrée`);
   assert.ok(body.result.capabilities.tools);
@@ -62,6 +63,7 @@ test("Consignes : question sur un nom ou un document → tous les systèmes conn
   const { instructions } = (await init(LATEST_PROTOCOL_VERSION)).body.result;
   assert.match(instructions, /sans nommer le système : chercher dans tous les systèmes connectés \(Salesforce, Sage X3, SharePoint, Dropbox, et MyReport s'il est pertinent\)/);
   assert.match(instructions, /sharepoint_read avec l'itemId et le driveId/); assert.match(instructions, /dropbox_read avec l'id/);
+  assert.match(instructions, /Une recherche vide ne prouve pas qu.un document n.existe pas/, "jamais conclure à l.absence sur une recherche vide");
   const only = await startHub({ upstreamUrl: up.url, users: { [KEY]: connectedUser(up.url) }, env: { CONNECTORS_ENABLED: "sagex3,dropbox" } });
   try {
     const r = await fetch(`${only.url}/mcp`, { method: "POST", headers: { Authorization: `Bearer ${KEY}`, "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
@@ -75,11 +77,11 @@ test("Consignes : question sur un nom ou un document → tous les systèmes conn
 test("Outils : schéma d'entrée objet, description, annotation readOnlyHint sur chacun", async () => {
   const { body } = await rpc({ jsonrpc: "2.0", id: 2, method: "tools/list" });
   const tools = body.result.tools;
-  assert.equal(tools.length, 15);
+  assert.equal(tools.length, 16);
   for (const t of tools) {
     assert.match(t.name, /^[a-z0-9_]{1,64}$/, t.name);
     assert.ok(t.description?.length > 20, `${t.name} : description`);
-    assert.match(t.title ?? "", /^(Sage X3|Salesforce|SharePoint|Dropbox|MyReport) – \S/, `${t.name} : titre lisible`);
+    assert.match(t.title ?? "", /^(Sage X3|Salesforce|SharePoint|Dropbox|MyReport|Clevoa) – \S/, `${t.name} : titre lisible`);
     assert.equal(t.inputSchema.type, "object", `${t.name} : schéma objet`);
     assert.equal(t.annotations?.readOnlyHint, true, `${t.name} : lecture seule annoncée`);
   }
@@ -109,7 +111,7 @@ test("Reconnexion SSE : un client qui ferme puis rouvre sa session avec la même
   for (let i = 0; i < 3; i++) {
     const c = new Client({ name: "reconnexion", version: "1.0.0" });
     await c.connect(new SSEClientTransport(new URL(`${hub.url}/sse`), { requestInit: { headers: { Authorization: `Bearer ${KEY}` } } }));
-    assert.equal((await c.listTools()).tools.length, 15, `connexion ${i + 1}`);
+    assert.equal((await c.listTools()).tools.length, 16, `connexion ${i + 1}`);
     await c.close();
   }
 });

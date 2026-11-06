@@ -29,7 +29,7 @@ Statut : **expérimental**, désactivé par défaut (`CLOUDFLARE_TUNNEL=1` l'act
   Entra ID, qui authentifie (double authentification, accès conditionnel) et délivre les jetons.
 * Le hub vérifie chaque jeton : signature, émetteur, locataire, audience, application cliente, scope `mcp`, expiration.
 * Même identité que le [SSO du portail](sso-entra.md) (`oid` + locataire) : le collaborateur garde ses connexions.
-* Le port 8090 n'expose que les métadonnées, `/authorize`, `/token`, `/mcp`, `/health` et `/favicon.ico`.
+* Le port 8090 n'expose que les métadonnées, `/authorize`, `/token`, `/mcp`, `/health`, `/favicon.ico` et `/icon.png`.
 * Le portail (8080) refuse toute requête relayée par Cloudflare (403).
 
 ## 2. Prérequis
@@ -98,18 +98,30 @@ interne ne change pas. Supprimer ensuite le nom d'hôte public dans Cloudflare.
 
 ## 6. Claude : ajout du connecteur par l'Owner
 
-Paramètres de l'organisation → Connecteurs → Ajouter un connecteur personnalisé (libellés **à vérifier**) :
+Vérifié le 06/11/2026 sur Claude Team, en connecteur personnel. Trois rôles, une seule saisie technique :
 
-* nom : `Clevoa – <client>`, affiché tel quel aux collaborateurs ;
+| Qui | Quoi | Quand |
+|---|---|---|
+| Administrateur Entra | application de `ENTRAID_CLAUDE_CLIENT_ID` → Propriétés → **Affectation requise : Oui**, puis affecter les testeurs ou les groupes autorisés (libellés **à vérifier**) | avant tout ajout dans l'organisation : sinon tout membre peut se connecter |
+| Owner Claude | Paramètres de l'organisation → Connecteurs → Ajouter un connecteur personnalisé | une fois par environnement |
+| Collaborateur | Paramètres → Connecteurs → **Connecter** → compte Microsoft | une fois |
+
+Saisie de l'Owner (formulaire « Ajouter un connecteur personnalisé ») :
+
+* nom : `Clevoa – <client> (test)` en pré-production, `Clevoa – <client>` en production : les deux peuvent coexister ;
 * URL : `https://<client>.<domaine>/mcp` (chemin compris) ;
-* paramètres avancés : identifiant client = `ENTRAID_CLAUDE_CLIENT_ID`, secret client = `ENTRAID_CLAUDE_CLIENT_SECRET`.
+* authentification : « Se connecter maintenant » (détecté) ; client OAuth : « Utiliser votre propre client OAuth » (détecté),
+  identifiant = `ENTRAID_CLAUDE_CLIENT_ID`, secret = `ENTRAID_CLAUDE_CLIENT_SECRET` (**obligatoire**, bien que Claude
+  l'indique facultatif) ; aucun en-tête.
 
-Chaque collaborateur clique ensuite **Connecter** avec son compte Microsoft ; le connecteur le suit sur le web, le bureau
-et le mobile. Sur le portail, « Brancher votre assistant » s'ouvre alors sur l'onglet « Claude » ; l'onglet « Claude
+Pour un essai, l'ajouter d'abord dans ses propres connecteurs (Personnalisation → Connecteurs) : personne d'autre ne le
+voit. Le connecteur suit ensuite le collaborateur sur le web, le bureau et le mobile ; Claude range les outils en
+« lecture seule » et demande une approbation à chaque appel, réglable par l'utilisateur. Sur le portail, « Brancher votre assistant » s'ouvre alors sur l'onglet « Claude » ; l'onglet « Claude
 Desktop » (`mcp-remote`) disparaît et la clé reste dans l'onglet « Clé personnelle » ([guide](../user/guide-utilisateur.md)).
 
-Le hub annonce un titre (« Clevoa AI Gateway »), une description et le logo Clevoa ; Claude peut afficher une icône
-générique pour un connecteur personnalisé (à vérifier).
+Le hub annonce un titre (« Clevoa AI Gateway »), une description qui donne l'adresse du portail (où le collaborateur
+connecte ses applications), ce portail comme site (`websiteUrl`) et le logo Clevoa, intégré et par adresse https
+(`/icon.png`). Le 06/11/2026, Claude affichait une icône générique pour ce connecteur personnalisé.
 
 ## 7. Limites connues
 

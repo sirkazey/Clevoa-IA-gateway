@@ -88,6 +88,9 @@ test("SharePoint : Word, PDF, PDF scanné et PDF endommagé ; recherche sans sit
   assert.match(read.text, /^Synthèse & perspectives/);
   assert.deepEqual(up.requests("/items/01D").map((r) => r.path), ["/v1.0/drives/b!drive-direction/items/01D", "/v1.0/drives/b!drive-direction/items/01D/content"]);
   assert.ok(up.state.requests.every((r) => r.method === "GET" || r.path === "/v1.0/search/query"), "Graph : des GET, et le POST de recherche seulement");
+  const none = text(await c.callTool({ name: "sharepoint_search", arguments: { query: "déposé à l'instant" } }));
+  assert.deepEqual(none.results, []);
+  assert.match(none.note, /pas y être encore : parcourir les dossiers probables avec sharepoint_list avant de conclure/, "recherche vide : jamais une absence affirmée");
 });
 
 test("Dropbox : proxy MCP avec le Bearer de l'utilisateur, liste blanche lecture seule, droits Dropbox respectés", async () => {

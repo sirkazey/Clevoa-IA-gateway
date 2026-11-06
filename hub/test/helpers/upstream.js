@@ -190,6 +190,7 @@ export async function startUpstream() {
       if (/\/root\/search\(q='/.test(path)) return json(res, 200, { value: [it("01A", "Budget 2026.xlsx", false)] });
       if (path === "/v1.0/search/query" && req.method === "POST") { // Microsoft Search : tous les sites et le OneDrive de l'utilisateur
         const q = JSON.parse(rawBody).requests[0];
+        if (q.query.queryString === "déposé à l'instant") return json(res, 200, { value: [{ hitsContainers: [{ total: 0, moreResultsAvailable: false }] }] }); // pas encore indexé
         const hit = (id, site, driveId) => ({ hitId: id, rank: 1, summary: "…", resource: { "@odata.type": "#microsoft.graph.driveItem", ...it(id, FILES[id].name, false), size: FILES[id].data.length,
           webUrl: `https://sp.example/${site}/Documents/${encodeURIComponent(FILES[id].name)}`, parentReference: { driveId, siteId: "site-x" } } });
         return json(res, 200, { value: [{ searchTerms: q.query.queryString.split(" "), hitsContainers: [{ total: 2, moreResultsAvailable: false,

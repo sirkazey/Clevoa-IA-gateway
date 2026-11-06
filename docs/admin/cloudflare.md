@@ -55,7 +55,7 @@ Sécurité → WAF → Règles personnalisées, action **Bloquer**, deux règles
 1. **Chemins autorisés seulement** (casse comprise) :
 
    ```
-   (http.host eq "<hote>" and not (lower(http.request.uri.path) in {"/mcp" "/token" "/authorize" "/favicon.ico"}
+   (http.host eq "<hote>" and not (lower(http.request.uri.path) in {"/mcp" "/token" "/authorize" "/favicon.ico" "/icon.png"}
      or starts_with(lower(http.request.uri.path), "/.well-known/oauth-")))
    ```
 2. **`/mcp` et `/token` réservés au cloud d'Anthropic** :
@@ -65,7 +65,8 @@ Sécurité → WAF → Règles personnalisées, action **Bloquer**, deux règles
      and not ip.src in {<plages d'Anthropic>})
    ```
 
-`/authorize` (navigateur du collaborateur), `/favicon.ico` (logo) et `/.well-known/oauth-…` restent ouverts.
+`/authorize` (navigateur du collaborateur), `/favicon.ico` et `/icon.png` (logo) et `/.well-known/oauth-…` restent ouverts.
+Plages d'Anthropic : prendre les adresses **sortantes** (relevées le 06/11/2026 : `160.79.104.0/21`, `153.61.208.0/20`).
 
 - [ ] « Bot Fight Mode » et blocage des robots d'IA **désactivés** pour ces noms (sinon Claude est bloqué), au besoin
       par une règle « Ignorer » (à vérifier).

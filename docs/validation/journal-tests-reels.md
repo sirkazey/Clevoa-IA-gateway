@@ -6,9 +6,9 @@ Document de validation : il consigne ce qui a été **réellement exécuté** co
 Chaque entrée dit ce qui a été exécuté contre les systèmes Charlois, avec quel résultat, et ce que le hub a dû corriger. Les tests automatisés (hub, bouchon, backend Clevoa, scénario CI de sauvegarde et restauration ; [inventaire](../developer/tests.md))
 tournent à chaque commit ; ils ne sont pas listés ici.
 
-Compte utilisé pour tous les tests : le DSI du Groupe Charlois, profil **administrateur** sur chaque système testé.
-Conséquence : le cloisonnement (un utilisateur restreint ne voit que ses données) n'est pas encore prouvé sur les vrais
-systèmes. C'est le test manquant prioritaire.
+Compte utilisé pour la plupart des tests : le DSI du Groupe Charlois, profil **administrateur** sur chaque système testé.
+Cloisonnement : vérifié le 05/11/2026 avec un compte collaborateur non administrateur (entrée C1–C3) sur Sage X3,
+Salesforce et SharePoint ; Dropbox reste à vérifier avec un compte de l'équipe Dropbox Business du client.
 
 ## 2026-10-23 · Sage X3 préproduction (4CAD Cloud, Syracuse 24R1)
 
@@ -119,6 +119,22 @@ du DSI, administrateur ; les deux comptes fictifs du bouchon pour le cloisonneme
 Non vérifié : retour arrière sous Portainer ; accès en ligne (tunnel, connecteur Claude) ; compte non administrateur ;
 lecture et recherche de documents SharePoint.
 
+## 2026-11-05 · Cloisonnement avec un compte non administrateur (1.7.0-rc.3)
+
+Une collaboratrice de la DSI, compte **non administrateur** sur chaque système, connectée au portail par le SSO Entra
+avec sa propre identité, puis à Sage X3 et Salesforce avec ses propres comptes ; Claude Desktop par clé. Compte rendu
+du propriétaire.
+
+| # | Test | Résultat | Suite donnée |
+|---|---|---|---|
+| C1 | Sage X3 : questions sur les données du dossier de pré-production | réponses limitées à ses droits Syracuse | OK |
+| C2 | Salesforce (sandbox) : questions sur les comptes et opportunités | réponses limitées à ses droits Salesforce | OK |
+| C3 | SharePoint : dossiers du site de la DSI réservés au propriétaire | non visibles pour elle | OK |
+
+Depuis la rc.3, les mêmes jetons personnels portent les nouveaux chemins (recherche Microsoft Search, lecture par
+`driveId`, `dropbox_read`) ; Graph et Dropbox appliquent les droits du jeton. À refaire sur la version finale : une
+recherche SharePoint sans site, puis la lecture d'un fichier réservé, avec le même compte (cinq minutes).
+
 ## 2026-11-06 · Dropbox (compte personnel de test)
 
 Application Dropbox créée sur un compte personnel de test (trois documents fictifs), autorisations
@@ -138,6 +154,36 @@ Même session, SharePoint : `sharepoint_search` sans site a répondu 400 « Url 
 établie) ; 1.7.0-rc.7 passe par Microsoft Search. Lecture d'un docx ou xlsx : « Binaire : ouvrez webUrl » ; 1.7.0-rc.7
 extrait le texte.
 
+## 2026-11-06 · Lecture des documents (1.7.0-rc.7, Claude Desktop par clé)
+
+Mêmes comptes de test ; un contrat scanné de 19 pages (PDF image, tableaux), fourni par le propriétaire, déposé dans
+Dropbox et sur un site SharePoint de test. Le document n'est pas versionné ; aucun extrait n'en est consigné ici.
+
+| # | Test | Résultat | Suite donnée |
+|---|---|---|---|
+| L1 | Dropbox : lecture du contrat scanné par `dropbox_read` | pages jointes en image, lues par Claude (résumé, montants, durée, résiliation) | **images transmises au modèle par Claude Desktop** : vérifié |
+| L2 | SharePoint : `sharepoint_search` sans site | résultats sur plusieurs sites (Microsoft Search) ; plus de 400 | OK |
+| L3 | SharePoint : `sharepoint_list`, `sharepoint_read` d'un fichier texte et du contrat scanné | lus ; mêmes pages qu'en Dropbox | OK |
+| L4 | SharePoint : recherche d'un fichier déposé une minute plus tôt | non trouvé (index Microsoft Search en retard) ; Claude a conclu à tort à son absence | 1.7.0-rc.8 : note sur recherche vide, consigne « introuvable par la recherche » |
+
+Reste à vérifier en réel : chiffres et dates d'un xlsx, texte d'un docx et d'un pptx, comparés par le testeur.
+
 ## Tests non encore réalisés
 
 Liste tenue à jour dans [l'état des fonctionnalités § 3](etat-des-fonctionnalites.md#3-tests-restant-à-réaliser).
+
+## 2026-11-06 · Accès en ligne (1.7.0-rc.7, Cloudflare, connecteur Claude)
+
+Tunnel Cloudflare et règles WAF du runbook sur un domaine de secours acheté chez Cloudflare (le changement de serveurs DNS
+du domaine prévu restait bloqué chez son registraire) ; connecteur personnalisé ajouté dans les connecteurs personnels
+d'un compte Claude Team (pas encore dans l'organisation) ; compte du propriétaire.
+
+| # | Test | Résultat | Suite donnée |
+|---|---|---|---|
+| O1 | Contrôles du runbook Cloudflare § 5 | métadonnées 200 ; `/mcp` sans jeton 401 ; portail 403 ; `/mcp` hors Anthropic 403 | OK |
+| O2 | Ajout du connecteur et « Connecter » sur claude.ai (critère 1) | connexion Microsoft relayée ; 13 outils rangés en « lecture seule », titres lisibles | OK ; secret client obligatoire bien que Claude le dise facultatif |
+| O3 | Application mobile (critères 2 et 3) | authentification demandée au premier usage, puis question Sage X3 et Salesforce servie, sources citées | OK |
+| O4 | Compte rattaché, logo | rien n'indique dans Claude le compte Microsoft utilisé ; icône générique | 1.7.0-rc.8 : outil `clevoa_mon_compte`, logo par adresse https |
+
+Restent les critères 4 à 7 du [premier essai](../admin/acces-en-ligne.md#8-premier-essai--critères) : compte non affecté
+refusé, compte désactivé, deux collaborateurs, journal sans e-mail ni jeton.

@@ -27,6 +27,7 @@ const TENANT = process.env.MS_TENANT_ID || "";
 const SCOPE = "mcp"; // scope exposé par l'inscription Entra (« Exposer une API ») : api://<ONLINE_CLIENT_ID>/mcp
 const ENTRA_SCOPES = [`api://${CLIENT_ID}/${SCOPE}`, "offline_access"]; // demandés à Entra quoi qu'envoie l'assistant
 export const MCP_URL = `${BASE}/mcp`; // adresse à saisir dans Claude, affichée par le portail
+export const ICON_URL = `${BASE}/icon.png`; // logo annoncé aux assistants par adresse https (en plus des icônes intégrées)
 const ISSUER = `${LOGIN}/${TENANT}/v2.0`; // jetons d'accès v2 (requestedAccessTokenVersion = 2 dans le manifeste)
 
 if (ENABLED) {
@@ -112,6 +113,7 @@ export function keyFor({ oid, tid, upn, name, given }) {
 }
 
 const FAVICON = readFileSync(new URL("./public/favicon.ico", import.meta.url));
+const ICON = readFileSync(new URL("./public/brand/clevoa-icone-app-256.png", import.meta.url));
 const SECURITY_HEADERS = { "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY",
   "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'", "Cache-Control": "no-store" };
 
@@ -141,6 +143,7 @@ export function app(mcp) {
   a.get("/health", (_req, res) => res.json({ ok: true }));
   // Icône du nom public, pour les assistants qui la cherchent à la racine du domaine (chemin autorisé par la règle WAF 1).
   a.get("/favicon.ico", (_req, res) => res.type("image/x-icon").set("Cache-Control", "public, max-age=86400").send(FAVICON));
+  a.get("/icon.png", (_req, res) => res.type("image/png").set("Cache-Control", "public, max-age=86400").send(ICON));
   a.use((_req, res) => res.status(404).json({ error: "introuvable" }));
   return a;
 }
