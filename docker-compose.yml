@@ -75,6 +75,7 @@ services:
       ONLINE_CLIENT_SECRET: ${ENTRAID_CLAUDE_CLIENT_SECRET:-} # secret de cette application réservé à Claude
       ONLINE_REDIRECT_URIS: ${ENTRAID_CLAUDE_REDIRECT_URIS:-} # vide = https://claude.ai/api/mcp/auth_callback (web, bureau, mobile)
       ONLINE_TRUST_PROXY: ${CLOUDFLARE_TRUST_PROXY:-1}        # cloudflared devant le port 8090
+      ONLINE_CIMD_CLIENTS: ${ENTRAID_CIMD_CLIENTS:-}          # inscription automatique (CIMD, 1.8, expérimental) : vide = désactivé ; on = Claude et ChatGPT
     networks: [default, tunnel]   # tunnel : réseau partagé avec cloudflared seul
     volumes:
       - mcp-data:/data   # users.json : jetons OAuth par utilisateur ; hub.db : historique, compteurs, audit (1.5)

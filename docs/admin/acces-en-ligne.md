@@ -170,3 +170,85 @@ Faire d'abord les contrôles du [runbook Cloudflare § 5](cloudflare.md#5-contr�
 | 5 | Compte désactivé dans Entra | plus d'accès après environ une heure |
 | 6 | Deux collaborateurs | chacun ses données ; « Déconnecter » l'un ne touche pas l'autre |
 | 7 | Journal du hub | aucune adresse e-mail ni jeton (`eyJ`) |
+
+## 9. Inscription automatique (CIMD), 1.8, expérimental
+
+Objet : ajouter le connecteur dans Claude ou ChatGPT avec **son URL seule**, sans saisir d'identifiant ni de secret.
+Statut : **expérimental**, désactivé par défaut, testé sur bouchon seulement (`hub/test/online-cimd.test.js`).
+
+### Principe
+
+L'assistant se présente par l'adresse https d'un document qu'il publie (CIMD : *Client ID Metadata Document*,
+[spécification MCP 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#client-id-metadata-documents)).
+Le hub :
+
+1. n'accepte que les adresses de sa **liste blanche** (`ENTRAID_CIMD_CLIENTS`), comparées à l'identique ;
+2. récupère le document en https seulement : sans redirection, en 5 s et 5 Ko au plus, jamais vers une adresse IP privée
+   ou de boucle locale ; le garde en cache selon `Cache-Control` (une heure au plus), jamais en cas d'erreur ;
+3. retient les adresses de retour présentes **à la fois** dans le document et dans la liste connue du hub (celle de
+   l'assistant, intégrée, ou `ENTRAID_CLAUDE_REDIRECT_URIS`) ;
+4. traite l'assistant en **client public** : aucun secret, PKCE S256 obligatoire ;
+5. reçoit lui-même la réponse d'Entra sur `https://<hote>/oauth/callback`, puis renvoie à l'assistant **son propre
+   code** : à usage unique, valable 5 minutes, lié à l'assistant, à son adresse de retour, au PKCE et au navigateur qui a
+   commencé la connexion (témoin `HttpOnly`) ;
+6. échange ensuite ce code auprès d'Entra avec **son** inscription et **son** secret. Les jetons restent ceux d'Entra ;
+   le hub n'en délivre aucun.
+
+Le client préenregistré (identifiant et secret saisis) reste accepté. Quand CIMD est actif, il passe lui aussi par
+`/oauth/callback`.
+
+### Assistants reconnus
+
+`ENTRAID_CIMD_CLIENTS=on` admet les deux documents ci-dessous, relevés le 06/11/2026 :
+
+| Assistant | Document (`client_id`) | Adresse de retour admise | Source |
+|---|---|---|---|
+| Claude (web, bureau, mobile, Cowork) | `https://claude.ai/oauth/mcp-oauth-client-metadata` | `https://claude.ai/api/mcp/auth_callback` | document lu le 06/11/2026 ; adresse non citée par la [documentation d'Anthropic](https://claude.com/docs/connectors/building/authentication) : **à vérifier** au premier essai |
+| ChatGPT | `https://chatgpt.com/oauth/client.json` | `https://chatgpt.com/connector_platform_oauth_redirect` | [documentation d'OpenAI](https://developers.openai.com/plugins/build/auth) et document lu le 06/11/2026 |
+
+Claude Code (`https://claude.ai/oauth/claude-code-client-metadata`) est exclu : son adresse de retour est une boucle
+locale (`http://localhost/callback`), que tout programme du poste peut usurper.
+
+### Mise en place
+
+1. Entra ID, application de `ENTRAID_CLAUDE_CLIENT_ID` → Authentification → plateforme *Web* : ajouter l'URI de
+   redirection `https://<hote>/oauth/callback` (libellés **à vérifier**). Les adresses de Claude et de ChatGPT peuvent
+   rester ; elles ne servent plus.
+2. Cloudflare, [règle 1](cloudflare.md#4-règles-de-sécurité-du-nom-dhôte) : ajouter `"/oauth/callback"` à la liste des
+   chemins autorisés. Ne **pas** l'ajouter à la règle 2 : c'est le navigateur du collaborateur qui l'appelle, comme
+   `/authorize`.
+3. Stack : `ENTRAID_CIMD_CLIENTS=on`, puis *Update the stack*. Le journal contient `[online] inscription automatique
+   (CIMD, expérimental) : …` et l'adresse de retour à enregistrer.
+4. Contrôle : `curl -s https://<hote>/.well-known/oauth-authorization-server` contient
+   `"client_id_metadata_document_supported":true`.
+5. Claude : « Ajouter un connecteur personnalisé », URL seule, sans identifiant ni secret (option « Utiliser l'identité
+   publiée de Claude »). ChatGPT : connexion OAuth, option CIMD.
+
+| Variable | Valeur |
+|---|---|
+| `ENTRAID_CIMD_CLIENTS` | vide ou `0` : désactivé (comportement 1.7) ; `on` : Claude et ChatGPT ; sinon les adresses https des documents, séparées par des virgules |
+
+Dans le conteneur, le hub la lit sous le nom `ONLINE_CIMD_CLIENTS`. `ONLINE_CIMD_ALLOW_LOOPBACK=1` (documents en `http`
+sur `127.0.0.1`) ne sert qu'aux tests ; le hub refuse de démarrer avec en production.
+
+**Retour arrière** : `ENTRAID_CIMD_CLIENTS=` puis *Update the stack*. Les connecteurs ajoutés par URL seule ne se
+connectent plus ; ceux qui ont un identifiant et un secret continuent, à condition que l'adresse de retour de
+l'assistant soit restée dans Entra.
+
+### Sécurité : ce qui change
+
+* Plus aucun secret chez Anthropic ni chez OpenAI ; le secret Entra reste dans la stack.
+* Mêmes barrières qu'avant : liste blanche des assistants, adresses de retour vérifiées, PKCE, comptes du locataire
+  seulement, affectation et accès conditionnel d'Entra, vérification de chaque jeton par le hub.
+* Nouveau : le hub délivre des **codes** (pas des jetons) et appelle les adresses de la liste blanche.
+* Risque résiduel : un jeton de renouvellement Entra volé suffit, sans secret, pour obtenir un jeton d'accès. Avant la
+  1.8, il fallait aussi le secret, mais celui-ci était détenu par les mêmes assistants.
+* Autorisations en cours et codes sont en mémoire : un redémarrage du hub oblige à relancer la connexion.
+
+### À vérifier au premier essai réel
+
+1. Claude choisit bien CIMD avec ce document, sans identifiant saisi.
+2. ChatGPT utilise le document stable `client.json` (le hub annonce le paramètre `iss`, RFC 9207). À défaut, il présente
+   un document par compte (`https://chatgpt.com/oauth/<id>/client.json`), que la liste blanche refuse.
+3. Entra accepte l'échange avec l'adresse `/oauth/callback` et le défi PKCE de l'assistant.
+4. Journal : aucun code, jeton ni secret ; refus lisibles (`[online] document CIMD refusé (…)`).

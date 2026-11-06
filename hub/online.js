@@ -5,8 +5,12 @@
 // aucun jeton : il vérifie ceux d'Entra (signature, émetteur, locataire, audience, application cliente, scope) avec jose, puis
 // rattache le collaborateur à sa clé par son identité Entra, comme le SSO du portail (même oid, même locataire, mêmes connexions).
 // Client Claude pré-enregistré : inscription d'application Entra dédiée, dont l'Owner saisit l'identifiant et le secret dans Claude.
+// Inscription automatique (CIMD, 1.8, expérimental, ONLINE_CIMD_CLIENTS) : l'assistant se présente par l'adresse de son document
+// (cimd.js), sans secret ; le hub devient l'adresse de retour enregistrée dans Entra (/oauth/callback) et réémet son propre code,
+// à usage unique, lié au client, à son adresse de retour et au PKCE de l'assistant. Les jetons restent ceux d'Entra.
 import express from "express";
 import { readFileSync } from "node:fs";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createRemoteJWKSet, jwtVerify, errors as joseErrors } from "jose";
 import { mcpAuthRouter, getOAuthProtectedResourceMetadataUrl } from "@modelcontextprotocol/sdk/server/auth/router.js";
 import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
@@ -15,6 +19,7 @@ import { InvalidGrantError, InvalidTargetError, InvalidTokenError, ServerError }
 import { store } from "./store.js";
 import * as sso from "./sso.js";
 import { IS_PROD } from "./version.js";
+import * as cimd from "./cimd.js";
 
 export const ENABLED = ["on", "1"].includes(process.env.ONLINE); // Compose : CLOUDFLARE_TUNNEL=1 ; vide ou 0 = désactivé
 const PORT = Number(process.env.ONLINE_PORT || 8090);
@@ -29,6 +34,12 @@ const ENTRA_SCOPES = [`api://${CLIENT_ID}/${SCOPE}`, "offline_access"]; // deman
 export const MCP_URL = `${BASE}/mcp`; // adresse à saisir dans Claude, affichée par le portail
 export const ICON_URL = `${BASE}/icon.png`; // logo annoncé aux assistants par adresse https (en plus des icônes intégrées)
 const ISSUER = `${LOGIN}/${TENANT}/v2.0`; // jetons d'accès v2 (requestedAccessTokenVersion = 2 dans le manifeste)
+// CIMD : assistants admis par l'adresse de leur document (vide = désactivé, comportement 1.7 inchangé).
+const CIMD_CLIENTS = cimd.parseClients(process.env.ONLINE_CIMD_CLIENTS);
+const CIMD_LOOPBACK = process.env.ONLINE_CIMD_ALLOW_LOOPBACK === "1"; // tests et poste de développement seulement
+export const CIMD = CIMD_CLIENTS.length > 0;
+const CALLBACK = `${BASE}/oauth/callback`; // adresse de retour du hub, enregistrée dans Entra quand CIMD est actif
+const AS_ISSUER = BASE ? new URL(BASE).href : ""; // identifiant du serveur d'autorisation publié par le SDK (RFC 9207 : paramètre iss)
 
 if (ENABLED) {
   const fail = (m) => { console.error(`[online] ${m}`); process.exit(1); };
@@ -41,6 +52,11 @@ if (ENABLED) {
   if (CLIENT_SECRET.length < 16) fail("ENTRAID_CLAUDE_CLIENT_SECRET trop court : copier la valeur du secret Entra, pas son identifiant");
   if (!(PORT > 0 && PORT < 65536) || PORT === Number(process.env.PORT || 8080)) fail("ONLINE_PORT doit être un port distinct de celui du portail");
   if (REDIRECTS.some((u) => !/^https:\/\/|^http:\/\/(localhost|127\.0\.0\.1)(:|\/)/.test(u))) fail("ENTRAID_CLAUDE_REDIRECT_URIS (ONLINE_REDIRECT_URIS) : https seulement (boucle locale tolérée)");
+  if (CIMD_LOOPBACK && IS_PROD) fail("ONLINE_CIMD_ALLOW_LOOPBACK est interdit en production");
+  for (const id of CIMD_CLIENTS) {
+    const why = cimd.checkId(id, { loopback: CIMD_LOOPBACK });
+    if (why) fail(`ENTRAID_CIMD_CLIENTS (ONLINE_CIMD_CLIENTS) : ${JSON.stringify(id)} refusé (${why}) ; valeurs admises : vide, on, ou des adresses https de documents CIMD`);
+  }
 }
 
 const client = { client_id: CLIENT_ID, client_secret: CLIENT_SECRET, redirect_uris: REDIRECTS, token_endpoint_auth_method: "client_secret_post",
@@ -49,21 +65,40 @@ const client = { client_id: CLIENT_ID, client_secret: CLIENT_SECRET, redirect_ur
 /** Le jeton est-il demandé pour ce hub ? (RFC 8707) : absent, ou égal à l'adresse de /mcp, au fragment et à la barre finale près. */
 const forUs = (r) => !r || String(r.href ?? r).replace(/#.*$/, "").replace(/\/$/, "") === MCP_URL;
 
+// CIMD : autorisations en cours (10 min, le temps de se connecter chez Entra) et codes du hub (5 min, échangés en quelques secondes).
+const pending = cimd.onceMap({ ttlMs: 10 * 60_000 });
+const codes = cimd.onceMap({ ttlMs: 5 * 60_000 });
+const txCookie = (tx) => `clevoa_oauth_${tx.slice(0, 16)}`; // un témoin par connexion : deux onglets ne se gênent pas
+const sameText = (a, b) => typeof a === "string" && typeof b === "string" && a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
+const s256 = (v) => createHash("sha256").update(v).digest("base64url");
+
 /** Relais du SDK, avec trois ajustements pour Entra : scopes de l'inscription imposés, paramètre `resource` vérifié ici puis
  *  retiré (Entra v2 travaille par scope et refuse un `resource` qui ne correspond pas), refus d'Entra rendus en invalid_grant
  *  (l'assistant propose alors de se reconnecter, au lieu d'une erreur serveur). */
 class EntraRelay extends ProxyOAuthServerProvider {
   async authorize(c, params, res) {
     if (!forUs(params.resource)) throw new InvalidTargetError("resource inconnue de ce serveur");
-    return super.authorize(c, { ...params, scopes: ENTRA_SCOPES, resource: undefined }, res);
+    if (!CIMD) return super.authorize(c, { ...params, scopes: ENTRA_SCOPES, resource: undefined }, res);
+    // CIMD actif (tous les clients) : Entra renvoie au hub, avec le défi PKCE de l'assistant ; un témoin lie le retour à ce navigateur.
+    const tx = randomBytes(24).toString("base64url"), nonce = randomBytes(24).toString("base64url");
+    pending.put(tx, { clientId: c.client_id, redirectUri: params.redirectUri, state: params.state, challenge: params.codeChallenge, nonce });
+    res.cookie(txCookie(tx), nonce, { httpOnly: true, sameSite: "lax", secure: BASE.startsWith("https://"), path: "/oauth/callback", maxAge: 10 * 60_000 });
+    return super.authorize(client, { ...params, redirectUri: CALLBACK, state: tx, scopes: ENTRA_SCOPES, resource: undefined }, res);
   }
   async exchangeAuthorizationCode(c, code, verifier, redirectUri, resource) {
     if (!forUs(resource)) throw new InvalidTargetError("resource inconnue de ce serveur");
-    return refused(() => super.exchangeAuthorizationCode(c, code, verifier, redirectUri, undefined), "code");
+    if (!CIMD) return refused(() => super.exchangeAuthorizationCode(c, code, verifier, redirectUri, undefined), "code");
+    // Code du hub : usage unique, même client, même adresse de retour, PKCE vérifié ici puis par Entra (même défi).
+    const g = codes.take(code);
+    if (!g || g.clientId !== c.client_id) throw new InvalidGrantError("code inconnu, expire ou deja utilise");
+    if (redirectUri && redirectUri !== g.redirectUri) throw new InvalidGrantError("redirect_uri differente de celle de l'autorisation");
+    if (!verifier || s256(verifier) !== g.challenge) throw new InvalidGrantError("code_verifier invalide");
+    return refused(() => super.exchangeAuthorizationCode(client, g.entraCode, verifier, CALLBACK, undefined), "code");
   }
-  async exchangeRefreshToken(c, refreshToken, _scopes, resource) {
+  async exchangeRefreshToken(_c, refreshToken, _scopes, resource) {
     if (!forUs(resource)) throw new InvalidTargetError("resource inconnue de ce serveur");
-    return refused(() => super.exchangeRefreshToken(c, refreshToken, ENTRA_SCOPES, undefined), "refresh");
+    // Toujours l'inscription du hub (et son secret) : un client CIMD n'en a pas, Entra n'en connaît pas d'autre.
+    return refused(() => super.exchangeRefreshToken(client, refreshToken, ENTRA_SCOPES, undefined), "refresh");
   }
 }
 /** Réponse 4xx d'Entra (code expiré, compte désactivé, consentement retiré) : invalid_grant ; panne réseau ou 5xx : erreur serveur. */
@@ -124,10 +159,11 @@ export function app(mcp) {
   a.disable("x-powered-by");
   a.set("trust proxy", Number(process.env.ONLINE_TRUST_PROXY ?? 1)); // cloudflared devant : propre à ce port, indépendant du portail
   a.use((_req, res, next) => { res.set(SECURITY_HEADERS); next(); });
+  const registry = cimd.createRegistry({ clients: CIMD_CLIENTS, redirects: REDIRECTS, loopback: CIMD_LOOPBACK });
   const provider = new EntraRelay({
     endpoints: { authorizationUrl: `${LOGIN}/${TENANT}/oauth2/v2.0/authorize`, tokenUrl: `${LOGIN}/${TENANT}/oauth2/v2.0/token` }, // ni révocation ni inscription : Entra n'en propose pas
     verifyAccessToken: verify,
-    getClient: async (id) => (id === CLIENT_ID ? client : undefined),
+    getClient: async (id) => (id === CLIENT_ID ? client : CIMD ? registry.getClient(id) : undefined),
   });
   // Toutes les demandes de jeton de Claude viennent des quelques adresses d'Anthropic : le plafond par adresse du SDK (50 par 15 min)
   // couperait les renouvellements de tous les collaborateurs. Plafond relevé ; la règle WAF de Cloudflare filtre en amont.
@@ -152,6 +188,48 @@ export function app(mcp) {
     }
     next();
   });
+  if (CIMD) {
+    // Métadonnées : CIMD annoncé, et paramètre iss dans chaque réponse d'autorisation (RFC 9207 ; ChatGPT utilise alors son
+    // document et son adresse de retour stables). « none » figure déjà dans token_endpoint_auth_methods_supported (SDK).
+    a.use("/.well-known/oauth-authorization-server", (_req, res, next) => {
+      const json = res.json.bind(res);
+      res.json = (body) => json(res.statusCode === 200 ? { ...body, client_id_metadata_document_supported: true, authorization_response_iss_parameter_supported: true } : body);
+      next();
+    });
+    // Erreurs renvoyées par le SDK à l'assistant depuis /authorize : iss ajouté aussi (le départ vers Entra n'est pas touché).
+    a.use("/authorize", (_req, res, next) => {
+      const redirect = res.redirect.bind(res);
+      res.redirect = (...args) => {
+        const i = args.length - 1, to = new URL(String(args[i]));
+        if (!to.href.startsWith(`${LOGIN}/`) && to.searchParams.has("error")) { to.searchParams.set("iss", AS_ISSUER); args[i] = to.href; }
+        return redirect(...args);
+      };
+      next();
+    });
+    // Retour d'Entra : le hub vérifie l'autorisation en cours et le témoin du navigateur, puis renvoie à l'assistant son propre code.
+    a.get("/oauth/callback", (req, res) => {
+      const tx = typeof req.query.state === "string" ? req.query.state : "";
+      const p = tx && pending.take(tx);
+      const fail = (m) => { console.error(`[online] /oauth/callback refusé : ${m}`); res.status(400).json({ error: "invalid_request", error_description: m }); };
+      if (!p) return fail("connexion inconnue ou expirée : la relancer depuis l'assistant");
+      const name = txCookie(tx), got = (req.headers.cookie || "").split(/;\s*/).find((k) => k.startsWith(`${name}=`))?.slice(name.length + 1);
+      res.clearCookie(name, { path: "/oauth/callback" });
+      if (!sameText(got, p.nonce)) return fail("navigateur différent de celui qui a commencé la connexion");
+      const back = new URL(p.redirectUri), code = typeof req.query.code === "string" ? req.query.code : "";
+      if (code) {
+        const own = randomBytes(32).toString("base64url");
+        codes.put(own, { entraCode: code, clientId: p.clientId, redirectUri: p.redirectUri, challenge: p.challenge });
+        back.searchParams.set("code", own);
+      } else {
+        const error = ["access_denied", "consent_required", "interaction_required", "login_required", "temporarily_unavailable"].includes(req.query.error) ? req.query.error : "server_error";
+        console.error(`[online] connexion refusée par Entra (${error}) pour ${p.clientId}`); // jamais le détail d'Entra ni un code
+        back.searchParams.set("error", error);
+      }
+      if (p.state) back.searchParams.set("state", p.state);
+      back.searchParams.set("iss", AS_ISSUER);
+      res.redirect(302, back.href);
+    });
+  }
   a.use(mcpAuthRouter({ provider, issuerUrl: new URL(BASE), resourceServerUrl: new URL(MCP_URL), scopesSupported: [SCOPE],
     resourceName: process.env.INSTANCE_LABEL || "Clevoa AI Gateway", tokenOptions: { rateLimit: generous }, authorizationOptions: { rateLimit: generous } }));
   const auth = requireBearerAuth({ verifier: provider, requiredScopes: [SCOPE], expectedResource: new URL(MCP_URL),
@@ -175,5 +253,8 @@ export const portalGuard = (req, res, next) => (ENABLED && (req.headers["cf-conn
 
 export function start(mcp) {
   if (!ENABLED) return;
-  app(mcp).listen(PORT, () => console.log(`[online] accès en ligne actif : ${MCP_URL} (port ${PORT}, annuaire ${TENANT})`));
+  app(mcp).listen(PORT, () => {
+    console.log(`[online] accès en ligne actif : ${MCP_URL} (port ${PORT}, annuaire ${TENANT})`);
+    if (CIMD) console.log(`[online] inscription automatique (CIMD, expérimental) : ${CIMD_CLIENTS.join(", ")} ; adresse de retour à enregistrer dans Entra : ${CALLBACK}`);
+  });
 }

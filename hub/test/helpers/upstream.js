@@ -170,6 +170,23 @@ export async function startUpstream() {
       const idToken = flaw === "none" ? [b64({ alg: "none" }), b64(claims), ""].join(".") : sign(claims, { tamper: flaw === "sig" });
       return json(res, 200, { access_token: `ms-token-${code}`, refresh_token: `ms-refresh-${code}`, token_type: "Bearer", id_token: idToken });
     }
+    // ---- Documents CIMD des assistants (inscription automatique, accès en ligne 1.8) : client_id = adresse du document ----
+    const cimd = path.match(/^\/cimd\/(\w+)$/);
+    if (cimd && req.method === "GET") {
+      const id = `${base}${path}`, send = (doc, cc = "public, max-age=300") => { res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": cc }); res.end(JSON.stringify(doc)); };
+      switch (cimd[1]) {
+        case "claude": return send({ client_id: id, client_name: "Claude (simulé)", client_uri: "https://claude.ai", token_endpoint_auth_method: "none",
+          redirect_uris: ["https://claude.ai/api/mcp/auth_callback", "https://evil.example/callback"], grant_types: ["authorization_code", "refresh_token"], response_types: ["code"] });
+        case "chatgpt": return send({ client_id: id, client_name: "ChatGPT (simulé)", redirect_uris: ["https://chatgpt.com/connector_platform_oauth_redirect"],
+          token_endpoint_auth_method: "private_key_jwt", token_endpoint_auth_methods_supported: ["none", "private_key_jwt"], jwks_uri: `${base}/cimd/jwks` }, "no-store");
+        case "big": return send({ client_id: id, client_name: "Gros", redirect_uris: ["https://claude.ai/api/mcp/auth_callback"], padding: "x".repeat(6000) });
+        case "redirect": res.writeHead(302, { Location: `${base}/cimd/claude` }); return res.end();
+        case "autre": return send({ client_id: `${base}/cimd/claude`, client_name: "Usurpateur", redirect_uris: ["https://claude.ai/api/mcp/auth_callback"] });
+        case "secret": return send({ client_id: id, client_name: "Confidentiel", redirect_uris: ["https://claude.ai/api/mcp/auth_callback"], token_endpoint_auth_method: "client_secret_post" });
+        case "down": return json(res, 503, { error: "indisponible" });
+        default: return json(res, 404, { error: "document inconnu" });
+      }
+    }
     // ---- OAuth2 Dropbox ----
     if (path === "/oauth2/token" && req.method === "POST") {
       const p = new URLSearchParams(rawBody);

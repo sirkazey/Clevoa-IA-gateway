@@ -48,6 +48,8 @@ test("Métadonnées : ressource protégée (RFC 9728) et serveur d'autorisation 
   assert.equal(as.token_endpoint, `${base}/token`);
   assert.equal(as.registration_endpoint, undefined, "client pré-enregistré par l'Owner : pas de DCR");
   assert.equal(as.revocation_endpoint, undefined, "Entra n'a pas de point de révocation : rien à relayer");
+  assert.equal(as.client_id_metadata_document_supported, undefined, "CIMD désactivé par défaut (ONLINE_CIMD_CLIENTS vide)");
+  assert.equal((await fetch(`${base}/oauth/callback?state=x&code=y`)).status, 404, "pas d'adresse de retour du hub sans CIMD");
 });
 
 test("/mcp sans jeton : 401 avec WWW-Authenticate qui désigne les métadonnées (déclenche le « Connect » de Claude)", async () => {
