@@ -11,8 +11,8 @@ services.
 ```mermaid
 flowchart LR
     subgraph U["Collaborateurs"]
-        W["Claude<br/>web · bureau · mobile"]
-        D["Claude Code · Claude Desktop<br/>réseau interne"]
+        W["Claude<br/>web · bureau · mobile<br/>compte Microsoft"]
+        D["Usages techniques<br/>Claude Code, scripts"]
     end
     T["Cloudflare<br/>WAF + tunnel"]
     subgraph CL["Serveur du client · aucun port entrant"]
@@ -36,8 +36,10 @@ flowchart LR
     H -.-> CV
 ```
 
-Les deux entrées mènent au même hub, aux mêmes outils et aux mêmes droits : le port 8090 (tunnel Cloudflare) identifie le
-collaborateur par son jeton Entra, le port 8080 (réseau interne) par sa clé personnelle. Non représentée : la sauvegarde
+Les deux entrées mènent au même hub, aux mêmes outils et aux mêmes droits. Avec l'accès en ligne, toutes les applications
+Claude (web, bureau, mobile, sur le réseau interne ou non) passent par le connecteur et le compte Microsoft (port 8090).
+La clé personnelle (port 8080, réseau interne) ne sert plus qu'aux usages techniques, ou à tout le monde si l'accès en
+ligne n'est pas activé. Non représentée : la sauvegarde
 quotidienne, conteneur `mcp-backup` ([exploitation § 4](../admin/exploitation.md#4-sauvegarde)).
 
 | Module (`hub/`) | Rôle |
