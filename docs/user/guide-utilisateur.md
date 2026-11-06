@@ -40,8 +40,8 @@ peuvent tourner en **simulateur** : les données sont inventées et étiquetées
 ## 2. Brancher l'assistant
 
 Le panneau **Brancher votre assistant**, à droite (en dessous sur un téléphone), propose deux onglets. Quand votre DSI a
-ouvert l'accès en ligne, le premier est **Claude** ; sinon c'est **Claude Desktop**. Le second, **Claude Code et autres**,
-sert aux usages techniques.
+ouvert l'accès en ligne, ce sont **Claude** et **Clé personnelle** (usages techniques : Claude Code sur le réseau interne,
+autre client MCP, script) ; sinon, **Claude Desktop** et **Claude Code et autres**.
 
 ### Claude (claude.ai, application de bureau, mobile) : accès en ligne
 
