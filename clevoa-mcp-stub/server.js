@@ -25,7 +25,7 @@ const strip = (o) => Object.fromEntries(Object.entries(o).filter(([k]) => !k.sta
 app.get("/", (_req, res) => res.type("html").send(`<!doctype html><meta charset="utf-8"><title>Bouchon d'entreprise Clevoa AI Gateway</title><body style="font:15px system-ui;max-width:720px;margin:40px auto">
 <h1>Bouchon d'entreprise Clevoa AI Gateway</h1><p>Imite Salesforce, Microsoft Graph, Dropbox MCP, Sage X3 Syracuse, MyReport MCP et Clevoa avec un jeu de données canin.</p>
 <h3>Collaborateurs simulés</h3><ul>${Object.entries(USERS).map(([u, p]) => `<li><b>${p.name}</b> (${p.role}) — ${u}<br>Sage X3 : login <code>${p.sageLogin}</code>, clé <code>${p.sageKey}</code> · MyReport : jeton <code>${p.myreportKey}</code> · dossier Confidentiel : ${p.confidentiel ? "oui" : "non"} · achats Sage : ${p.achats ? "oui" : "non"}</li>`).join("")}</ul>
-<h3>Points d'entrée</h3><pre>${["/services/oauth2/{authorize,token,userinfo}  /platform/mcp/v1/d/{org}/platform/sobject-reads   Salesforce (MCP hébergé)", "/ms/{tenant}/oauth2/v2.0/{authorize,token}  /v1.0/...                   Microsoft Graph", "/oauth2/{authorize,token}  /dropbox-mcp                                Dropbox", "/oauth/{authorize,token,userinfo}  /api1/x3/erp/{dossier}/...          Sage X3 Syracuse", "/myreport/sse  /myreport/messages                                     MyReport Server (MCP SSE)", "/api/v1/telemetry                                                    Clevoa"].join("\n")}</pre>
+<h3>Points d'entrée</h3><pre>${["/services/oauth2/{authorize,token,userinfo}  /platform/mcp/v1/d/{org}/platform/sobject-reads   Salesforce (MCP hébergé)", "/ms/{tenant}/oauth2/v2.0/{authorize,token}  /v1.0/...                   Microsoft Graph", "/oauth2/{authorize,token}  /dropbox-mcp  /2/files/{get_metadata,download}  Dropbox", "/oauth/{authorize,token,userinfo}  /api1/x3/erp/{dossier}/...          Sage X3 Syracuse", "/myreport/sse  /myreport/messages                                     MyReport Server (MCP SSE)", "/api/v1/telemetry                                                    Clevoa"].join("\n")}</pre>
 <p>Télémétrie reçue : <a href="/api/v1/telemetry">/api/v1/telemetry</a></p></body>`));
 app.get("/_stub/approve", approve);
 
@@ -108,6 +108,12 @@ app.use("/v1.0", (req, res) => {
     if (dir && DOCS.find((d) => d.path === dir)?.restricted && !USERS[u].confidentiel) return deny(res, 403, { error: { code: "accessDenied", message: "Access denied" } });
     return res.json({ value: visible(u).filter((d) => d.path.split("/").slice(0, -1).join("/") === dir).map((d) => docItem(d, req)) });
   }
+  if (p === "/search/query" && req.method === "POST") { // Microsoft Search : tous les sites visibles par l'utilisateur
+    const s = String(req.body?.requests?.[0]?.query?.queryString || "").toLowerCase();
+    const hits = visible(u).filter((d) => !d.folder && s.split(/\s+/).every((w) => d.path.toLowerCase().includes(w))).slice(0, req.body.requests[0].size || 25)
+      .map((d, i) => ({ hitId: d.id, rank: i + 1, summary: "", resource: { "@odata.type": "#microsoft.graph.driveItem", ...docItem(d, req), parentReference: { driveId: "b!charlois-finance", siteId: "charlois.sharepoint.com,site-finance" } } }));
+    return res.json({ value: [{ searchTerms: s.split(/\s+/), hitsContainers: [{ hits, total: hits.length, moreResultsAvailable: false }] }] });
+  }
   m = p.match(/\/root\/search\(q='(.*)'\)$/);
   if (m) { const s = m[1].replace(/''/g, "'").toLowerCase(); return res.json({ value: visible(u).filter((d) => !d.folder && d.path.toLowerCase().includes(s)).map((d) => docItem(d, req)) }); }
   m = p.match(/\/items\/(\w+)(\/content)?$/);
@@ -129,15 +135,17 @@ app.get("/dl/:id", (req, res) => {
 // ---------------------------------------------------------------- Dropbox (OAuth2 + serveur MCP officiel simulé)
 app.get("/oauth2/authorize", authorizePage("dbx", "Dropbox"));
 app.post("/oauth2/token", tokenEndpoint("dbx"));
+const NS = "ns:4242"; // espace de noms d'équipe : les chemins renvoyés sont des ns_path, comme en vrai
+const norm = (p) => (p || "").replace(/^ns:\d+\/\//, "/").replace(/^id:(\w+)$/, (_, id) => "/" + (DOCS.find((d) => d.id === id)?.path ?? "?")).replace(/\/$/, "") || "/";
+const dbxFind = (u, p) => { const d = DOCS.find((x) => "/" + x.path === norm(p)); return !d ? null : d.restricted && !USERS[u].confidentiel ? "denied" : d; };
+const dbxSize = (d) => (d.file ? statSync(new URL(d.file, FILES)).size : undefined);
 function dropboxMcp(u) {
   // Noms d'outils, arguments et formes de réponse alignés sur le serveur MCP officiel Dropbox (schémas relevés le 22/10/2026).
+  // Comme le vrai serveur avec le jeton d'une application tierce (06/11/2026) : ni fetch ni file_preview.
   const srv = new McpServer({ name: "dropbox-stub", version: "1.0.0" });
   const text = (o) => ({ content: [{ type: "text", text: typeof o === "string" ? o : JSON.stringify(o, null, 1) }], structuredContent: typeof o === "object" ? o : undefined });
   const err = (m) => ({ isError: true, content: [{ type: "text", text: m }] });
-  const NS = "ns:4242"; // espace de noms d'équipe : les chemins renvoyés sont des ns_path, comme en vrai
-  const norm = (p) => (p || "").replace(/^ns:\d+\/\//, "/").replace(/^id:(\w+)$/, (_, id) => "/" + (DOCS.find((d) => d.id === id)?.path ?? "?")).replace(/\/$/, "") || "/";
-  const find = (p) => { const d = DOCS.find((x) => "/" + x.path === norm(p)); return !d ? null : d.restricted && !USERS[u].confidentiel ? "denied" : d; };
-  const size = (d) => (d.file ? statSync(new URL(d.file, FILES)).size : undefined);
+  const find = (p) => dbxFind(u, p), size = dbxSize;
   const entry = (d) => ({ name: d.path.split("/").pop(), path: `${NS}//${d.path}`, path_display: "/" + d.path, file_id: `id:${d.id}`, object_type: d.folder ? "folder" : "file", modified_time: "2026-10-01T08:00:00Z", client_modified: "2026-10-01T08:00:00Z", ...(d.folder ? { folder: {} } : { file: { size: size(d) } }) });
   srv.registerTool("who_am_i", { description: "Get the connected Dropbox user's identity, team, and namespace roots", inputSchema: {} }, async () =>
     text({ account_id: `dbid:${u}`, display_name: USERS[u].name, email: u, country: "FR", locale: "fr", team_id: "dbtid:charlois", team_name: "Charlois", root_namespace_id: "4242", home_namespace_id: "4243" }));
@@ -156,17 +164,6 @@ function dropboxMcp(u) {
     return text(d.folder ? { metadata_type: "folder", folder: { ...common, descendants_count: DOCS.filter((x) => x.path.startsWith(d.path + "/")).length } }
       : { metadata_type: "file", file: { ...common, client_modified: "2026-10-01T08:00:00Z", server_modified: "2026-10-01T08:00:00Z", size: size(d), mime_type: d.mime, is_downloadable: true, rev: "0a1b2c" } });
   });
-  srv.registerTool("fetch", { description: "Fetch full text content for a Dropbox file by id or path", inputSchema: { id: z.string() } }, async ({ id }) => {
-    const d = find(id); if (!d || d === "denied" || d.folder) return err(d === "denied" ? "path/access_denied" : "path/not_found");
-    if (!/^text\//.test(d.mime)) return err(`extraction_failed: ${d.path.split("/").pop()} — extraction de texte impossible pour ${d.mime} ; ouvrez https://www.dropbox.com/home/${d.path}`);
-    return text({ id, title: d.path.split("/").pop(), text: readFileSync(new URL(d.file, FILES), "utf8"), url: `https://www.dropbox.com/home/${d.path}`, metadata: { path_display: "/" + d.path, server_modified: "2026-10-01T08:00:00Z" } });
-  });
-  srv.registerTool("file_preview", { description: "Preview Dropbox files visually with thumbnails and Open in Dropbox links", inputSchema: { file_paths: z.array(z.string()).min(1) } }, async ({ file_paths }, extra) => {
-    const base = `http://${extra?.requestInfo?.headers?.host || "mcp-stub:4000"}`;
-    const results = file_paths.map((p) => { const d = find(p); return !d || d === "denied" ? { file_name: p, message: d === "denied" ? "accès refusé" : "introuvable" }
-      : { thumbnail_url: d.file ? `${base}/dl/${d.id}?sig=${sign(d.id)}` : "", file_type: d.path.split(".").pop(), open_in_dropbox_url: `https://www.dropbox.com/home/${d.path}`, copy_link_url: `https://www.dropbox.com/scl/${d.id}`, file_name: d.path.split("/").pop(), message: d.mime === "image/png" ? "Podium d'un concours canin (image PNG)" : d.folder ? "Dossier" : "Document" }; });
-    return text({ results });
-  });
   srv.registerTool("delete", { description: "Supprime un fichier (écriture : jamais atteignable via le hub)", inputSchema: { path: z.string() } }, async () => text("deleted"));
   return srv;
 }
@@ -175,6 +172,25 @@ app.post("/dropbox-mcp", async (req, res) => {
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }), srv = dropboxMcp(u);
   res.on("close", () => { transport.close(); srv.close(); });
   await srv.connect(transport); await transport.handleRequest(req, res, req.body);
+});
+
+// API HTTP Dropbox : métadonnées et téléchargement (dropbox_read). Erreurs au format Dropbox (409 + error_summary).
+const dbxError = (res, status, summary) => res.status(status).json({ error_summary: summary, error: { ".tag": summary.split("/")[0] } });
+app.post("/2/files/get_metadata", (req, res) => {
+  const u = bearerUser(req, "dbx"); if (!u) return dbxError(res, 401, "invalid_access_token/");
+  const d = dbxFind(u, req.body?.path);
+  if (!d || d === "denied") return dbxError(res, 409, d ? "path/restricted_content/" : "path/not_found/");
+  res.json({ ".tag": d.folder ? "folder" : "file", name: d.path.split("/").pop(), id: `id:${d.id}`, path_display: "/" + d.path, path_lower: "/" + d.path.toLowerCase(),
+    ...(d.folder ? {} : { size: dbxSize(d), server_modified: "2026-10-01T08:00:00Z", client_modified: "2026-10-01T08:00:00Z", rev: "0a1b2c", is_downloadable: true }) });
+});
+app.post("/2/files/download", (req, res) => {
+  const u = bearerUser(req, "dbx"); if (!u) return dbxError(res, 401, "invalid_access_token/");
+  const arg = String(req.headers["dropbox-api-arg"] || "");
+  if (/[^\x20-\x7e]/.test(arg)) return res.status(400).type("text").send("Error in call to API function \"files/download\": HTTP header \"Dropbox-API-Arg\": could not decode input as JSON"); // exigence réelle : ASCII
+  let path; try { path = JSON.parse(arg).path; } catch { return res.status(400).type("text").send("Dropbox-API-Arg invalide"); }
+  const d = dbxFind(u, path);
+  if (!d || d === "denied" || d.folder) return dbxError(res, 409, d === "denied" ? "path/restricted_content/" : d ? "path/not_file/" : "path/not_found/");
+  res.set("Dropbox-API-Result", JSON.stringify({ name: d.path.split("/").pop(), id: `id:${d.id}` }).replace(/[^\x20-\x7e]/g, "?")).type("application/octet-stream").send(readFileSync(new URL(d.file, FILES)));
 });
 
 // ---------------------------------------------------------------- Sage X3 Syracuse (+ IdP OAuth2 générique)

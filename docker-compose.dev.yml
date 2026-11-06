@@ -47,6 +47,7 @@ services:
       DROPBOX_AUTH_URL: ${DROPBOX_AUTH_URL:-http://mcp-stub:4000}
       DROPBOX_API_URL: ${DROPBOX_API_URL:-http://mcp-stub:4000}
       DROPBOX_MCP_URL: ${DROPBOX_MCP_URL:-http://mcp-stub:4000/dropbox-mcp}
+      DROPBOX_CONTENT_URL: ${DROPBOX_CONTENT_URL:-http://mcp-stub:4000}
       DROPBOX_APP_KEY: ${DROPBOX_APP_KEY:-stub}
       DROPBOX_APP_SECRET: ${DROPBOX_APP_SECRET:-stub}
       SAGE_URL: ${SAGE_URL:-http://mcp-stub:4000}

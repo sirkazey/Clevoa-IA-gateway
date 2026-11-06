@@ -31,9 +31,9 @@ test("SharePoint : list / search / read avec le Bearer Graph de l'utilisateur ; 
   const forbidden = await c.callTool({ name: "sharepoint_list", arguments: { path: "Secret" } });
   assert.equal(forbidden.isError, true); assert.match(forbidden.content[0].text, /SharePoint 403/);
 
-  const found = text(await c.callTool({ name: "sharepoint_search", arguments: { query: "budget 2026" } }));
+  const found = text(await c.callTool({ name: "sharepoint_search", arguments: { query: "budget 2026", site: "site-finance" } }));
   assert.equal(found[0].id, "01A");
-  assert.equal(up.requests("/root/search(q='budget 2026')").length, 1, up.state.requests.map((r) => r.path).join());
+  assert.equal(up.requests("/sites/site-finance/drive/root/search(q='budget 2026')").length, 1, up.state.requests.map((r) => r.path).join());
 
   const txt = text(await c.callTool({ name: "sharepoint_read", arguments: { itemId: "01C" } }));
   assert.match(txt.text, /EBITDA 12 %/);
@@ -41,8 +41,14 @@ test("SharePoint : list / search / read avec le Bearer Graph de l'utilisateur ; 
   const evil = await c.callTool({ name: "sharepoint_read", arguments: { itemId: "EVIL" } });
   assert.equal(evil.isError, true); assert.match(evil.content[0].text, /redirection de téléchargement refusée vers evil\.example\.invalid/);
   assert.equal(up.requests("/steal").length, 0, "le hub ne suit jamais une redirection vers un hôte inattendu");
-  const bin = text(await c.callTool({ name: "sharepoint_read", arguments: { itemId: "01A" } }));
-  assert.match(bin.note, /Binaire/); assert.equal(bin.text, undefined);
+  const xl = text(await c.callTool({ name: "sharepoint_read", arguments: { itemId: "01A" } }));
+  assert.equal(xl.text, "## Feuille « Budget »\nPoste\tMontant\nLoyer\t1200"); assert.equal(xl.format, "xlsx");
+  up.reset();
+  const png = text(await c.callTool({ name: "sharepoint_read", arguments: { itemId: "01I" } }));
+  assert.match(png.note, /^Format \.png : lecture du contenu non prise en charge dans cette version ; ouvrez https:\/\/sp\.example\/photo\.png\.$/); assert.equal(png.text, undefined);
+  const big = await c.callTool({ name: "sharepoint_read", arguments: { itemId: "01G" } });
+  assert.equal(big.isError, true); assert.match(big.content[0].text, /Fichier de 30 Mo : au-delà de 25 Mo/);
+  assert.equal(up.requests("/content").length, 0, "image et fichier trop gros : rien n'est téléchargé");
   const dir = await c.callTool({ name: "sharepoint_read", arguments: { itemId: "01B" } });
   assert.equal(dir.isError, true);
 
@@ -51,13 +57,47 @@ test("SharePoint : list / search / read avec le Bearer Graph de l'utilisateur ; 
   assert.ok(up.state.requests.every((r) => r.method === "GET" || r.path.includes("/dropbox-mcp")), "Graph : uniquement des GET");
 });
 
+test("SharePoint : Word, PDF, PDF scanné et PDF endommagé ; recherche sans site par Microsoft Search, puis lecture par driveId", async () => {
+  up.reset();
+  const word = text(await c.callTool({ name: "sharepoint_read", arguments: { itemId: "01D" } }));
+  assert.equal(word.text, "Synthèse & perspectives\nMarge brute en hausse\nIndicateur\tValeur\nMarge\t31 %");
+  const pdf = text(await c.callTool({ name: "sharepoint_read", arguments: { itemId: "01P" } }));
+  assert.equal(pdf.text, "--- Page 1 ---\nRapport annuel fictif page un\n\n--- Page 2 ---\nPerspectives page deux");
+  const blank = text(await c.callTool({ name: "sharepoint_read", arguments: { itemId: "01S" } }));
+  assert.match(blank.note, /^PDF sans texte ni image de page lisible/); assert.equal(blank.text, undefined);
+  const scan = await c.callTool({ name: "sharepoint_read", arguments: { itemId: "01K" } });
+  assert.deepEqual(scan.content.map((b) => b.type), ["text", "image", "image", "image", "image", "image", "text"], "métadonnées, 5 pages en image, provenance");
+  assert.match(JSON.parse(scan.content[0].text).note, /^PDF scanné : 7 pages, pages 1 à 5 jointes en image\. Pages scannées suivantes : redemander avec pages="6-7"\.$/);
+  assert.equal(Buffer.from(scan.content[1].data, "base64").subarray(1, 4).toString(), "PNG"); assert.equal(scan.content[1].mimeType, "image/png");
+  assert.equal(scan.content.at(-1).text, "Source : SharePoint");
+  const rest = await c.callTool({ name: "sharepoint_read", arguments: { itemId: "01K", pages: "6-7" } });
+  assert.equal(rest.content.filter((b) => b.type === "image").length, 2);
+  assert.equal((await c.callTool({ name: "sharepoint_read", arguments: { itemId: "01K", pages: "page 6" } })).isError, true, "pages : format refusé par le schéma");
+  const broken = await c.callTool({ name: "sharepoint_read", arguments: { itemId: "01X" } });
+  assert.equal(broken.isError, true); assert.match(broken.content[0].text, /^PDF illisible/);
+
+  up.reset();
+  const hits = text(await c.callTool({ name: "sharepoint_search", arguments: { query: "synthèse marge" } }));
+  const q = up.requests("/search/query", "POST");
+  assert.equal(q.length, 1); assert.equal(q[0].headers.authorization, "Bearer ms-token-alice");
+  assert.deepEqual(JSON.parse(q[0].body), { requests: [{ entityTypes: ["driveItem"], query: { queryString: "synthèse marge" }, from: 0, size: 25 }] });
+  assert.equal(up.requests("/root/search").length, 0, "sans site : jamais la recherche du seul OneDrive");
+  assert.deepEqual(hits.map((h) => [h.id, h.name, h.type, h.driveId, h.site]),
+    [["01D", "Note de synthèse.docx", "fichier", "b!drive-direction", "Direction"], ["01P", "Rapport annuel.pdf", "fichier", "b!drive-onedrive", "OneDrive"]]);
+  const read = text(await c.callTool({ name: "sharepoint_read", arguments: { itemId: hits[0].id, driveId: hits[0].driveId } }));
+  assert.match(read.text, /^Synthèse & perspectives/);
+  assert.deepEqual(up.requests("/items/01D").map((r) => r.path), ["/v1.0/drives/b!drive-direction/items/01D", "/v1.0/drives/b!drive-direction/items/01D/content"]);
+  assert.ok(up.state.requests.every((r) => r.method === "GET" || r.path === "/v1.0/search/query"), "Graph : des GET, et le POST de recherche seulement");
+});
+
 test("Dropbox : proxy MCP avec le Bearer de l'utilisateur, liste blanche lecture seule, droits Dropbox respectés", async () => {
   up.reset();
   const tools = text(await c.callTool({ name: "dropbox_tools", arguments: {} }));
-  assert.deepEqual(tools.map((t) => t.name), ["who_am_i", "list_folder", "file_preview"], "delete est filtré");
-  const img = await c.callTool({ name: "dropbox_call", arguments: { tool: "file_preview", arguments: { path: "/x.png" } } });
-  assert.equal(img.content[0].type, "image", "contenu image relayé tel quel"); assert.equal(img.content[0].mimeType, "image/png");
+  assert.deepEqual(tools.map((t) => t.name), ["who_am_i", "list_folder", "search"], "fetch et delete filtrés ; search vient de la seconde page de listTools");
+  assert.equal(up.requests("/dropbox-mcp").filter((r) => /"tools\/list"/.test(r.body)).length, 2, "deux pages de listTools (nextCursor)");
   assert.ok(tools[1].inputSchema.properties.path, "le schéma du serveur Dropbox est transmis tel quel");
+  const s = text(await c.callTool({ name: "dropbox_call", arguments: { tool: "search", arguments: { query: "synthèse", include_folders: true } } }));
+  assert.equal(s.include_folders, true, "include_folders transmis tel quel : seul Dropbox peut le refuser");
   assert.ok(up.requests("/dropbox-mcp").length > 0 && up.requests("/dropbox-mcp").every((r) => r.headers.authorization === "Bearer dbx-token-alice"));
 
   const entries = text(await c.callTool({ name: "dropbox_call", arguments: { tool: "list_folder", arguments: { path: "/Finance" } } }));
@@ -70,6 +110,57 @@ test("Dropbox : proxy MCP avec le Bearer de l'utilisateur, liste blanche lecture
   const del = await c.callTool({ name: "dropbox_call", arguments: { tool: "delete", arguments: { path: "/Finance" } } });
   assert.equal(del.isError, true, "outil d'écriture refusé par le schéma");
   assert.equal(up.requests("/dropbox-mcp").length, 0, "rien n'est envoyé à Dropbox pour un outil hors liste blanche");
+  for (const tool of ["fetch", "file_preview"]) {
+    const r = await c.callTool({ name: "dropbox_call", arguments: { tool, arguments: { id: "id:dbx-01D" } } });
+    assert.equal(r.isError, true, `${tool} refusé par le schéma`);
+  }
+  assert.equal(up.requests("/dropbox-mcp").length, 0);
+});
+
+test("Dropbox : dropbox_read par id et par chemin (métadonnées, puis files/download), PDF, refus d'un dossier, d'un fichier trop gros, d'un chemin inconnu", async () => {
+  up.reset();
+  const byId = await c.callTool({ name: "dropbox_read", arguments: { path: "id:dbx-01D" } });
+  const word = JSON.parse(byId.content[0].text);
+  assert.deepEqual([word.name, word.path, word.size > 100, word.modified, word.format], ["Note de synthèse.docx", "/Finance/Note de synthèse.docx", true, "2026-10-01T08:00:00Z", "docx"]);
+  assert.match(word.text, /^Synthèse & perspectives\nMarge brute en hausse\nIndicateur\tValeur/);
+  assert.equal(byId.content.at(-1).text, "Source : Dropbox", "ligne de provenance, comme les autres connecteurs");
+  const meta = up.requests("/2/files/get_metadata", "POST"), dl = up.requests("/2/files/download", "POST");
+  assert.deepEqual(JSON.parse(meta[0].body), { path: "id:dbx-01D" }); assert.equal(meta[0].headers.authorization, "Bearer dbx-token-alice");
+  assert.equal(dl[0].headers["dropbox-api-arg"], '{"path":"id:dbx-01D"}'); assert.equal(dl[0].headers.authorization, "Bearer dbx-token-alice");
+
+  up.reset();
+  const xl = text(await c.callTool({ name: "dropbox_read", arguments: { path: "/Finance/Budget 2026.xlsx" } }));
+  assert.equal(xl.text, "## Feuille « Budget »\nPoste\tMontant\nLoyer\t1200");
+  const pdf = text(await c.callTool({ name: "dropbox_read", arguments: { path: "/Finance/Rapport annuel.pdf" } }));
+  assert.match(pdf.text, /^--- Page 1 ---\nRapport annuel fictif page un/);
+  assert.equal(up.requests("/2/files/download").length, 2);
+  const scan = await c.callTool({ name: "dropbox_read", arguments: { path: "id:dbx-01K", pages: "3-4" } });
+  assert.deepEqual(scan.content.map((b) => b.type), ["text", "image", "image", "text"]);
+  const sm = JSON.parse(scan.content[0].text);
+  assert.deepEqual([sm.name, sm.note], ["Contrat scanne.pdf", "PDF scanné : 7 pages, pages 3 à 4 jointes en image. Pages 3 à 4 lues sur 7 : demander la suite avec pages=\"5-7\"."]);
+
+  up.reset();
+  const accent = await c.callTool({ name: "dropbox_read", arguments: { path: "/Finance/Note de synthèse.docx" } });
+  assert.equal(accent.isError, undefined, accent.content[0].text);
+  assert.equal(up.requests("/2/files/download")[0].headers["dropbox-api-arg"], '{"path":"/Finance/Note de synth\\u00e8se.docx"}', "è échappé en \\u00e8");
+  const dir = await c.callTool({ name: "dropbox_read", arguments: { path: "/Finance" } });
+  assert.equal(dir.isError, true); assert.match(dir.content[0].text, /C'est un dossier/);
+  const big = await c.callTool({ name: "dropbox_read", arguments: { path: "/Finance/Gros classeur.xlsx" } });
+  assert.equal(big.isError, true); assert.match(big.content[0].text, /au-delà de 25 Mo/);
+  const missing = await c.callTool({ name: "dropbox_read", arguments: { path: "/Finance/Absent.docx" } });
+  assert.equal(missing.isError, true); assert.match(missing.content[0].text, /^Dropbox : fichier introuvable ou inaccessible \(path\/not_found/);
+  assert.equal(up.requests("/2/files/download").length, 1, "dossier, fichier trop gros, chemin inconnu : aucun téléchargement");
+  const bad = await c.callTool({ name: "dropbox_read", arguments: { path: "Finance/sans-slash.docx" } });
+  assert.equal(bad.isError, true, "chemin relatif refusé par le schéma");
+});
+
+test("Dropbox : en-tête Dropbox-API-Arg en ASCII (caractères échappés en \\uXXXX) ; un 401 de l'API renouvelle le jeton", async () => {
+  up.reset();
+  await c.callTool({ name: "dropbox_read", arguments: { path: "/Finance/Budget 2026.xlsx" } });
+  up.failNext("/2/files/get_metadata", 401, { error_summary: "expired_access_token/.." });
+  const r = await c.callTool({ name: "dropbox_read", arguments: { path: "/Finance/Note de synthèse.docx" } });
+  assert.equal(r.isError, undefined, r.content[0].text);
+  assert.ok(up.requests("/2/files/get_metadata").some((q) => q.headers.authorization === "Bearer dbx-token-refreshed"), "nouvel essai avec le jeton renouvelé");
 });
 
 test("Dropbox : un 401 du serveur MCP déclenche le refresh_token Dropbox puis un nouvel essai", async () => {

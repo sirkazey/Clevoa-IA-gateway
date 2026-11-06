@@ -117,14 +117,21 @@ const call = async (c, key, fn) => {
 // ---------- Serveur MCP (un par connexion, lié à la clé de l'utilisateur) ----------
 /** Ligne de provenance jointe à chaque résultat : système, et dossier pour Sage X3. */
 const provenance = (c) => `Source : ${c.label}${c.source ? ` · ${c.source()}` : ""}`;
+// Consignes envoyées à chaque session : courtes, limitées aux connecteurs proposés (CONNECTORS_ENABLED, production).
+const has = (id) => CONNECTORS.some((c) => c.id === id);
+const searchable = CONNECTORS.filter((c) => c.id !== "myreport").map((c) => c.label);
 const INSTRUCTIONS = [
-  "Outils en LECTURE SEULE sur Salesforce, Sage X3, SharePoint, Dropbox et MyReport avec les droits de l'utilisateur connecté.",
+  `Outils en LECTURE SEULE sur ${CONNECTORS.map((c) => c.label).join(", ")} avec les droits de l'utilisateur connecté.`,
   "Chaque résultat se termine par une ligne « Source : … » (système, dossier Sage X3, sandbox ou production Salesforce) : toujours la citer dans la réponse, pour que l'utilisateur sache d'où vient chaque donnée.",
-  "Question sur un client, un fournisseur, une commande ou une facture sans nommer le système : interroger Sage X3 ET Salesforce, puis dire ce que chacun renvoie.",
-  "Salesforce : salesforce_tools puis salesforce_call (serveur MCP officiel SObject Reads). Sage X3 : sagex3_describe puis sagex3_query ; les montants sont dans la devise de l'ERP.",
-  "Documents : sharepoint_search / sharepoint_read, dropbox_tools puis dropbox_call. Analyses MyReport : myreport_tools puis myreport_call.",
+  `Question sur un nom (société, client, fournisseur, personne, projet), une commande, une facture ou un document sans nommer le système : chercher dans tous les systèmes connectés (${searchable.join(", ")}${has("myreport") ? ", et MyReport s'il est pertinent" : ""}), puis dire ce que chacun renvoie.`,
+  has("salesforce") && "Salesforce : salesforce_tools puis salesforce_call (serveur MCP officiel SObject Reads).",
+  has("sagex3") && "Sage X3 : sagex3_describe puis sagex3_query ; les montants sont dans la devise de l'ERP.",
+  has("sharepoint") && "SharePoint : sharepoint_search (sans site : tous les sites et le OneDrive), puis sharepoint_read avec l'itemId et le driveId du résultat.",
+  has("dropbox") && "Dropbox : dropbox_call (search, list_folder), puis dropbox_read avec l'id du résultat.",
+  (has("sharepoint") || has("dropbox")) && "Word, Excel, PowerPoint, PDF et texte sont lus ; les pages d'un PDF scanné sont jointes en image, 5 par appel (argument pages pour la suite).",
+  has("myreport") && "Analyses MyReport : myreport_tools puis myreport_call.",
   "Résultat « … aucune donnée n'a été lue. Action requise : … » : le collaborateur doit (re)connecter ce système ; relayer l'action et le lien tels quels, sans jamais en déduire une absence de données ni un total nul.",
-].join(" ");
+].filter(Boolean).join(" ");
 /** Consignes de la session : générales, plus l'état des connexions du collaborateur à l'ouverture (systèmes à connecter et leur lien). */
 function instructionsFor(key) {
   const u = store.get(key) || {};

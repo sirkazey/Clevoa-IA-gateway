@@ -209,7 +209,7 @@ test("SharePoint et Dropbox : OAuth utilisateur (Entra avec scopes délégués l
   const t1 = await fetch(`${hub.url}/api/test/sharepoint`, { headers: { cookie } }).then((x) => x.json());
   assert.equal(t1.ok, true, JSON.stringify(t1)); assert.match(t1.message, /Alice Martin/);
   const t2 = await fetch(`${hub.url}/api/test/dropbox`, { headers: { cookie } }).then((x) => x.json());
-  assert.equal(t2.ok, true, JSON.stringify(t2)); assert.deepEqual(t2.tables, ["who_am_i", "list_folder", "file_preview"], "delete exclu de la liste blanche");
+  assert.equal(t2.ok, true, JSON.stringify(t2)); assert.deepEqual(t2.tables, ["who_am_i", "list_folder", "search"], "fetch et delete exclus de la liste blanche");
 });
 
 test("GET /api/test/:system : voyant vert avec le jeton de l'utilisateur, rouge avec le message d'erreur", async () => {

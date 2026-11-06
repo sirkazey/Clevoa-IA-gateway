@@ -68,7 +68,7 @@ export async function startHub({ upstreamUrl, users = {}, env = {}, store, prepa
     MS_LOGIN_URL: `${upstreamUrl}/ms`, MS_TENANT_ID: "common", MS_CLIENT_ID: "ms-client-id", MS_CLIENT_SECRET: "ms-client-secret", GRAPH_URL: `${upstreamUrl}/v1.0`,
     CLEVOA_URL: `${upstreamUrl}/api/v1/telemetry`, CLEVOA_KEY: "clevoa-key-test",
     MYREPORT_MCP_URL: `${upstreamUrl}/myreport/sse`, MYREPORT_TOOLS: "liste_indicateurs,valeur_indicateur",
-    DROPBOX_APP_KEY: "dbx-app-key", DROPBOX_APP_SECRET: "dbx-app-secret", DROPBOX_API_URL: upstreamUrl, DROPBOX_MCP_URL: `${upstreamUrl}/dropbox-mcp`,
+    DROPBOX_APP_KEY: "dbx-app-key", DROPBOX_APP_SECRET: "dbx-app-secret", DROPBOX_API_URL: upstreamUrl, DROPBOX_CONTENT_URL: upstreamUrl, DROPBOX_MCP_URL: `${upstreamUrl}/dropbox-mcp`,
     PROBE: "off", // sonde HEAD : désactivée par défaut, sinon les tests dépendraient de l'heure (health.test.js la teste)
     ...env,
   };

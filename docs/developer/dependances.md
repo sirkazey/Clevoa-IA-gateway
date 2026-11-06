@@ -29,6 +29,8 @@ Règle : reprendre un composant éprouvé plutôt qu'écrire du code maison pour
 | `express-rate-limit` | 8.7.1 | toutes les limites de débit (IPv6 regroupées par /56) | MIT |
 | `openid-client` | 6.8.8 | SSO Entra et SharePoint : code, refresh, id_token vérifié. Horloge juste requise (± 30 s, NTP) | MIT |
 | `jose` | 6.2.13 | accès en ligne : vérification des jetons d'accès Entra | MIT |
+| `fflate` | 0.8.3 | lecture des zip Office (docx, xlsx, pptx), décompression limitée aux entrées utiles ; aucune dépendance | MIT |
+| `unpdf` | 1.9.1 | texte et images des PDF (pdf.js embarqué) ; aucune dépendance. `pdfjs-dist` écarté : 37 Mo et une dépendance native facultative | MIT |
 | `node:sqlite` (intégré à Node 24) | — | `hub.db` ; API encore « release candidate », d'où un seul module (`db.js`), testé à chaque mise à jour de Node | domaine public |
 
 Dépendance transitive notable : `oauth4webapi` (même auteur qu'openid-client). Inventaire complet : SBOM de la CI (§ 3).
