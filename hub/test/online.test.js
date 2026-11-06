@@ -107,6 +107,15 @@ test("/token : mauvais secret refusé sans appel à Entra ; renouvellement refus
   assert.equal(bad.status, 400);
   assert.equal((await bad.json()).error, "invalid_client");
   assert.equal(up.requests("/ms/common/oauth2/v2.0/token").length, 0);
+  for (const end = Date.now() + 2000; !/\[online\] \/token refusé \(400\) : invalid_client – Invalid client_secret/.test(hub.logs()) && Date.now() < end;) await new Promise((r) => setTimeout(r, 50));
+  assert.match(hub.logs(), /\[online\] \/token refusé \(400\) : invalid_client – Invalid client_secret/, "refus écrit au journal");
+  assert.ok(!hub.logs().includes("mauvais-secret"), "jamais le secret reçu");
+  // Secret en en-tête Authorization: Basic (client_secret_basic) : accepté comme dans le corps.
+  up.state.msRefresh = "plain";
+  const basic = await fetch(`${base}/token`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: `Basic ${Buffer.from(`${CLIENT}:${encodeURIComponent(SECRET)}`).toString("base64")}` },
+    body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: "ms-refresh-marie" }) });
+  assert.equal(basic.status, 200, await basic.clone().text());
+  up.reset();
   up.state.msRefresh = "invalid_grant";
   const r = await fetch(`${base}/token`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: "ms-refresh-marie", client_id: CLIENT, client_secret: SECRET, resource: `${base}/mcp` }) });

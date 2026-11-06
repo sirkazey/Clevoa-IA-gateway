@@ -132,6 +132,26 @@ export function app(mcp) {
   // Toutes les demandes de jeton de Claude viennent des quelques adresses d'Anthropic : le plafond par adresse du SDK (50 par 15 min)
   // couperait les renouvellements de tous les collaborateurs. Plafond relevé ; la règle WAF de Cloudflare filtre en amont.
   const generous = { windowMs: 15 * 60_000, max: 1000 };
+  // Refus du relais OAuth écrits au journal, sans secret ni code : le 06/11/2026, un secret mal recopié dans ChatGPT était
+  // refusé sans aucune trace. Les messages du SDK (« Invalid client_secret », « Unregistered redirect_uri »…) ne citent aucune valeur.
+  a.use(["/authorize", "/token"], (req, res, next) => {
+    const json = res.json.bind(res);
+    res.json = (body) => {
+      if (res.statusCode >= 400) console.error(`[online] ${req.baseUrl || req.path} refusé (${res.statusCode}) : ${body?.error ?? "erreur"}${body?.error_description ? ` – ${body.error_description}` : ""}`);
+      return json(body);
+    };
+    next();
+  });
+  // Secret en en-tête (client_secret_basic, méthode par défaut de nombreux clients OAuth) : recopié dans le corps, où le SDK le lit.
+  a.post("/token", express.urlencoded({ extended: false, limit: "16kb" }), (req, _res, next) => {
+    const m = /^Basic\s+([A-Za-z0-9+/=]+)$/i.exec(req.headers.authorization || "");
+    if (m && req.body && !req.body.client_secret) {
+      const raw = Buffer.from(m[1], "base64").toString("utf8"), i = raw.indexOf(":");
+      const dec = (s) => { try { return decodeURIComponent(s.replace(/\+/g, " ")); } catch { return s; } }; // RFC 6749 § 2.3.1
+      if (i > 0) { req.body.client_id ??= dec(raw.slice(0, i)); req.body.client_secret = dec(raw.slice(i + 1)); }
+    }
+    next();
+  });
   a.use(mcpAuthRouter({ provider, issuerUrl: new URL(BASE), resourceServerUrl: new URL(MCP_URL), scopesSupported: [SCOPE],
     resourceName: process.env.INSTANCE_LABEL || "Clevoa AI Gateway", tokenOptions: { rateLimit: generous }, authorizationOptions: { rateLimit: generous } }));
   const auth = requireBearerAuth({ verifier: provider, requiredScopes: [SCOPE], expectedResource: new URL(MCP_URL),
