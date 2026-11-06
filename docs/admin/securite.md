@@ -1,139 +1,106 @@
 # Sécurité
 
-Principes de sécurité du produit, ce que l'administrateur doit vérifier, et ce qui reste à prouver. Les analyses
-automatiques (Semgrep, CodeQL, Gitleaks, Trivy, ZAP) sont décrites côté développeur dans
-[tests et analyses](../developer/tests.md) ; les audits passés dans [l'historique](../history/audit-2026-10.md).
+Public : l'administrateur du hub, la DSI et le DPO du client. Objet : les garanties du produit, ce qu'il faut vérifier
+au déploiement, ce que la télémétrie envoie et ce que la base locale conserve.
+
+Analyses automatiques : [tests et analyses](../developer/tests.md) ; dépendances : [dépendances](../developer/dependances.md) ;
+audits passés : [historique](../history/audit-2026-10.md).
 
 ## 1. Cloisonnement des identités (règle non négociable)
 
-Aucun compte de service, générique ou global, pour aucun des outils connectés.
+Aucun compte de service, générique ou global, pour aucun outil connecté.
 
-* `users.json` ne contient que des jetons **individuels**, obtenus par chaque collaborateur sur le portail et rangés
-  sous sa clé MCP personnelle, avec son identité (e-mail, SSO) et le jour de dernière utilisation par un assistant
-  (affiché sur son portail, ni l'heure ni les outils appelés). Le fichier est **chiffré AES-256-GCM** (clé maîtresse `ENCRYPTION_KEY`, obligatoire,
-  `openssl rand -hex 32`), déchiffré en mémoire uniquement, écrit avec les droits 600 dans un volume en 700.
-* Chaque appel MCP est authentifié par la clé de l'appelant. Le hub lit **son** jeton et le transmet tel quel en
-  `Authorization: Bearer` à l'outil, qui applique le profil de droits de ce collaborateur.
-* Le cache de structure (objets, champs) est par utilisateur et expire chaque nuit ; aucune donnée métier n'est cachée.
-* SSO Entra et SharePoint : l'id_token est vérifié par openid-client (bibliothèque certifiée OpenID), **signature comprise**
-  avec les clés publiées par l'annuaire, puis par les contrôles du hub (locataire, `oid`). Un id_token falsifié ou non signé
-  est refusé.
-* Dépendances : registre, licences, inventaire (SBOM) et mises à jour suivies dans [dépendances](../developer/dependances.md).
-* Aucun jeton n'est lu depuis l'environnement : les seules variables d'authentification sont les identifiants des
-  applications OAuth (échange de code et refresh), jamais utilisés pour requêter les API.
-* Exceptions : les **simulateurs** Sage X3 et MyReport (sans URL), qui ne contactent aucun système.
+* `users.json` ne contient que des jetons **individuels**, rangés sous la clé MCP de chaque collaborateur avec son
+  identité et le jour de sa dernière utilisation. Il est **chiffré AES-256-GCM** (`ENCRYPTION_KEY`, obligatoire,
+  `openssl rand -hex 32`), déchiffré en mémoire seulement, écrit en 600 dans un volume en 700.
+* Chaque appel MCP est authentifié par la clé de l'appelant. Le hub transmet **son** jeton en `Authorization: Bearer` :
+  l'outil applique les droits de ce collaborateur.
+* Le cache de structure (objets, champs) est par utilisateur et expire chaque nuit. Aucune donnée métier n'est cachée.
+* SSO et SharePoint : l'id_token est vérifié par openid-client, **signature comprise**, puis par le hub (locataire, `oid`).
+* Aucun jeton n'est lu dans l'environnement : les variables ne portent que les identifiants des applications OAuth.
+* Exception : les **simulateurs** Sage X3 et MyReport, qui ne contactent aucun système.
 
-Preuves : test `Cloisonnement` de `hub/test/mcp.test.js` (deux utilisateurs, seuls leurs jetons circulent),
-`hub/test/sso.test.js` (cookies manipulés, rejeu, code volé, fixation de session), campagne de charge (0 violation sur
-3 950 appels). **Limite** : sur les systèmes réels, le cloisonnement n'a été observé qu'avec un compte administrateur ;
-le test avec un compte restreint reste à faire ([état des fonctionnalités](../validation/etat-des-fonctionnalites.md)).
+Preuves : test `Cloisonnement` de `hub/test/mcp.test.js`, `hub/test/sso.test.js`, campagne de charge (0 violation sur
+3 950 appels). **Limite** : sur les systèmes réels, seul un compte administrateur a été observé ; le test avec un compte
+restreint reste à faire ([état des fonctionnalités](../validation/etat-des-fonctionnalites.md)).
 
 ## 2. Lecture seule
 
-Salesforce via le serveur MCP hébergé `SObject Reads` uniquement (URL verrouillée, outils au nom d'écriture refusés
-avant transfert) ; Sage X3 `$query` / `$details` / `$prototypes` uniquement, en GET ; Graph en GET uniquement, chemins
-et sites validés, redirections limitées aux hôtes Microsoft en https ; Dropbox et MyReport limités à une liste blanche
-d'outils ; noms d'objets validés (`^\w+$`) ; outils annotés `readOnlyHint`.
+* Salesforce : serveur MCP hébergé `SObject Reads` uniquement (URL verrouillée) ; les outils au nom d'écriture sont
+  refusés avant transfert.
+* Sage X3 : `$query`, `$details` et `$prototypes` uniquement, en GET.
+* Microsoft Graph : GET uniquement, chemins et sites validés, redirections limitées aux hôtes Microsoft en https.
+* Dropbox et MyReport : liste blanche d'outils.
+* Noms d'objets validés (`^\w+$`) ; outils annotés `readOnlyHint`.
 
 ## 3. Accès MCP et portail
 
-* La clé MCP personnelle se transmet **uniquement** dans l'en-tête `Authorization: Bearer`. Le paramètre `?key=` est
-  ignoré (une clé dans l'URL finirait dans les journaux du reverse proxy). Les connecteurs de claude.ai web et mobile ne
-  peuvent pas utiliser cette clé : ils passent par l'[accès en ligne](acces-en-ligne.md) (expérimental, désactivé par défaut),
-  port séparé où le hub ne délivre aucun jeton et vérifie ceux d'Entra ID. Cloudflare y voit les échanges en clair.
-* Le callback OAuth est lié au navigateur qui a lancé le flux (anti login-CSRF) ; les POST du portail refusent une
-  autre origine ; PKCE S256 sur tous les flux.
-* Transport SSE : `POST /messages` exige la clé MCP et la session doit avoir été ouverte par cette clé (403 sinon).
-* État des systèmes (1.4.0) : le hub envoie, du lundi au vendredi de 7 h à 19 h, une requête `HEAD` toutes les 10 minutes
-  vers la racine de l'adresse de chaque système réel, **sans aucun identifiant** ni redirection suivie (`PROBE=off` la
-  désactive). Le portail (`/api/status`, réservé à un collaborateur identifié par le SSO ou ayant connecté une
-  application) n'affiche qu'un état et un temps de réponse par système (à partir de 5 appels), jamais un volume, l'heure
-  d'un appel ni une identité. Le jeton de supervision doit compter 24 caractères au moins. La supervision (`/metrics`, `/metrics/prtg`) exige un jeton dédié `METRICS_TOKEN`, distinct des clés des
-  collaborateurs, et n'existe pas sans lui ; elle ne contient ni identité, ni clé, ni adresse, ni donnée métier.
-* Limitation de débit en mémoire, par adresse IP et par minute : 20 diagnostics, 30 actions portail, 60 `/api/me`, 60
-  `/api/status`, 30 `/metrics`,
-  60 départs et retours OAuth, 20 échecs d'authentification MCP (une clé valide n'est jamais freinée par les échecs
-  d'autres clients). `TRUST_PROXY` indique le nombre de reverse proxys pour lire l'IP réelle. Les routes MCP elles-mêmes
-  (`/mcp`, `/sse`, `/messages`) sont plafonnées par clé, et non par IP (tout un bureau sort par la même adresse) :
-  300 requêtes par minute (1.5), très au-dessus d'un usage normal, contre une clé fuitée ou un assistant qui boucle.
+* La clé MCP passe **uniquement** dans l'en-tête `Authorization: Bearer`. Le paramètre `?key=` est ignoré.
+* claude.ai web et mobile passent par l'[accès en ligne](acces-en-ligne.md) (expérimental) : port séparé, jetons Entra ID,
+  Cloudflare voit les échanges en clair.
+* OAuth : PKCE S256 sur tous les flux ; callback lié au navigateur qui a lancé le flux. Les POST du portail refusent une
+  autre origine.
+* SSE : `POST /messages` exige la clé qui a ouvert la session (403 sinon).
+* État des systèmes : en semaine de 7 h à 19 h, une requête `HEAD` sans identifiant toutes les 10 minutes vers chaque
+  système réel (`PROBE=off` la désactive). `/api/status`, réservé aux collaborateurs identifiés, n'affiche qu'un état et
+  un temps de réponse par système.
+* Supervision (`/metrics`, `/metrics/prtg`) : n'existe qu'avec `METRICS_TOKEN` (24 caractères au moins, distinct des
+  clés). Ni identité, ni clé, ni adresse, ni donnée métier.
+* Limites par adresse IP et par minute (`TRUST_PROXY` = nombre de reverse proxys) : 20 diagnostics, 30 actions portail,
+  60 `/api/me`, 60 `/api/status`, 30 `/metrics`, 60 départs et retours OAuth, 20 échecs d'authentification MCP.
+* Routes MCP (`/mcp`, `/sse`, `/messages`) : 300 requêtes par minute **par clé**.
 * Plafond d'appels sortants par connecteur, tous utilisateurs confondus : `MYREPORT_MAX_PER_MIN` (défaut 20),
-  `SF_MAX_PER_MIN` (défaut illimité). Au-delà, erreur claire sans rien envoyer au système.
-* En-têtes de sécurité HTTP sur toutes les réponses (CSP sans ressource externe, nosniff, anti-clickjacking,
-  Referrer-Policy, Permissions-Policy, COOP/CORP), `X-Powered-By` retiré.
-* Conteneur : utilisateur `node`, capacités retirées, `no-new-privileges`, système de fichiers en lecture seule hormis
-  `/data` et `/tmp` ; en production, `PUBLIC_URL` en https obligatoire. Le conteneur de sauvegarde garde la seule
-  capacité `DAC_OVERRIDE` pour lire le volume ([exploitation § 4](exploitation.md#4-sauvegarde)).
-* Journaux : jamais de clé, de jeton, d'argument d'outil ni de résultat ; en `debug`, nom de l'outil, durée et statut.
+  `SF_MAX_PER_MIN` (défaut illimité). Au-delà, erreur claire sans appel au système.
+* En-têtes HTTP : CSP sans ressource externe, nosniff, anti-clickjacking, Referrer-Policy, Permissions-Policy,
+  COOP/CORP ; `X-Powered-By` retiré.
+* Conteneur : utilisateur `node`, capacités retirées, `no-new-privileges`, système de fichiers en lecture seule hors
+  `/data` et `/tmp`. En production, `PUBLIC_URL` doit être en https.
+* Journaux : jamais de clé, de jeton, d'argument d'outil ni de résultat. En `debug` : nom de l'outil, durée, statut.
 
 ## 4. Télémétrie Clevoa
 
-**Finalité** : permettre à Clevoa SASU, éditeur, de savoir quelles installations tournent, dans quelle version, avec
-quels connecteurs configurés, et de détecter une installation qui ne donne plus de nouvelles ou qui doit être mise à
-jour. Base du suivi de licence (nombre de sièges) et du contrat de maintenance. Clevoa n'a, par ce canal, aucun accès à
-l'installation : la réponse du backend n'est jamais exécutée ; le hub n'en retient qu'un statut court et, s'il est bien
-formé, un numéro de version minimale qui produit un avertissement dans ses journaux. La clé n'est jamais envoyée à une
-autre adresse que `CLEVOA_URL` (aucune redirection suivie).
+**Finalité** : savoir quelles installations tournent, en quelle version, avec quels connecteurs (suivi de licence et
+maintenance). Clevoa n'obtient aucun accès à l'installation : le hub ne retient de la réponse qu'un statut et une
+éventuelle version minimale.
 
-**Fréquence** : un `POST` vers `CLEVOA_URL` (défaut `https://clevoa.fr/api/v1/telemetry`, figé en production) au
-démarrage puis toutes les 6 heures (03:00, 09:00, 15:00, 21:00, heure du serveur, plus 0 à 10 minutes tirées au hasard
-pour étaler les envois des installations), avec l'en-tête `X-Clevoa-Key`. Délai de
-10 secondes par envoi ; après un échec, trois nouveaux essais (1, 5 puis 30 minutes), puis le créneau suivant (depuis la
-1.3.2-rc.2 ; un envoi par jour auparavant). Une panne de Clevoa n'interrompt jamais le
-hub : journal `[telemetry] échec`, rien d'autre.
+**Envoi** : `POST` vers `CLEVOA_URL` (défaut `https://clevoa.fr/api/v1/telemetry`, figé en production), en-tête
+`X-Clevoa-Key`, sans redirection suivie ; au démarrage puis à 03:00, 09:00, 15:00 et 21:00 (plus 0 à 10 minutes au
+hasard). Après un échec : essais à 1, 5 et 30 minutes. Une panne de Clevoa n'affecte pas le hub (journal
+`[telemetry] échec`).
 
-**Données**, et rien d'autre (le backend refuse tout champ supplémentaire, toute statistique mal formée et tout payload
-de plus de 8 Ko) :
-
-```json
-{ "installation": "3f1c2a4e-8b7d-4c1e-9a2b-5d6e7f8a9b0c", "version": "1.5.0", "env": "PRODUCTION", "date": "2026-10-24",
-  "connectors": { "salesforce": true, "sagex3": false, "sharepoint": true, "dropbox": true, "myreport": false },
-  "requests": 137, "seats": 9, "since": "2026-10-24T03:00:00.000Z",
-  "stats": { "salesforce": { "calls": 120, "errors": { "auth": 0, "quota": 0, "timeout": 1, "unreachable": 0, "other": 0, "user": 3 },
-                             "users": 6, "authUsers": 0, "p50": 410, "p95": 1180 } } }
-```
+**Données** (le backend refuse tout autre champ, toute statistique mal formée et tout envoi de plus de 8 Ko) :
 
 | Champ | Contenu |
 |---|---|
-| `installation` | UUID aléatoire tiré au premier envoi, conservé dans `users.json` chiffré (il suit les sauvegardes) ; ne désigne ni le client ni une personne |
+| `installation` | UUID aléatoire, conservé dans `users.json` chiffré (il suit les sauvegardes) ; ne désigne ni le client ni une personne |
 | `version`, `env`, `date` | version du hub, `PRODUCTION` ou `PRE-PROD`, date du jour |
 | `connectors` | vrai = système réel configuré (un simulateur compte `false`) |
-| `requests` | nombre d'appels d'outils depuis le dernier envoi **réussi**, tous collaborateurs confondus |
-| `seats` | collaborateurs ayant connecté au moins un outil (base de la licence par siège), un entier |
-| `since` | début de la période couverte par `stats` (dernier envoi réussi, ou démarrage du hub) |
-| `stats` | par connecteur utilisé pendant la période : nombre d'appels ; erreurs par type (`auth` jeton expiré ou refusé, `quota`, `timeout`, `unreachable` système injoignable, `other`, `user` erreur d'usage : outil hors liste blanche, compte non connecté) ; nombre de collaborateurs distincts ayant appelé l'outil (`users`) et refusés en authentification sans avoir été servis une seule fois sur la période (`authUsers`) ; latences médiane et 95e centile en millisecondes. Les collaborateurs sont comptés par une empreinte salée de leur clé MCP, tenue en mémoire et jamais transmise ; le sel change à chaque démarrage. Aucun nom d'outil appelé, argument, message d'erreur ni identifiant |
+| `requests` | appels d'outils depuis le dernier envoi **réussi**, tous collaborateurs confondus |
+| `seats` | nombre de collaborateurs ayant connecté au moins un outil (base de la licence) |
+| `since` | début de la période couverte par `stats` |
+| `stats` | par connecteur utilisé : appels ; erreurs par type (`auth`, `quota`, `timeout`, `unreachable`, `other`, `user` = erreur d'usage) ; collaborateurs distincts (`users`) et refusés sans aucun succès (`authUsers`) ; latences médiane et 95e centile en ms |
 
-Ne quittent jamais le hub : jetons OAuth, clés MCP, mots de passe, données métier, contenu des requêtes, réponses des
-outils, noms et e-mails des collaborateurs, journaux applicatifs, adresses IP des postes. La clé `CLEVOA_KEY` identifie
-le **client** ; l'identifiant distingue ses installations. Une sauvegarde de production restaurée en
-pré-production y apporte le même identifiant d'installation ; Clevoa tient une fiche par identifiant **et** par
-environnement, les deux restent distinctes. Parler de télémétrie « réduite à des compteurs », pas
-« totalement anonyme » : Clevoa sait quel client a combien d'installations.
+Les collaborateurs sont comptés par une empreinte salée de leur clé, jamais transmise. Ne quittent jamais le hub :
+jetons, clés MCP, mots de passe, données métier, requêtes, réponses, noms et e-mails, journaux, adresses IP des postes.
+`CLEVOA_KEY` identifie le **client**, l'identifiant ses installations ; une pré-production restaurée depuis la
+production reste distincte (fiche par identifiant **et** par environnement). Dire « réduite à des compteurs », pas
+« anonyme ».
 
-**Destinataire et conservation** : Clevoa SASU, sur AWS région Paris (`eu-west-3`, sous-traitant). Dans une table
-DynamoDB chiffrée : une fiche par installation (dernier état, premier et dernier contact, incidents en cours) et une
-ligne par envoi (les compteurs ci-dessus), chacune expirée 400 jours après son écriture (la suppression effective par
-AWS intervient en général sous quelques jours) ; la restauration à un instant donné de la table conserve une copie
-35 jours de plus. Journaux techniques CloudWatch : 90 jours. E-mails d'incident (nom du client, identifiant,
-environnement, connecteur et nature de l'incident), envoyés seulement à l'ouverture et à la fermeture d'un incident, au plus dix par client et par heure :
-conservés dans la messagerie de Clevoa, à purger selon sa propre politique. Ces données sont consultées par Clevoa dans
-une [console de suivi](../../clevoa-console/README.md) installée sur son réseau privé, en lecture seule. Détail :
-[backend](../../clevoa-backend/README.md).
+**Destinataire et conservation** : Clevoa SASU, sur AWS Paris (`eu-west-3`, sous-traitant), table DynamoDB chiffrée ;
+fiches et envois expirés après 400 jours, journaux CloudWatch 90 jours, e-mails d'incident (ouverture et fermeture
+seulement). Détail : [backend](../../clevoa-backend/README.md). Clevoa les consulte dans une
+[console](../../clevoa-console/README.md) en lecture seule, sur son réseau privé.
 
-**Désactivation** : `CLEVOA_KEY` vide désactive la télémétrie hors production. En production, la clé est exigée par
-`docker-compose.prod.yml` (suivi de licence et de maintenance) ; son encadrement contractuel est un point ouvert de la
-licence ([§ 11, point 8](../../LICENSE.md#11-points-à-valider-par-un-conseil-juridique)). Un client qui bloque le flux sortant vers Clevoa garde un hub pleinement fonctionnel ; son installation apparaît alors
-comme silencieuse dans le rapport de Clevoa.
+**Désactivation** : `CLEVOA_KEY` vide la désactive hors production. En production, `docker-compose.prod.yml` exige la
+clé ; son encadrement contractuel est un point ouvert ([licence § 11, point 8](../../LICENSE.md#11-points-à-valider-par-un-conseil-juridique)).
+Un client qui bloque le flux garde un hub pleinement fonctionnel ; son installation apparaît silencieuse chez Clevoa.
 
-**Implications contractuelles et données personnelles** : aucune donnée de collaborateur n'est transmise ; l'adresse IP
-du serveur du client est vue par AWS lors de chaque envoi. Sur une petite installation, un compteur par connecteur et par
-période de 6 heures peut se rapprocher d'une personne (« un collaborateur a eu un refus Salesforce ce matin ») : Clevoa
-n'en fait qu'un usage de maintenance, et ce point fait partie de la validation juridique ci-dessous. La qualification juridique (donnée personnelle ou non,
-mention au registre des traitements du client, clause du contrat de licence) est **à faire valider** par le juriste ou
-le DPO de Clevoa et du client avant la première mise en production.
+**Données personnelles** : AWS voit l'adresse IP du serveur. Sur une petite installation, un compteur peut se
+rapprocher d'une personne. La qualification juridique (donnée personnelle ou non, registre des traitements, clause de
+licence) est **à faire valider** par le juriste ou le DPO de Clevoa et du client avant la première production.
 
-**Version minimale** : si Clevoa renseigne une version minimale, le hub qui est en dessous l'écrit dans ses journaux
-(`[telemetry] version … inférieure au minimum …`) ; il continue de fonctionner, la mise à jour reste une décision de
-l'administrateur ([mise à jour](exploitation.md#10-mise-à-jour-et-retour-arrière)).
+**Version minimale** : en dessous, le hub écrit `[telemetry] version … inférieure au minimum …` et continue de
+fonctionner. La mise à jour reste une décision de l'administrateur ([mise à jour](exploitation.md#10-mise-à-jour-et-retour-arrière)).
 
 ## 5. Ce que l'administrateur doit vérifier au déploiement
 
@@ -142,63 +109,49 @@ l'administrateur ([mise à jour](exploitation.md#10-mise-à-jour-et-retour-arri�
 | Hub joignable seulement via le reverse proxy https | `HUB_PORT=127.0.0.1:8080`, nom DNS interne, `TRUST_PROXY` juste ([exploitation § 6](exploitation.md#6-reverse-proxy-nginx-https)) |
 | `ENCRYPTION_KEY` et configuration au coffre, jamais avec les sauvegardes | [exploitation § 4](exploitation.md#4-sauvegarde) |
 | Une `ENCRYPTION_KEY` et une `CLEVOA_KEY` par environnement | variables de chaque stack |
-| Périmètre d'accès au portail | SSO Entra ID ([guide](sso-entra.md)), ou réseau interne / VPN ; tout compte du locataire peut obtenir une clé |
-| Permissions Graph `Files.Read.All` et `Sites.Read.All` justifiées | revue M365 / DPO : ces permissions déléguées donnent aux assistants l'accès aux documents que le collaborateur voit |
+| Périmètre d'accès au portail | [SSO Entra ID](sso-entra.md), ou réseau interne / VPN ; tout compte du locataire peut obtenir une clé |
+| Permissions Graph `Files.Read.All` et `Sites.Read.All` | revue M365 / DPO : les assistants voient les documents que voit le collaborateur |
 | Départ d'un collaborateur, clé compromise | [exploitation § 8](exploitation.md#8-départ-dun-collaborateur-clé-compromise) |
-| Pas de secret dans le dépôt ni dans les issues | Gitleaks en CI ; modèles d'issue rappelant « sans jeton ni donnée métier » |
-| Journal d'audit (`AUDIT=on`) seulement après avis du DPO et information des collaborateurs | § 7 |
+| Aucun secret dans le dépôt ni les issues | Gitleaks en CI ; modèles d'issue « sans jeton ni donnée métier » |
+| Journal d'audit (`AUDIT=on`) | seulement après avis du DPO et information des collaborateurs (§ 7) |
 
 ## 6. Ce qui reste à prouver
 
-Tests humains prioritaires sur tout scanner : compte restreint sur Sage X3 et Salesforce, révocation OAuth réelle,
-injection de prompts et contenus non fiables dans les données (CRM, documents) relayées aux assistants, exactitude
-financière sur un jeu de référence. Liste et état : [état des fonctionnalités](../validation/etat-des-fonctionnalites.md).
+Compte restreint sur Sage X3 et Salesforce, révocation OAuth réelle, injection de prompts par des données non fiables,
+exactitude financière sur un jeu de référence. État :
+[état des fonctionnalités](../validation/etat-des-fonctionnalites.md).
 
-## 7. Base d'exploitation et journal d'audit (1.5)
+## 7. Base d'exploitation et journal d'audit
 
-Ce que contient `/data/hub.db` (SQLite, dans le volume du hub : dossier en 700 et fichiers en 600, lisibles par le seul
-utilisateur `node`), et ce qu'il n'y a jamais :
+`/data/hub.db` (SQLite, volume du hub, dossier en 700 et fichiers en 600, lisibles par `node` seul) contient :
 
 | Donnée | Contenu | Identifie une personne ? | Conservation |
 |---|---|---|---|
 | Disponibilité | système, créneau de 10 minutes, état, temps de réponse p95 | non | 90 jours |
-| Usage mensuel | mois, système, nombre d'appels et d'erreurs | non | 24 mois |
-| Collaborateurs actifs | mois, **pseudonyme** du collaborateur | pseudonyme (voir ci-dessous) | 24 mois |
-| Journal d'audit, si `AUDIT=on` | date, pseudonyme, e-mail **chiffré** (AES-256-GCM, `ENCRYPTION_KEY`), système, nom de l'outil, résultat (`ok` ou catégorie d'erreur), durée | oui | `AUDIT_DAYS` (90 jours par défaut) |
-| **Jamais** | arguments des outils (requêtes, filtres, chemins), données renvoyées, jetons, clés MCP | | |
+| Usage mensuel | mois, système, appels, erreurs | non | 24 mois |
+| Collaborateurs actifs | mois, **pseudonyme** | pseudonyme | 24 mois |
+| Journal d'audit, si `AUDIT=on` | date, pseudonyme, e-mail **chiffré** (`ENCRYPTION_KEY`), système, outil, résultat (`ok` ou catégorie d'erreur), durée | oui | `AUDIT_DAYS` (90 jours par défaut) |
+| **Jamais** | arguments des outils, données renvoyées, jetons, clés MCP | | |
 
-Le pseudonyme est un HMAC-SHA256 de l'identité du collaborateur (identité Entra, sinon clé MCP) calculé avec une sous-clé
-tirée d'`ENCRYPTION_KEY` : il ne se lit pas, mais qui détient la clé peut retrouver la personne. Au sens du RGPD, ce sont donc des
-données **pseudonymisées**, pas anonymes. Il change si la clé MCP d'un collaborateur sans SSO est régénérée.
+Le pseudonyme est un HMAC-SHA256 de l'identité (Entra, sinon clé MCP) avec une sous-clé d'`ENCRYPTION_KEY` : données
+**pseudonymisées**, pas anonymes. Sans SSO, il change quand la clé MCP est régénérée.
 
-**Journal d'audit : désactivé par défaut**, parce que c'est un traitement de données personnelles du client, pas de
-Clevoa. Avant de poser `AUDIT=on`, le client doit au minimum (à valider par son DPO ; ceci n'est pas un avis juridique) :
+**Journal d'audit : désactivé par défaut**, car c'est un traitement de données personnelles du client. Avant
+`AUDIT=on`, le client doit au minimum (à valider par son DPO ; ceci n'est pas un avis juridique) :
 
-1. fixer la **finalité** (par exemple : sécurité et traçabilité des accès aux données métier par les assistants IA)
-   et sa base légale (en général l'intérêt légitime de l'employeur) ;
+1. fixer la **finalité** et la base légale ;
 2. l'inscrire au **registre des traitements** ;
-3. **informer les collaborateurs** (charte informatique ou note d'information) : ce qui est journalisé, pourquoi,
-   combien de temps, qui y accède ;
-4. fixer la **durée de conservation** (`AUDIT_DAYS`) et la **liste des personnes** autorisées à exporter le journal.
+3. **informer les collaborateurs** : quoi, pourquoi, combien de temps, qui y accède ;
+4. fixer la **durée** (`AUDIT_DAYS`) et les personnes autorisées à exporter.
 
-Accès : aucune route HTTP, aucun écran. L'export passe par `docker exec … node admin.js audit` sur le serveur
-([exploitation § 12](exploitation.md#12-disponibilité-usage-et-journal-daudit)), donc par un administrateur qui a déjà
-accès à Docker et aux variables (dont `ENCRYPTION_KEY`). Le fichier exporté est en clair : le traiter comme une donnée
-personnelle (remise tracée, suppression après usage). Clevoa n'y a jamais accès : rien de la base n'est envoyé par la
-télémétrie, qui ne transmet que des compteurs agrégés (§ 4).
+**Accès** : aucune route HTTP, aucun écran ; export par un administrateur du serveur
+([exploitation § 12](exploitation.md#12-disponibilité-usage-et-journal-daudit)). Le fichier exporté est en clair :
+remise tracée, suppression après usage. Rien de la base ne part dans la télémétrie.
 
-Conservation réelle : une ligne purgée est effacée du fichier lui-même (`secure_delete`), pas seulement marquée libre, et
-le journal WAL est vidé après la purge. Mais elle survit dans les copies faites avant sa purge : sauvegardes `hub-*.db`
-(`BACKUP_KEEP_DAYS`, 30 jours par défaut, plus la politique du serveur de sauvegarde) et `hub.db.avant-restauration` laissé
-dans le volume par une restauration (à supprimer une fois la restauration validée). Durée effective de l'audit :
-`AUDIT_DAYS` + `BACKUP_KEEP_DAYS`, à indiquer dans l'information des collaborateurs. Une valeur d'`AUDIT_DAYS` illisible
-empêche le hub de démarrer, plutôt qu'une conservation illimitée sans le dire.
+**Durée réelle** = `AUDIT_DAYS` + `BACKUP_KEEP_DAYS` (30 jours par défaut) : une ligne purgée est effacée du fichier
+(`secure_delete`), mais survit dans les sauvegardes `hub-*.db` et dans `hub.db.avant-restauration` (à supprimer après
+une restauration validée). L'annoncer aux collaborateurs. Dans les sauvegardes (600, root, `BACKUP_DIR`), compteurs,
+outils et pseudonymes sont lisibles sans la clé, pas les e-mails d'audit.
 
-Les sauvegardes `hub-*.db` héritent de ces règles : compteurs, noms d'outils et pseudonymes y sont lisibles sans la clé,
-les e-mails d'audit non. Elles sont écrites en 600 (root) dans `BACKUP_DIR` ; les inclure dans la politique de
-conservation des journaux du client.
-
-Un audit promis qui s'arrête (disque plein, base abîmée) ne bloque aucun outil, mais se voit : `clevoa_hub_db_up` et
-`clevoa_hub_db_write_failures_total` dans `/metrics`, canaux « Hub · base d'exploitation » et « Hub · écritures en échec »
-dans PRTG ([exploitation § 11](exploitation.md#11-supervision-du-hub)). L'export CSV neutralise les formules de tableur
-(valeur commençant par `=`, `+`, `-`, `@` préfixée d'une apostrophe).
+**Panne de la base** : aucun outil n'est bloqué ; `clevoa_hub_db_up` et `clevoa_hub_db_write_failures_total` la
+signalent ([exploitation § 11](exploitation.md#11-supervision-du-hub)).
