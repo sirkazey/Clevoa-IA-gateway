@@ -29,11 +29,7 @@ flowchart LR
     end
 
     W -->|"jeton Entra"| T
-    %% liens invisibles : gardent Cloudflare à gauche du serveur malgré la flèche sortante
-    T ~~~ CD
-    T ~~~ CD
-    T ~~~ CD
-    CD -->|"tunnel sortant"| T
+    T -->|"tunnel ouvert par le serveur"| CD
     CD --> H
     D -->|"clé personnelle"| H
     H ==>|"lecture seule"| X3
