@@ -6,7 +6,7 @@ métier d'une entreprise : Salesforce, Sage X3, SharePoint / OneDrive, Dropbox, 
 aucun compte technique.
 
 Édité par Clevoa SASU. Premier client : Groupe Charlois (direction financière). Qualification en cours sur sa
-pré-production ; aucune instance en production. Version courante : **1.7.0-rc.5** (`hub/version.js`).
+pré-production ; aucune instance en production. Version courante : **1.7.0-rc.6** (`hub/version.js`).
 
 ## Ce que fait la passerelle
 

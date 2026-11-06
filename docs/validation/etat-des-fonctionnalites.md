@@ -1,9 +1,9 @@
 # État des fonctionnalités et limites connues
 
-Public : DSI, recette, direction. Objet : ce qui est vérifié en version 1.7.0-rc.5, ce qui reste à prouver avant la
+Public : DSI, recette, direction. Objet : ce qui est vérifié en version 1.7.0-rc.6, ce qui reste à prouver avant la
 production, et les limites connues.
 
-La 1.7.0-rc.5 tourne depuis le 05/11/2026 sur le serveur de pré-production du client (Portainer, systèmes réels,
+Les versions candidates 1.7.0 tournent depuis le 05/11/2026 sur le serveur de pré-production du client (1.7.0-rc.5 depuis le 06/11 ; Portainer, systèmes réels,
 [journal P1–P11](journal-tests-reels.md)). Avant toute production manquent le cloisonnement avec un compte non
 administrateur et une restauration réelle. Statuts : [conventions](../CONTRIBUTING.md#statut-des-fonctionnalités).
 Historique : [`CHANGELOG.md`](../../CHANGELOG.md). Évolutions : [roadmap produit](../roadmap-produit.md).
