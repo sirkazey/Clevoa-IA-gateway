@@ -7,6 +7,15 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
+## [1.7.0-rc.6] – 2026-11-06
+
+Version candidate de finition du portail et de la documentation, avant le premier essai de l'accès en ligne.
+
+### Modifié
+- Portail : la page ne se décale plus en changeant d'onglet ; le bandeau ne signale un incident que s'il y en a un.
+- Accès en ligne actif : l'onglet de la clé s'appelle « Clé personnelle » et renvoie l'usage courant vers l'onglet « Claude ».
+- Documentation allégée d'un tiers : une source par sujet, état actuel seulement, guide utilisateur réécrit ; étude « connexion en un clic » archivée.
+
 ## [1.7.0-rc.5] – 2026-11-05
 
 Version candidate du portail, préparée pour l'accès en ligne : parcours de branchement et identité du collaborateur.

@@ -1,18 +1,17 @@
 # Reprendre le projet dans Claude Code
 
-Public : le propriétaire du produit, ou toute personne qui reprend le développement avec Claude Code (claude.ai/code).
-Objet : recréer en cinq minutes, sur un autre compte Claude, l'environnement cloud, la session et le contexte de
-travail. Les règles permanentes sont dans [`CLAUDE.md`](../../CLAUDE.md), chargé automatiquement par chaque session.
+Public : le propriétaire du produit, ou quiconque reprend le développement avec Claude Code (claude.ai/code).
+Objet : recréer en cinq minutes, sur un autre compte Claude, l'environnement cloud, la session et le contexte. Les
+règles permanentes sont dans [`CLAUDE.md`](../../CLAUDE.md), chargé par chaque session.
 
 ## 1. Procédure en cinq minutes
 
-1. **GitHub.** Sur le nouveau compte : connecter GitHub (https://claude.ai/connect-github), puis vérifier que l'application
-   Claude GitHub est installée sur `sirkazey/Clevoa-IA-gateway` (même page). Sans elle, la session ne peut ni cloner ni
-   ouvrir de PR.
-2. **Environnement cloud.** Sur claude.ai/code, créer un environnement nommé `MCP-Finance` :
-   * *Network access* : **Trusted** (par défaut) ; il autorise déjà `nodejs.org` et npm ;
-   * *Setup script* : coller le script ci-dessous. Il installe Node 24 sans dépendre du dépôt, puis les dépendances si
-     le dépôt est déjà cloné, et sort toujours en code 0 (un code non nul empêche la session de démarrer) ;
+1. **GitHub.** Connecter GitHub (https://claude.ai/connect-github) et vérifier que l'application Claude GitHub est
+   installée sur `sirkazey/Clevoa-IA-gateway`. Sans elle, la session ne peut ni cloner ni ouvrir de PR.
+2. **Environnement cloud.** Sur claude.ai/code, créer un environnement `MCP-Finance` :
+   * *Network access* : **Trusted** (autorise `nodejs.org` et npm) ;
+   * *Setup script* : le script ci-dessous. Il installe Node 24, puis les dépendances si le dépôt est cloné. Il sort
+     toujours en code 0 : un code non nul empêche la session de démarrer ;
    * aucune variable ni secret : les tests tournent sans réseau ni compte réel.
 
    ```bash
@@ -26,15 +25,13 @@ travail. Les règles permanentes sont dans [`CLAUDE.md`](../../CLAUDE.md), charg
    for d in */; do [ -f "$d/ops/claude-setup.sh" ] && bash "$d/ops/claude-setup.sh"; done
    true
    ```
-3. **Session.** Nouvelle session dans cet environnement, **dépôt `sirkazey/Clevoa-IA-gateway` sélectionné avant le
-   premier message** (sinon le dépôt n'est pas cloné : « Cloner le dépôt » apparaît grisé), branche `dev`, modèle le plus
-   capable proposé, mode de permission *auto*.
+3. **Session.** Nouvelle session dans cet environnement. Sélectionner le dépôt `sirkazey/Clevoa-IA-gateway` **avant le
+   premier message**, sinon il n'est pas cloné. Branche `dev`, modèle le plus capable, mode de permission *auto*.
 4. **Contexte.** Coller le prompt du § 2 comme premier message.
-5. **Vérification.** La session doit répondre avec la version courante, l'état de `main` et `dev`, et le résultat
-   des tests du hub. Si Node 22 apparaît ou si les dépendances manquent, lancer `bash ops/claude-setup.sh` dans la session.
+5. **Vérification.** La session répond avec la version courante, l'état de `main` et `dev` et le résultat des tests du
+   hub. Si Node 22 apparaît ou si les dépendances manquent : `bash ops/claude-setup.sh`.
 
-Facultatif, selon le travail : reconnecter Google Drive (contrats et documents Clevoa), Microsoft Learn (documentation
-Entra ID), et recopier les préférences personnelles (§ 3).
+Facultatif : reconnecter Google Drive et Microsoft Learn (§ 5), recopier les préférences (§ 3).
 
 ## 2. Prompt de reprise
 
@@ -50,7 +47,7 @@ Réponds en français, en conseiller : conclusion d'abord, incertitudes signalé
 
 ## 3. Préférences personnelles du propriétaire
 
-À recopier dans les réglages du profil Claude (préférences de réponse), elles ne suivent pas le compte :
+À recopier dans les préférences du profil Claude ; elles ne suivent pas le compte :
 
 ```text
 Tu es mon conseiller, pas mon assistant. ton rôle est d'être utile, pas agréable.Applique ces règles dans chaque réponse:
@@ -63,67 +60,39 @@ Tu es mon conseiller, pas mon assistant. ton rôle est d'être utile, pas agréa
 7: N'utilise jamais: "Bonne question", "Tu as tout à fait raison", "C'est très pertinent", "Absolument", "Bien sûr", "Effectivement".
 ```
 
-## 4. Environnement : ce que la session trouve et ce qu'elle n'a pas
+## 4. Environnement de la session
 
-| Élément | État | Remarque |
-|---|---|---|
-| Node | 22 fourni par l'image ; 24.22.1 installé par [`ops/claude-setup.sh`](../../ops/claude-setup.sh) dans `/opt/node24` | liens dans `~/.local/bin`, prioritaire dans le PATH ; vérifié le 3 novembre 2026 (environ 10 s) |
-| Docker | client présent, démon arrêté | `nohup dockerd >/tmp/dockerd.log 2>&1 &` démarre le démon (vérifié) ; téléchargement d'images depuis Docker Hub non vérifié |
-| GitHub | outils MCP GitHub de la session (lecture, PR, fusion, relance de CI) | pas de CLI `gh` ; push des tags et suppression de branches refusés (403) : à faire dans l'interface |
-| Réseau | proxy sortant de la session | aucun appel aux systèmes réels (Sage, Salesforce, Entra) depuis le cloud : les tests réels se font depuis le poste du propriétaire |
-| Durée de vie | conteneur effacé après inactivité | tout ce qui compte est poussé sur GitHub ; les fichiers du *scratchpad* sont perdus |
-
-Hook de fin de tour de l'environnement : il rappelle de commiter et pousser toute modification en cours. Le respecter,
-sauf travail d'un sous-agent non terminé.
+| Élément | État |
+|---|---|
+| Node | 22 dans l'image ; 24.22.1 installé par [`ops/claude-setup.sh`](../../ops/claude-setup.sh) dans `/opt/node24` |
+| Docker | démon arrêté : `nohup dockerd >/tmp/dockerd.log 2>&1 &` ; téléchargement depuis Docker Hub non vérifié |
+| GitHub | lecture, PR, fusion, CI ; tags, Releases et suppression de branches refusés (403) : à faire dans l'interface |
+| Réseau | aucun appel aux systèmes réels depuis le cloud ; les tests réels se font depuis le poste du propriétaire |
+| Durée de vie | conteneur effacé après inactivité : pousser tout ce qui compte (un hook de fin de tour le rappelle) |
 
 ## 5. Agents, skills et connecteurs
 
-**Agents.** Le dépôt ne définit aucun agent personnalisé (pas de `.claude/agents/`). Les sessions ont utilisé les
-sous-agents intégrés (`general-purpose`, `Explore`) avec des consignes écrites au cas par cas. Trois usages éprouvés,
-à reprendre :
+Aucun agent ni skill propre au dépôt. Usages éprouvés des sous-agents intégrés : audit en trois sous-agents en lecture
+seule (documentation ; code du hub ; scripts, CI, bouchon et console) ; relecture d'un diff avant fusion par un
+sous-agent qui ignore la conclusion de la session. Skills utiles : `code-review`, `security-review`.
 
-| Usage | Comment |
-|---|---|
-| Audit complet | trois sous-agents en parallèle, en lecture seule : documentation ; code du hub ; scripts, CI, bouchon et console. Chacun rend une liste de constats avec fichier et ligne ; la session principale corrige |
-| Relecture indépendante avant fusion | un sous-agent qui reçoit le diff, pas la conclusion de la session, et cherche les défauts de sécurité et de fonctionnement |
-| Corrections de documentation en masse | un sous-agent avec la liste numérotée des corrections, interdiction de toucher au code, `node ops/check-docs.js` et `hub/test/docs.test.js` à passer, compte rendu point par point |
+Connecteurs claude.ai : GitHub (indispensable) ; Google Drive, Microsoft Learn, Artifacts (facultatifs). Ne passent
+pas d'un compte à l'autre : conversations, artifacts, tâches programmées, connexions, préférences et mémoire.
 
-**Skills.** Aucune skill propre au projet. Skills intégrées utiles : `code-review` et `security-review` (relecture d'un
-diff), `session-start-hook` (si l'on veut remplacer le script d'environnement par un hook versionné).
+## 6. État et travaux en attente
 
-**Connecteurs claude.ai** (à reconnecter sur le nouveau compte) :
-
-| Connecteur | Usage | Indispensable |
-|---|---|---|
-| GitHub | dépôt, PR, CI, alertes CodeQL | oui |
-| Google Drive | contrats et documents Clevoa du propriétaire | non |
-| Microsoft Learn | documentation Entra ID, Graph | non |
-| Artifacts | rapports et écrans publiés | non |
-
-**Ce qui ne se transfère pas d'un compte à l'autre** : l'historique des conversations, les artifacts publiés, les
-routines programmées, les connexions des connecteurs, les préférences et la mémoire. Les artifacts de l'ancien compte
-(écrans du portail, rapport SSO) sont à exporter avant sa fermeture si on veut les garder ; leur contenu de référence
-est déjà dans [`docs/validation/`](../validation/etat-des-fonctionnalites.md).
-
-## 6. État au 5 novembre 2026
-
-* `main` : version **1.7.0-rc.1** (accès en ligne pour Claude, expérimental), tag `v1.7.0-rc.1` posé ; `dev` réaligné.
-* Pré-production sur le serveur du client depuis le 05/11 : Portainer, reverse-proxy nginx existant, Sage X3 (CHREC),
-  Salesforce sandbox, SharePoint et SSO Entra réels, Claude Desktop vérifié ([journal P1–P11](../validation/journal-tests-reels.md)).
-  `PIHTYP` lu sur CHREC ; `SINVOICE`, `GACCENTRY`, `GACCDUDATE` absents en standard (développement spécifique à chiffrer).
-* Accès en ligne en cours de mise en place : serveurs DNS de `clevoa.fr` changés pour Cloudflare le 05/11 (publication par le registre en cours), tunnel `charlois-test`
-  créé, application Entra du portail complétée (scope `mcp`, jetons v2, consentement administrateur) ; reste la route du
-  tunnel, les règles WAF, les variables `CLOUDFLARE_*` et `ENTRAID_CLAUDE_*` dans la stack et l'ajout du connecteur par l'Owner Claude.
-* Recette réelle restante avant toute production : [état des fonctionnalités § 3](../validation/etat-des-fonctionnalites.md#3-tests-restant-à-réaliser),
-  en premier le cloisonnement avec un compte non administrateur.
+État au 6 novembre 2026 : `main` et `dev` en **1.7.0-rc.6** (tag `v1.7.0-rc.6` à poser par le propriétaire ; `v1.7.0-rc.5` déployée le 06/11). Pré-production sur le
+serveur du client depuis le 05/11 ([journal P1–P11](../validation/journal-tests-reels.md)). Recette réelle restante :
+[état des fonctionnalités § 3](../validation/etat-des-fonctionnalites.md#3-tests-restant-à-réaliser), en premier le
+cloisonnement avec un compte non administrateur.
 
 Travaux en attente, dans l'ordre proposé :
 
-1. Accès en ligne : finir la mise en place ([guide](../admin/acces-en-ligne.md), [runbook Cloudflare](../admin/cloudflare.md))
-   et faire le premier essai réel (claude.ai, application de bureau, mobile).
-2. Petits correctifs constatés le 05/11 : bouchon aligné sur le vrai PINVOICE (statut de règlement retiré, `PIHTYP`
-   ajouté) ; raison du refus silencieux de SharePoint journalisée ; libellé « jeton personnel » de Sage au portail.
-3. Décision du propriétaire : alléger le dépôt pour un client unique (télémétrie, backend AWS et console ; connecteurs
-   Dropbox et MyReport) : à reprendre après la recette réelle ; télémétrie envisagée sur Cloudflare (Workers et D1).
-4. Côté GitHub, à faire par le propriétaire : supprimer les branches déjà fusionnées, poser les rulesets de `main`,
-   `dev` et des tags `v*`.
+1. Accès en ligne : finir la mise en place (route du tunnel, règles WAF, variables `CLOUDFLARE_*` et
+   `ENTRAID_CLAUDE_*`, connecteur ajouté par l'Owner Claude ; état exact à vérifier), puis premier essai réel
+   ([guide](../admin/acces-en-ligne.md), [runbook Cloudflare](../admin/cloudflare.md)).
+2. Petits correctifs : bouchon aligné sur le vrai `PINVOICE` (`PIHTYP` ajouté, statut de règlement retiré) ; raison du
+   refus silencieux de SharePoint journalisée ; libellé « jeton personnel » de Sage au portail.
+3. Après la recette, décision du propriétaire : alléger le dépôt pour un client unique (télémétrie, backend AWS,
+   console ; Dropbox et MyReport).
+4. Par le propriétaire, sur GitHub : supprimer les branches fusionnées, poser les rulesets de `main`, `dev` et `v*`.
