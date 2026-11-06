@@ -19,7 +19,7 @@ flowchart LR
         CD["cloudflared"]
         H["Hub Clevoa<br/>8090 accès en ligne<br/>8080 portail"]
     end
-    subgraph S["Systèmes · droits du collaborateur"]
+    subgraph S["Systèmes métier"]
         X3["Sage X3 · MyReport"]
         SA["Salesforce · SharePoint<br/>Dropbox"]
     end
@@ -28,7 +28,13 @@ flowchart LR
         CV["Clevoa<br/>compteurs anonymes"]
     end
 
-    W -->|"jeton Entra"| T -->|"tunnel sortant"| CD --> H
+    W -->|"jeton Entra"| T
+    %% liens invisibles : gardent Cloudflare à gauche du serveur malgré la flèche sortante
+    T ~~~ CD
+    T ~~~ CD
+    T ~~~ CD
+    CD -->|"tunnel sortant"| T
+    CD --> H
     D -->|"clé personnelle"| H
     H ==>|"lecture seule"| X3
     H ==>|"lecture seule"| SA
@@ -36,7 +42,8 @@ flowchart LR
     H -.-> CV
 ```
 
-Les deux entrées mènent au même hub, aux mêmes outils et aux mêmes droits. Avec l'accès en ligne, toutes les applications
+Les deux entrées mènent au même hub, aux mêmes outils et aux mêmes droits : ceux du collaborateur, en lecture seule. Le tunnel
+est ouvert depuis le serveur (`cloudflared`, connexion sortante) : aucun port n'est ouvert vers l'extérieur. Avec l'accès en ligne, toutes les applications
 Claude (web, bureau, mobile, sur le réseau interne ou non) passent par le connecteur et le compte Microsoft (port 8090).
 La clé personnelle (port 8080, réseau interne) ne sert plus qu'aux usages techniques, ou à tout le monde si l'accès en
 ligne n'est pas activé. Non représentée : la sauvegarde
