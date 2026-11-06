@@ -4,7 +4,7 @@ Public : direction, Clevoa, DSI cliente. Objet : sur quoi le produit évolue, et
 roadmap active ; les précédentes sont archivées ([octobre 2026](history/roadmap-2026-10.md)).
 
 État : aucune instance en production. Versions candidates 1.7.0 en pré-production chez le premier client depuis le
-05/11/2026 (version courante : 1.7.0-rc.7). Statut de chaque fonction : [état des fonctionnalités](validation/etat-des-fonctionnalites.md).
+05/11/2026 (version courante : 1.7.0-rc.8). Statut de chaque fonction : [état des fonctionnalités](validation/etat-des-fonctionnalites.md).
 
 ## 1. Cadre
 

@@ -7,6 +7,18 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
+## [1.7.0-rc.8] – 2026-11-06
+
+Version candidate corrective, issue du test réel de lecture des documents (journal L1–L4) : contrat scanné lu par Claude
+Desktop depuis Dropbox et SharePoint, recherche SharePoint sur tous les sites vérifiée.
+
+### Corrigé
+- Recherche SharePoint vide : note qui rappelle le retard de l'index Microsoft Search sur les dépôts récents et invite à parcourir les dossiers ; description de l'outil complétée.
+- Consignes du serveur : une recherche vide ne prouve pas l'absence d'un document ; dire « introuvable par la recherche » et parcourir les dossiers probables.
+
+### Modifié
+- État des fonctionnalités : lecture Dropbox, PDF scannés (Claude Desktop) et recherche SharePoint sur tous les sites passent à « disponible ».
+
 ## [1.7.0-rc.7] – 2026-11-06
 
 Version candidate de lecture des documents, issue du test réel de Dropbox du 06/11/2026.

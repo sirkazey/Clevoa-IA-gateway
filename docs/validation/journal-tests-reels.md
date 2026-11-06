@@ -138,6 +138,20 @@ Même session, SharePoint : `sharepoint_search` sans site a répondu 400 « Url 
 établie) ; 1.7.0-rc.7 passe par Microsoft Search. Lecture d'un docx ou xlsx : « Binaire : ouvrez webUrl » ; 1.7.0-rc.7
 extrait le texte.
 
+## 2026-11-06 · Lecture des documents (1.7.0-rc.7, Claude Desktop par clé)
+
+Mêmes comptes de test ; un contrat scanné de 19 pages (PDF image, tableaux), fourni par le propriétaire, déposé dans
+Dropbox et sur un site SharePoint de test. Le document n'est pas versionné ; aucun extrait n'en est consigné ici.
+
+| # | Test | Résultat | Suite donnée |
+|---|---|---|---|
+| L1 | Dropbox : lecture du contrat scanné par `dropbox_read` | pages jointes en image, lues par Claude (résumé, montants, durée, résiliation) | **images transmises au modèle par Claude Desktop** : vérifié |
+| L2 | SharePoint : `sharepoint_search` sans site | résultats sur plusieurs sites (Microsoft Search) ; plus de 400 | OK |
+| L3 | SharePoint : `sharepoint_list`, `sharepoint_read` d'un fichier texte et du contrat scanné | lus ; mêmes pages qu'en Dropbox | OK |
+| L4 | SharePoint : recherche d'un fichier déposé une minute plus tôt | non trouvé (index Microsoft Search en retard) ; Claude a conclu à tort à son absence | 1.7.0-rc.8 : note sur recherche vide, consigne « introuvable par la recherche » |
+
+Reste à vérifier en réel : chiffres et dates d'un xlsx, texte d'un docx et d'un pptx, comparés par le testeur.
+
 ## Tests non encore réalisés
 
 Liste tenue à jour dans [l'état des fonctionnalités § 3](etat-des-fonctionnalites.md#3-tests-restant-à-réaliser).

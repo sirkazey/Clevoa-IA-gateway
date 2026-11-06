@@ -62,6 +62,7 @@ test("Consignes : question sur un nom ou un document → tous les systèmes conn
   const { instructions } = (await init(LATEST_PROTOCOL_VERSION)).body.result;
   assert.match(instructions, /sans nommer le système : chercher dans tous les systèmes connectés \(Salesforce, Sage X3, SharePoint, Dropbox, et MyReport s'il est pertinent\)/);
   assert.match(instructions, /sharepoint_read avec l'itemId et le driveId/); assert.match(instructions, /dropbox_read avec l'id/);
+  assert.match(instructions, /Une recherche vide ne prouve pas qu.un document n.existe pas/, "jamais conclure à l.absence sur une recherche vide");
   const only = await startHub({ upstreamUrl: up.url, users: { [KEY]: connectedUser(up.url) }, env: { CONNECTORS_ENABLED: "sagex3,dropbox" } });
   try {
     const r = await fetch(`${only.url}/mcp`, { method: "POST", headers: { Authorization: `Bearer ${KEY}`, "Content-Type": "application/json", Accept: "application/json, text/event-stream" },

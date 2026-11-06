@@ -130,6 +130,7 @@ const INSTRUCTIONS = [
   has("dropbox") && "Dropbox : dropbox_call (search, list_folder), puis dropbox_read avec l'id du résultat.",
   (has("sharepoint") || has("dropbox")) && "Word, Excel, PowerPoint, PDF et texte sont lus ; les pages d'un PDF scanné sont jointes en image, 5 par appel (argument pages pour la suite).",
   has("myreport") && "Analyses MyReport : myreport_tools puis myreport_call.",
+  (has("sharepoint") || has("dropbox")) && `Une recherche vide ne prouve pas qu'un document n'existe pas (index en retard sur les dépôts récents, autre nom) : dire « introuvable par la recherche » et parcourir les dossiers probables (${[has("sharepoint") && "sharepoint_list", has("dropbox") && "list_folder"].filter(Boolean).join(", ")}) avant de conclure.`,
   "Résultat « … aucune donnée n'a été lue. Action requise : … » : le collaborateur doit (re)connecter ce système ; relayer l'action et le lien tels quels, sans jamais en déduire une absence de données ni un total nul.",
 ].filter(Boolean).join(" ");
 /** Consignes de la session : générales, plus l'état des connexions du collaborateur à l'ouverture (systèmes à connecter et leur lien). */

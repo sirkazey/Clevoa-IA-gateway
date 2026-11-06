@@ -83,13 +83,15 @@ export const tools = [
   },
   {
     name: "sharepoint_search", title: "SharePoint – rechercher des fichiers",
-    description: "Recherche de fichiers par mots-clés avec les droits de l'utilisateur. Sans site : tous les sites SharePoint et le OneDrive qu'il peut ouvrir (Microsoft Search, 25 résultats) ; chaque résultat porte son driveId, à passer à sharepoint_read.",
+    description: "Recherche de fichiers par mots-clés avec les droits de l'utilisateur. Sans site : tous les sites SharePoint et le OneDrive qu'il peut ouvrir (Microsoft Search, 25 résultats) ; chaque résultat porte son driveId, à passer à sharepoint_read. L'index a du retard : un fichier déposé ou renommé récemment peut manquer de quelques minutes à quelques heures ; sans résultat, parcourir les dossiers probables avec sharepoint_list avant de conclure.",
     input: { query: z.string().min(1).max(500), site: siteArg },
     run: async (tok, { query, site }) => {
       if (site) return (await get(tok, `${drive(site)}/root/search(q='${encodeURIComponent(query.replace(/'/g, "''"))}')`, { $top: 50 })).value.map(item);
       const r = await get(tok, "/search/query", {}, false, { requests: [{ entityTypes: ["driveItem"], query: { queryString: query }, from: 0, size: 25 }] });
-      return (r.value ?? []).flatMap((v) => v.hitsContainers ?? []).flatMap((h) => h.hits ?? []).map(({ resource: i = {} }) =>
+      const hits = (r.value ?? []).flatMap((v) => v.hitsContainers ?? []).flatMap((h) => h.hits ?? []).map(({ resource: i = {} }) =>
         ({ ...item(i), driveId: i.parentReference?.driveId, site: siteName(i.webUrl) }));
+      // Constaté le 06/11/2026 : un PDF déposé une minute avant n'était pas encore indexé, l'assistant a conclu à tort qu'il n'existait pas.
+      return hits.length ? hits : { results: [], note: "Aucun résultat dans l'index Microsoft Search. Un fichier déposé ou renommé récemment peut ne pas y être encore : parcourir les dossiers probables avec sharepoint_list avant de conclure qu'il n'existe pas." };
     },
   },
   {
