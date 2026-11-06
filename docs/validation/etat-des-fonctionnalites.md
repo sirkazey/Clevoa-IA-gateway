@@ -1,11 +1,12 @@
 # État des fonctionnalités et limites connues
 
-Public : DSI, recette, direction. Objet : ce qui est vérifié en version 1.7.0-rc.9, ce qui reste à prouver avant la
+Public : DSI, recette, direction. Objet : ce qui est vérifié en version 1.7.0, ce qui reste à prouver avant la
 production, et les limites connues.
 
-Les versions candidates 1.7.0 tournent depuis le 05/11/2026 sur le serveur de pré-production du client (1.7.0-rc.5 depuis le 06/11 ; Portainer, systèmes réels,
-[journal P1–P11](journal-tests-reels.md)). Cloisonnement vérifié le 05/11 avec un compte non administrateur
-(Sage X3, Salesforce, SharePoint ; journal C1–C3) ; avant toute production manque encore une restauration réelle. Statuts : [conventions](../CONTRIBUTING.md#statut-des-fonctionnalités).
+La 1.7.0 (06/11/2026) tourne sur le serveur de pré-production du client (Portainer, systèmes réels, versions
+candidates depuis le 05/11 ; [journal](journal-tests-reels.md)). Vérifiés en réel : cloisonnement avec un compte non
+administrateur (C1–C3), restauration d'une sauvegarde (R1), accès en ligne par Claude et ChatGPT (O1–O4, G1–G4), lecture
+des documents (L1–L4). Avant la production : les tests restants du § 3 et les prérequis de la [roadmap](../roadmap-produit.md). Statuts : [conventions](../CONTRIBUTING.md#statut-des-fonctionnalités).
 Historique : [`CHANGELOG.md`](../../CHANGELOG.md). Évolutions : [roadmap produit](../roadmap-produit.md).
 
 ## 1. Fonctionnalités
@@ -19,10 +20,10 @@ Historique : [`CHANGELOG.md`](../../CHANGELOG.md). Évolutions : [roadmap produi
 | Salesforce, SObject Reads | disponible (sandbox) | 23/10/2026 (F1–F6) | production ; expiration du JWT et rotation du refresh token ; compte restreint |
 | SharePoint / OneDrive (Graph délégué) | disponible (un compte) | 26/10 (E1–E8) et 05/11 (P5, P10) : connexion, liste des sites | second collaborateur ; revue de `Files.Read.All` et `Sites.Read.All` |
 | SharePoint : recherche sur tous les sites (Microsoft Search), lecture des PDF (texte et scannés) | disponible (un compte) | 06/11/2026 (L2–L4) | index de recherche en retard sur les dépôts récents (L4) |
-| SharePoint : lecture Word, Excel, PowerPoint | testé sur bouchon | `docs.test.js`, `extract.test.js` | chiffres et dates d'un xlsx comparés par le testeur |
+| Lecture Word, Excel, PowerPoint | disponible pour Dropbox (un compte) ; testé sur bouchon pour SharePoint (même extraction) | 06/11/2026 (G4) : fichiers Dropbox lus ; `docs.test.js`, `extract.test.js` | chiffres et dates d'un xlsx comparés par le testeur ; un fichier Office lu sur SharePoint |
 | Dropbox (serveur MCP officiel, compte personnel) | disponible | 06/11/2026 (D1–D6) : connexion, 6 outils, recherche et liste | dossiers d'équipe Dropbox Business ; cloisonnement avec un compte du client |
 | Dropbox : lecture d'un fichier (`dropbox_read`, API `files/download`) | disponible (compte personnel) | 06/11/2026 (L1) : contrat scanné ; `docs.test.js` | chiffres et dates d'un xlsx comparés par le testeur |
-| PDF scannés : pages jointes en image, lues par Claude | disponible (Claude Desktop) | 06/11/2026 (L1, L3) : contrat de 19 pages | connecteur en ligne (claude.ai, mobile) |
+| PDF scannés : pages jointes en image, lues par Claude | disponible (Claude Desktop) | 06/11/2026 (L1, L3) : contrat de 19 pages | connecteur en ligne (claude.ai, mobile) ; ChatGPT ne les exploite pas (G4) |
 | MyReport (proxy MCP SSE) | testé sur bouchon | plomberie SSE et liste blanche | serveur de l'éditeur, non livré |
 | SSO Entra ID (`entra`) | disponible (un compte) | 26/10 (E5–E8), `sso.test.js` | deux collaborateurs réels ; compte invité |
 | Comptages exacts, listes coupées signalées (Salesforce, Sage X3) | testé sur bouchon | `mcp.test.js` | un comptage sur la sandbox ; `$links.$next` de Syracuse |
@@ -48,7 +49,7 @@ Historique : [`CHANGELOG.md`](../../CHANGELOG.md). Évolutions : [roadmap produi
 | État des systèmes, supervision (`/metrics`, `/metrics/prtg`) | testé sur bouchon | `health.test.js` | vérification HEAD sur le réseau du client ; capteur de supervision |
 | Base d'exploitation `hub.db`, `admin.js` | testé sur bouchon | `db.test.js` | quelques semaines en pré-production |
 | Journal d'audit (`AUDIT=on`) | testé sur bouchon | `db.test.js` | avis du DPO, information des collaborateurs |
-| Sauvegarde automatique, restauration scriptée | testé sur bouchon | CI `backup-restore` | restauration sur un serveur du client, puis une par trimestre |
+| Sauvegarde automatique, restauration scriptée | disponible | 06/11/2026 (R1) : restauration réelle en pré-production ; CI `backup-restore` | une restauration par trimestre ; `ENCRYPTION_KEY` au coffre à confirmer |
 | Versions figées, retour arrière | testé sur bouchon | CI `rollback` | retour arrière sous Portainer |
 | Diagnostic exportable, contrôle de santé | testé sur bouchon | `diagnostic.test.js` | un diagnostic chez le client |
 | Reverse proxy nginx (profil `proxy`) | testé sur bouchon | `docker compose config` | déploiement réel |
@@ -58,14 +59,14 @@ Historique : [`CHANGELOG.md`](../../CHANGELOG.md). Évolutions : [roadmap produi
 
 | Fonctionnalité | Statut | Preuve | Reste à faire |
 |---|---|---|---|
-| Télémétrie toutes les 6 h ([sécurité § 4](../admin/securite.md#4-télémétrie-clevoa)) | testé sur bouchon | tests sans AWS | déploiement AWS, validation juridique |
+| Télémétrie toutes les 6 h ([sécurité § 4](../admin/securite.md#4-télémétrie-clevoa)) | testé sur bouchon | tests sans AWS | déploiement sur Cloudflare, prévu ([roadmap § 3](../roadmap-produit.md#3-axe-2--observabilité-et-maintenance)) ; validation juridique |
 | Incidents et e-mails | testé sur bouchon | SNS simulé | premier incident réel |
-| Console de suivi | testé sur bouchon | données de démonstration | table réelle, installation sur le NAS |
+| Console de suivi | testé sur bouchon | données de démonstration | déploiement derrière Cloudflare Access, prévu ([roadmap § 3](../roadmap-produit.md#3-axe-2--observabilité-et-maintenance)) |
 | Mini-portail d'administration, connecteurs déclaratifs | non planifié | [roadmap § 5](../roadmap-produit.md#5-hors-roadmap) | |
 
 ## 2. Limites connues
 
-* **Cloisonnement** observé avec un compte administrateur seulement : c'est la première preuve manquante.
+* **Cloisonnement** vérifié avec un seul compte non administrateur (C1–C3) ; Dropbox et deux collaborateurs réels restent à faire.
 * **Sage X3** : `sagex3_query` renvoie les colonnes de liste seulement. `PIHTYP` (type de pièce) n'est publié que sur
   les dossiers de recette ; la règle du numéro reste la référence. `GACCDUDATE`, `SINVOICE` et `GACCENTRY` sont absents
   en standard (développement spécifique à chiffrer). Fiche complète de 60 à 130 000 caractères (paramètre `champs`).
@@ -81,12 +82,14 @@ Historique : [`CHANGELOG.md`](../../CHANGELOG.md). Évolutions : [roadmap produi
 * **Débit MCP** : 300 requêtes par minute et par clé.
 * **Charge** : mémoire stable sur 27 minutes (RSS ≤ 132 Mo), pas sur une journée ; quotas réels et 429 Graph non
   mesurés.
-* **claude.ai** : accès en ligne essayé en réel le 06/11/2026 avec un seul compte (journal O1–O4) ; un seul annuaire Entra ; Cloudflare voit les échanges en
-  clair.
+* **Accès en ligne** : essayé en réel le 06/11/2026 avec un seul compte, par Claude et ChatGPT (journal O1–O4, G1–G4) ;
+  même application Entra que le portail (application dédiée prévue en 1.8) ; un seul annuaire Entra ; Cloudflare voit
+  les échanges en clair.
 * **Documents** : 25 Mo par fichier, 200 000 caractères de texte. PDF scanné : pas de reconnaissance de caractères
   dans le hub, 5 pages en image par demande, qualité selon le scan, coût en usage Claude. Images, anciens formats Office
   et PDF protégés par mot de passe non lus ([configuration](../admin/configuration.md#lecture-des-documents)).
-* **Tests réels** : une seule personne, un seul profil.
+* **Tests réels** : le propriétaire et une collaboratrice de la DSI (C1–C3) ; tests avec deux collaborateurs prévus la
+  semaine du 09/11/2026.
 
 ## 3. Tests restant à réaliser
 
@@ -101,12 +104,11 @@ Historique : [`CHANGELOG.md`](../../CHANGELOG.md). Évolutions : [roadmap produi
 | Lecture d'un contrat scanné par le connecteur en ligne (claude.ai, mobile) ; Claude Desktop vérifié le 06/11 | PDF scanné de test |
 | MyReport | serveur MCP de l'éditeur |
 | SSO Entra avec deux collaborateurs réels | un second compte du client |
-| Restauration sur un serveur du client (`sudo ops/restore.sh`) | accès au serveur, `ENCRYPTION_KEY` du coffre |
 | Recette de charge en pré-production (`loadtest/run.js` adapté) | comptes de test, jamais la production |
 | Exactitude financière (factures, avoirs, signes, devises, dates) | jeu de référence approuvé par la Finance |
 | Injection de prompts par les données relayées | cas de test documentés |
 | Comparaison croisée Sage X3 + Salesforce dans une réponse | |
 | Claude Code, Copilot : une session réelle chacun | poste avec l'assistant, clé MCP |
-| Backend de télémétrie sur AWS, console sur le NAS | compte AWS Clevoa, validation juridique |
+| Télémétrie et console sur Cloudflare (Workers, D1, Access), sans compte AWS ([roadmap § 3](../roadmap-produit.md#3-axe-2--observabilité-et-maintenance)) | backend repris sur D1, validation juridique |
 | Retour arrière sous Portainer (la mise à jour a été faite le 05/11) | stack sur un tag |
 | Diagnostic exporté chez le client et relu | accès administrateur au serveur |

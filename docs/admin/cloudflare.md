@@ -94,14 +94,14 @@ Plages d'Anthropic : prendre les adresses **sortantes** (relevées le 06/11/2026
 - **Jeton du tunnel** (départ d'un exploitant, doute, chaque année) : le faire tourner dans le tableau de bord, mettre à
   jour `CLOUDFLARE_TUNNEL_TOKEN`, *Update the stack*, contrôle 6. L'ancien jeton ne doit plus connecter (à vérifier).
 - **Secret Entra du connecteur** (avant expiration) : nouveau secret, puis `ENTRAID_CLAUDE_CLIENT_SECRET` chez le client
-  et dans le connecteur Claude (Owner), puis suppression de l'ancien.
+  et dans le connecteur Claude (Owner) et ChatGPT s'il est utilisé, puis suppression de l'ancien.
 - **Jetons d'API** : renouvelés à échéance, révoqués au départ de leur titulaire.
 
 ## 7. Retrait d'un client ou d'un environnement
 
 1. `CLOUDFLARE_TUNNEL=0` dans la stack du client, puis *Update the stack* : le portail interne reste.
 2. Supprimer le nom d'hôte public, puis le tunnel, puis les règles WAF du nom d'hôte.
-3. Révoquer le secret Entra du connecteur ; l'Owner retire le connecteur dans Claude.
+3. Révoquer le secret Entra du connecteur ; l'Owner retire le connecteur dans Claude (et dans ChatGPT s'il est utilisé).
 4. Consigner le retrait (date, client, environnement).
 
 ## 8. Incident : compte Cloudflare compromis ou doute

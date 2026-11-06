@@ -1,12 +1,12 @@
 # Clevoa AI Gateway
 
-Passerelle MCP **en lecture seule** entre les assistants IA (Claude Desktop, Claude Code, claude.ai) et les outils
+Passerelle MCP **en lecture seule** entre les assistants IA (Claude Desktop, Claude Code, claude.ai, ChatGPT) et les outils
 métier d'une entreprise : Salesforce, Sage X3, SharePoint / OneDrive, Dropbox, MyReport. Chaque appel porte le jeton
 **personnel** du collaborateur : l'assistant ne voit que ce que le collaborateur a déjà le droit de voir. Le hub n'a
 aucun compte technique.
 
 Édité par Clevoa SASU. Premier client : Groupe Charlois (direction financière). Qualification en cours sur sa
-pré-production ; aucune instance en production. Version courante : **1.7.0-rc.9** (`hub/version.js`).
+pré-production ; aucune instance en production. Version courante : **1.7.0** (`hub/version.js`).
 
 ## Ce que fait la passerelle
 
@@ -24,7 +24,7 @@ pré-production ; aucune instance en production. Version courante : **1.7.0-rc.9
 ## Architecture
 
 Le hub tourne sur l'infrastructure du client. Les assistants du réseau interne s'y branchent avec une clé personnelle.
-L'accès hors réseau (claude.ai web et mobile) passe par un tunnel Cloudflare sortant, sans port entrant, et Entra ID ;
+L'accès hors réseau (claude.ai web et mobile, ChatGPT) passe par un tunnel Cloudflare sortant, sans port entrant, et Entra ID ;
 il est expérimental et désactivé par défaut ([accès en ligne](docs/admin/acces-en-ligne.md)). Schéma, modules et répartition
 des rôles : [architecture](docs/developer/architecture.md).
 
@@ -34,8 +34,8 @@ des rôles : [architecture](docs/developer/architecture.md).
 |---|---|---|---|
 | Sage X3 24R1 | API REST Syracuse | `sagex3_representations`, `sagex3_describe`, `sagex3_query`, `sagex3_get` | disponible (pré-production) |
 | Salesforce | serveur MCP hébergé « SObject Reads » | `salesforce_tools`, `salesforce_call` | disponible (sandbox) |
-| SharePoint / OneDrive | Microsoft Graph, Microsoft Search | `sharepoint_sites`, `sharepoint_list`, `sharepoint_search`, `sharepoint_read` | disponible (pré-production, un compte) ; lecture des documents testée sur bouchon |
-| Dropbox | serveur MCP officiel, API `files/download` | `dropbox_tools`, `dropbox_call`, `dropbox_read` | disponible (compte personnel) ; lecture testée sur bouchon |
+| SharePoint / OneDrive | Microsoft Graph, Microsoft Search | `sharepoint_sites`, `sharepoint_list`, `sharepoint_search`, `sharepoint_read` | disponible (pré-production, un compte) ; lecture des documents vérifiée en réel |
+| Dropbox | serveur MCP officiel, API `files/download` | `dropbox_tools`, `dropbox_call`, `dropbox_read` | disponible (compte personnel) ; lecture des documents vérifiée en réel ; dossiers d'équipe Dropbox Business non vérifiés |
 | MyReport | serveur MCP SSE de l'éditeur | `myreport_tools`, `myreport_call` | testé sur bouchon (serveur éditeur non livré) |
 
 Détail, preuves et limites : [état des fonctionnalités](docs/validation/etat-des-fonctionnalites.md).
@@ -58,7 +58,7 @@ Suite : [installation](docs/admin/installation.md).
 
 | Public | Documents |
 |---|---|
-| Collaborateur | [Guide utilisateur](docs/user/guide-utilisateur.md) |
+| Collaborateur | [Démarrage rapide](docs/user/demarrage-rapide.md) · [Guide utilisateur](docs/user/guide-utilisateur.md) |
 | Administrateur | [Installation](docs/admin/installation.md) · [Configuration](docs/admin/configuration.md) · [Exploitation](docs/admin/exploitation.md) · [Sécurité](docs/admin/securite.md) |
 | Développeur | [Architecture](docs/developer/architecture.md) · [Tests](docs/developer/tests.md) · [Contribuer](docs/CONTRIBUTING.md) |
 | DSI, recette | [État des fonctionnalités et limites](docs/validation/etat-des-fonctionnalites.md) · [Roadmap produit](docs/roadmap-produit.md) |
@@ -72,8 +72,9 @@ Index complet : [docs/README.md](docs/README.md).
 * La clé MCP personnelle passe uniquement en en-tête `Authorization: Bearer`, jamais dans l'URL.
 * Télémétrie vers Clevoa limitée à des compteurs : aucun e-mail, jeton, requête ni résultat
   ([sécurité § 4](docs/admin/securite.md#4-télémétrie-clevoa)).
-* Seul Claude Desktop est vérifié en réel. Cloisonnement observé avec un compte administrateur seulement. Capacité de
-  50 collaborateurs démontrée sur bouchons seulement.
+* Vérifiés en réel : Claude Desktop (par clé), Claude web et mobile et ChatGPT (accès en ligne, expérimental) ;
+  Claude Code et Copilot au niveau du protocole seulement. Cloisonnement vérifié avec un compte non administrateur
+  (Sage X3, Salesforce, SharePoint). Capacité de 50 collaborateurs démontrée sur bouchons seulement.
 
 ## Licence
 

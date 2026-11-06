@@ -4,7 +4,7 @@ Public : direction, Clevoa, DSI cliente. Objet : sur quoi le produit évolue, et
 roadmap active ; les précédentes sont archivées ([octobre 2026](history/roadmap-2026-10.md)).
 
 État : aucune instance en production. Versions candidates 1.7.0 en pré-production chez le premier client depuis le
-05/11/2026 (version courante : 1.7.0-rc.9). Statut de chaque fonction : [état des fonctionnalités](validation/etat-des-fonctionnalites.md).
+05/11/2026 ; version stable courante : 1.7.0 (06/11/2026). Statut de chaque fonction : [état des fonctionnalités](validation/etat-des-fonctionnalites.md).
 
 ## 1. Cadre
 
@@ -34,15 +34,15 @@ Objectif : passer de « testé sur bouchon » à « disponible » chez le premie
 
 | Sujet | Statut | Critère de sortie |
 |---|---|---|
-| Tests réels de SharePoint (search, read), lecture Dropbox, MyReport | SharePoint et Dropbox faits le 06/11/2026 (journal L1–L4) ; MyReport à faire | un appel réussi par outil sur un vrai compte, consigné au [journal](validation/journal-tests-reels.md) |
+| Tests réels de SharePoint (search, read), lecture Dropbox, MyReport | SharePoint et Dropbox faits le 06/11/2026 (journal L1–L4, G4) ; MyReport à faire | un appel réussi par outil sur un vrai compte, consigné au [journal](validation/journal-tests-reels.md) |
 | Cloisonnement avec des comptes non administrateurs (Sage X3, Salesforce, SharePoint) | fait le 05/11/2026 (journal C1–C3) ; Dropbox à faire | un compte restreint ne voit que ses données, preuve consignée |
 | Authentification et révocation (jeton Salesforce, mot de passe Syracuse, SSO `entra`) | à faire | voyant rouge et message de reconnexion constatés sur chaque système |
-| Sauvegarde et restauration sur un serveur du client | à faire | une restauration réelle, puis une par trimestre |
-| Accès en ligne pour Claude (expérimental) | premier essai réel le 06/11/2026 (journal O1–O4) ; critères 4 à 7 à faire | [critères](admin/acces-en-ligne.md#8-premier-essai--critères) tous consignés |
-| Tout dans Claude, sans portail pour le collaborateur (décision du 06/11/2026) : liens de connexion utilisables hors réseau (pages de connexion derrière Cloudflare Access et Entra), SharePoint par On-Behalf-Of, inscription automatique du connecteur (CIMD), connexion des systèmes par le SSO Microsoft quand ils le permettent | prévu (1.8) | un collaborateur hors réseau connecte Sage X3 depuis le lien donné par Claude, sans VPN ni portail |
+| Sauvegarde et restauration sur un serveur du client | restauration réelle faite le 06/11/2026 en pré-production (journal R1) ; une par trimestre ensuite | une restauration réelle, puis une par trimestre |
+| Accès en ligne pour Claude et ChatGPT (expérimental) | premier essai réel le 06/11/2026 (journal O1–O4, G1–G4) ; critères 4 à 7 à faire | [critères](admin/acces-en-ligne.md#8-premier-essai--critères) tous consignés |
+| Tout dans Claude, sans portail pour le collaborateur (décision du 06/11/2026) : liens de connexion utilisables hors réseau (pages de connexion derrière Cloudflare Access et Entra), SharePoint par On-Behalf-Of, inscription automatique du connecteur (CIMD), application Entra dédiée à l'accès en ligne, connexion des systèmes par le SSO Microsoft quand ils le permettent | prévu (1.8) | un collaborateur hors réseau connecte Sage X3 depuis le lien donné par Claude, sans VPN ni portail |
 | Analyses de sécurité en CI sur chaque PR | fait | CI verte avant toute fusion |
-| Compatibilité MCP : Claude Desktop | fait | journal S13–S19 et F4–F5 (23/10/2026) |
-| Compatibilité MCP : Claude Code, ChatGPT, Copilot | à faire | une session réelle par assistant, consignée au journal |
+| Compatibilité MCP : Claude Desktop ; Claude web et mobile, ChatGPT par l'accès en ligne | fait | journal S13–S19 et F4–F5 (23/10/2026), O1–O4 et G1–G4 (06/11/2026) |
+| Compatibilité MCP : Claude Code, Copilot | à faire | une session réelle par assistant, consignée au journal |
 | Anomalies remontées en recette | à faire | anomalie reproduite par un test, corrigée, publiée dans une version corrective |
 
 Liste complète des tests réels restants : [état des fonctionnalités § 3](validation/etat-des-fonctionnalites.md#3-tests-restant-à-réaliser).

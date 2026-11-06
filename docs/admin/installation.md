@@ -121,11 +121,11 @@ maintenance.
 
 ## 7. Première mise en service auprès des collaborateurs
 
-1. Choisir l'assistant autorisé, installé sur un poste du réseau ou en VPN. Seul Claude Desktop est vérifié en réel ;
-   Claude Code, ChatGPT et Copilot ne sont testés qu'au niveau du protocole
-   ([état des fonctionnalités](../validation/etat-des-fonctionnalites.md)). Claude.ai web et mobile demandent
-   l'[accès en ligne](acces-en-ligne.md), expérimental : à annoncer comme tel.
+1. Choisir l'assistant autorisé. Claude Desktop, par clé sur un poste du réseau ou en VPN, est vérifié en réel ;
+   Claude web et mobile et ChatGPT aussi, par l'[accès en ligne](acces-en-ligne.md), expérimental : à annoncer comme
+   tel. Claude Code et Copilot ne sont testés qu'au niveau du protocole
+   ([état des fonctionnalités](../validation/etat-des-fonctionnalites.md)).
 2. Informer les collaborateurs (droits inchangés, jetons chiffrés et individuels, télémétrie réduite à des compteurs :
    [sécurité](securite.md)) ; mettre à jour le registre des traitements si la DSI le tient.
-3. Onboarding en trois gestes ([guide utilisateur](../user/guide-utilisateur.md)) : se connecter aux outils, vérifier
-   les voyants, copier le bloc dans l'assistant.
+3. Onboarding en trois étapes : la [fiche de démarrage rapide](../user/demarrage-rapide.md) (connecter ses applications,
+   activer le connecteur dans Claude, poser ses questions). Déroulé complet de la production : [mise en production](mise-en-production.md).

@@ -21,8 +21,9 @@ Aucun compte de service, générique ou global, pour aucun outil connecté.
 * Exception : les **simulateurs** Sage X3 et MyReport, qui ne contactent aucun système.
 
 Preuves : test `Cloisonnement` de `hub/test/mcp.test.js`, `hub/test/sso.test.js`, campagne de charge (0 violation sur
-3 950 appels). **Limite** : sur les systèmes réels, seul un compte administrateur a été observé ; le test avec un compte
-restreint reste à faire ([état des fonctionnalités](../validation/etat-des-fonctionnalites.md)).
+3 950 appels). Sur les systèmes réels : vérifié le 05/11/2026 avec un compte non administrateur sur Sage X3,
+Salesforce et SharePoint ([journal C1–C3](../validation/journal-tests-reels.md)). **Limite** : Dropbox et deux
+collaborateurs réels restent à faire ([état des fonctionnalités](../validation/etat-des-fonctionnalites.md)).
 
 ## 2. Lecture seule
 
@@ -36,7 +37,7 @@ restreint reste à faire ([état des fonctionnalités](../validation/etat-des-fo
 ## 3. Accès MCP et portail
 
 * La clé MCP passe **uniquement** dans l'en-tête `Authorization: Bearer`. Le paramètre `?key=` est ignoré.
-* claude.ai web et mobile passent par l'[accès en ligne](acces-en-ligne.md) (expérimental) : port séparé, jetons Entra ID,
+* claude.ai web et mobile, et ChatGPT, passent par l'[accès en ligne](acces-en-ligne.md) (expérimental) : port séparé, jetons Entra ID,
   Cloudflare voit les échanges en clair.
 * OAuth : PKCE S256 sur tous les flux ; callback lié au navigateur qui a lancé le flux. Les POST du portail refusent une
   autre origine.
@@ -86,16 +87,17 @@ jetons, clés MCP, mots de passe, données métier, requêtes, réponses, noms e
 production reste distincte (fiche par identifiant **et** par environnement). Dire « réduite à des compteurs », pas
 « anonyme ».
 
-**Destinataire et conservation** : Clevoa SASU, sur AWS Paris (`eu-west-3`, sous-traitant), table DynamoDB chiffrée ;
-fiches et envois expirés après 400 jours, journaux CloudWatch 90 jours, e-mails d'incident (ouverture et fermeture
-seulement). Détail : [backend](../../clevoa-backend/README.md). Clevoa les consulte dans une
-[console](../../clevoa-console/README.md) en lecture seule, sur son réseau privé.
+**Destinataire et conservation** : Clevoa SASU. Le backend n'est pas encore déployé : écrit pour AWS Paris (table
+DynamoDB chiffrée, journaux CloudWatch 90 jours), il doit passer sur Cloudflare (Workers, D1 en Europe), sans compte
+AWS ([roadmap § 3](../roadmap-produit.md#3-axe-2--observabilité-et-maintenance)). Fiches et envois expirés après
+400 jours ; e-mails d'incident (ouverture et fermeture seulement). Détail : [backend](../../clevoa-backend/README.md). Clevoa les consulterait dans une
+[console](../../clevoa-console/README.md) en lecture seule, derrière Cloudflare Access.
 
 **Désactivation** : `CLEVOA_KEY` vide la désactive hors production. En production, `docker-compose.prod.yml` exige la
 clé ; son encadrement contractuel est un point ouvert ([licence § 11, point 8](../../LICENSE.md#11-points-à-valider-par-un-conseil-juridique)).
 Un client qui bloque le flux garde un hub pleinement fonctionnel ; son installation apparaît silencieuse chez Clevoa.
 
-**Données personnelles** : AWS voit l'adresse IP du serveur. Sur une petite installation, un compteur peut se
+**Données personnelles** : l'hébergeur du backend voit l'adresse IP du serveur. Sur une petite installation, un compteur peut se
 rapprocher d'une personne. La qualification juridique (donnée personnelle ou non, registre des traitements, clause de
 licence) est **à faire valider** par le juriste ou le DPO de Clevoa et du client avant la première production.
 

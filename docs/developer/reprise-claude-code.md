@@ -81,18 +81,16 @@ pas d'un compte à l'autre : conversations, artifacts, tâches programmées, con
 
 ## 6. État et travaux en attente
 
-État au 6 novembre 2026 : `main` et `dev` en **1.7.0-rc.9** (tag `v1.7.0-rc.9` à poser par le propriétaire ; `v1.7.0-rc.8` déployée le 06/11). Pré-production sur le
+État au 6 novembre 2026 : `main` et `dev` en **1.7.0**, version stable (tag `v1.7.0` à poser par le propriétaire). Pré-production sur le
 serveur du client depuis le 05/11 ([journal P1–P11](../validation/journal-tests-reels.md)). Recette réelle restante :
-[état des fonctionnalités § 3](../validation/etat-des-fonctionnalites.md#3-tests-restant-à-réaliser), en premier le
-cloisonnement avec un compte non administrateur.
+[état des fonctionnalités § 3](../validation/etat-des-fonctionnalites.md#3-tests-restant-à-réaliser) ; tests avec deux
+collaborateurs prévus la semaine du 9 novembre.
 
 Travaux en attente, dans l'ordre proposé :
 
-1. Accès en ligne : finir la mise en place (route du tunnel, règles WAF, variables `CLOUDFLARE_*` et
-   `ENTRAID_CLAUDE_*`, connecteur ajouté par l'Owner Claude ; état exact à vérifier), puis premier essai réel
-   ([guide](../admin/acces-en-ligne.md), [runbook Cloudflare](../admin/cloudflare.md)).
+1. 1.8 : inscription du connecteur par CIMD (plus d'identifiant ni de secret à saisir dans Claude ou ChatGPT), application
+   Entra dédiée à l'accès en ligne, liens de connexion utilisables hors réseau ([roadmap](../roadmap-produit.md)).
 2. Petits correctifs : bouchon aligné sur le vrai `PINVOICE` (`PIHTYP` ajouté, statut de règlement retiré) ; raison du
    refus silencieux de SharePoint journalisée ; libellé « jeton personnel » de Sage au portail.
-3. Après la recette, décision du propriétaire : alléger le dépôt pour un client unique (télémétrie, backend AWS,
-   console ; Dropbox et MyReport).
+3. Services éditeur sur Cloudflare (télémétrie en Worker et D1, console derrière Access), sans compte AWS.
 4. Par le propriétaire, sur GitHub : supprimer les branches fusionnées, poser les rulesets de `main`, `dev` et `v*`.

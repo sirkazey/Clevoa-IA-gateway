@@ -3,8 +3,9 @@
 Public : l'administrateur du hub et l'administrateur Entra ID du client. Objet : utiliser le hub depuis Claude **hors du
 réseau de l'entreprise**, sans port entrant ni clé à copier.
 
-Statut : **expérimental**, désactivé par défaut (`CLOUDFLARE_TUNNEL=1` l'active), testé sur bouchon seulement
-([état des fonctionnalités](../validation/etat-des-fonctionnalites.md)). Choix et alternatives :
+Statut : **expérimental**, désactivé par défaut (`CLOUDFLARE_TUNNEL=1` l'active), vérifié en réel le 06/11/2026 avec
+Claude (web, mobile) et ChatGPT, un compte ([journal O1–O4, G1–G4](../validation/journal-tests-reels.md) ;
+[état des fonctionnalités](../validation/etat-des-fonctionnalites.md)). Choix et alternatives :
 [étude](../history/etude-connexion-un-clic.md#9-décision-du-3-novembre-2026--entra-seul-relais-oauth-du-sdk-et-cloudflare-tunnel).
 
 ## 1. Principe
@@ -42,9 +43,9 @@ Statut : **expérimental**, désactivé par défaut (`CLOUDFLARE_TUNNEL=1` l'act
 
 ## 3. Entra ID : application pour Claude
 
-Le secret de cette application est confié à Anthropic (saisi dans Claude). En production, préférer une **application
-dédiée** : son secret n'ouvre que le scope `mcp`. Si l'application du portail est réutilisée, lui créer un **secret
-réservé à Claude** et poser `ENTRAID_CLAUDE_CLIENT_ID` = `MS_CLIENT_ID`. Libellés Entra **à vérifier**.
+Le secret de cette application est confié à Anthropic (saisi dans Claude). Aujourd'hui, l'accès en ligne utilise
+l'application du portail : lui créer un **secret réservé à Claude** et poser `ENTRAID_CLAUDE_CLIENT_ID` = `MS_CLIENT_ID`.
+Une **application dédiée**, dont le secret n'ouvre que le scope `mcp`, est prévue en 1.8 ([roadmap](../roadmap-produit.md)). Libellés Entra **à vérifier**.
 
 1. Inscriptions d'applications → Nouvelle inscription (ou l'application existante) : comptes de **cet annuaire
    uniquement**, URI de redirection *Web* `https://claude.ai/api/mcp/auth_callback`.
@@ -149,12 +150,11 @@ non exploitées (Claude les lit).
 ## 7. Limites connues
 
 * **Connexion des systèmes** : Sage X3, Salesforce, SharePoint et Dropbox se connectent sur le **portail interne**. Un
-  collaborateur jamais passé par le portail reçoit dans Claude « Action requise » avec le lien du portail. Piste étudiée, non
-  inscrite à la roadmap : SharePoint par le flux « On-Behalf-Of » d'Entra.
+  collaborateur jamais passé par le portail reçoit dans Claude « Action requise » avec le lien du portail. Prévus en 1.8
+  ([roadmap](../roadmap-produit.md)) : liens de connexion utilisables hors réseau, SharePoint par le flux « On-Behalf-Of » d'Entra.
 * **Compte désactivé dans Entra** : accès conservé jusqu'à l'expiration du jeton (environ une heure).
 * **Un seul annuaire** : celui du portail (`MS_TENANT_ID`).
-* **À prouver au premier essai réel** : envoi du secret par Claude en `client_secret_post` (seule méthode du SDK) ;
-  comportement d'Entra avec les scopes imposés par le hub ; connecteur sur mobile.
+* **Critères 4 à 7 du premier essai** (§ 8) : à faire ; les critères 1 à 3 sont vérifiés (journal O2, O3).
 * Test d'intrusion externe et cloisonnement entre deux collaborateurs réels : préalables à toute production.
 
 ## 8. Premier essai : critères

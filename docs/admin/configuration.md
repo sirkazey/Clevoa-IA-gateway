@@ -176,7 +176,8 @@ pour lui = 403). Outils : `sharepoint_sites`, `sharepoint_list`, `sharepoint_sea
 * `sharepoint_search` sans `site` : Microsoft Search (`POST /search/query`, une recherche sans écriture), sur tous les
   sites et le OneDrive que le collaborateur peut ouvrir, 25 résultats avec leur `driveId`. Avec `site` : ce site seul.
 * `sharepoint_read` (avec le `driveId` d'un résultat) lit Word, Excel, PowerPoint, PDF et les fichiers texte ; les
-  pages d'un PDF scanné sont jointes en image ([lecture des documents](#lecture-des-documents)). Testé sur bouchon.
+  pages d'un PDF scanné sont jointes en image ([lecture des documents](#lecture-des-documents)). Vérifié en réel le
+  06/11/2026 sur un texte et un PDF scanné (journal L3) ; Word, Excel et PowerPoint vérifiés par Dropbox (G4).
 
 Création (libellés Entra **à vérifier**) :
 
@@ -242,7 +243,7 @@ pointent vers le bouchon.
 | Excel (`.xlsx`) | une section par feuille ; une ligne par rangée ; valeur calculée des formules ; dates (jj/mm/aaaa) et pourcentages selon le format de la cellule, montants sans séparateur ni devise |
 | PowerPoint (`.pptx`) | une section par diapositive, avec les notes de l'orateur |
 | PDF avec texte | texte page par page (« --- Page 3 --- »), 300 pages et 20 s au plus |
-| PDF scanné | pages jointes en image à Claude, 5 par demande (argument `pages`, ex. `6-10`) |
+| PDF scanné | pages jointes en image à Claude, 5 par demande (argument `pages`, ex. `6-10`) ; ChatGPT ne les exploite pas |
 | Texte (`txt`, `csv`, `json`, `md`, `xml`…) | contenu UTF-8 |
 
 Le hub ne fait pas de reconnaissance de caractères : Claude lit l'image lui-même, la qualité dépend du scan et chaque

@@ -11,7 +11,7 @@ services.
 ```mermaid
 flowchart LR
     subgraph U["Collaborateurs"]
-        W["Claude<br/>web · bureau · mobile<br/>compte Microsoft"]
+        W["Claude, ChatGPT<br/>web · bureau · mobile<br/>compte Microsoft"]
         D["Usages techniques<br/>Claude Code, scripts"]
     end
     T["Cloudflare<br/>WAF + tunnel"]
@@ -25,7 +25,7 @@ flowchart LR
     end
     subgraph EXT["Services annexes"]
         E["Microsoft Entra ID<br/>identité"]
-        CV["Clevoa<br/>compteurs anonymes"]
+        CV["Clevoa<br/>compteurs seulement"]
     end
 
     W -->|"jeton Entra"| T
@@ -100,8 +100,8 @@ processus.
 * **SSE** (`GET /sse`, `POST /messages?sessionId=`) : session liée à la clé qui l'a ouverte ; à retirer quand tous les
   assistants cibles seront en Streamable HTTP.
 * Révisions du protocole 2024-10-07 à 2025-11-25 (celles du SDK), négociées à l'initialisation.
-* `INSTRUCTIONS` pour le modèle : citer la ligne Source, interroger Sage X3 et Salesforce quand le système n'est pas
-  nommé.
+* `INSTRUCTIONS` pour le modèle : citer la ligne Source, chercher dans tous les systèmes connectés quand le système
+  n'est pas nommé.
 
 En production (`APP_ENV=production`), un connecteur simulé (`mock`) n'est pas exposé. `CONNECTORS_ENABLED` restreint
 les connecteurs proposés (vide = tous).
@@ -136,7 +136,8 @@ MyReport), simulateur (Sage X3 et MyReport sans URL). Interface : [écrire un co
 ## 7. Composants annexes
 
 [Bouchon d'entreprise](../../clevoa-mcp-stub/README.md), [backend de télémétrie](../../clevoa-backend/README.md)
-(AWS Lambda, DynamoDB), [console de suivi](../../clevoa-console/README.md) (NAS de Clevoa, jamais chez un client),
+(écrit pour AWS Lambda et DynamoDB, jamais déployé ; passage sur Cloudflare prévu, [roadmap § 3](../roadmap-produit.md#3-axe-2--observabilité-et-maintenance)),
+[console de suivi](../../clevoa-console/README.md) (chez Clevoa, jamais chez un client),
 [outils de charge](../../loadtest/README.md).
 
 ## 8. Règles de simplicité
@@ -155,7 +156,7 @@ ses systèmes.
 | Infrastructure du client | `mcp-hub`, `mcp-backup`, `cloudflared`, `nginx` | Clevoa, sur les serveurs du client | jetons chiffrés, données métier en transit |
 | Systèmes du client | Entra ID, Sage X3, MyReport, Salesforce, SharePoint, Dropbox | le client et ses intégrateurs | données métier, selon les droits de chacun |
 | Cloudflare, compte Clevoa | nom public, WAF, tunnel | Clevoa | **requêtes et réponses MCP en clair** ; Cloudflare est sous-traitant ultérieur |
-| Cloud Anthropic | connecteur Claude de l'organisation | le client (Owner Claude) | questions, réponses, jetons Entra |
+| Cloud Anthropic (OpenAI si ChatGPT est utilisé) | connecteur Claude de l'organisation | le client (Owner Claude) | questions, réponses, jetons Entra |
 | Clevoa | télémétrie, console de suivi | Clevoa | compteurs et états seulement |
 
 Conséquences : compte Cloudflare sécurisé comme une production ([runbook](../admin/cloudflare.md)) ; rôle de
