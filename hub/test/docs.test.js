@@ -147,6 +147,8 @@ test("Dropbox : dropbox_read par id et par chemin (métadonnées, puis files/dow
   assert.equal(dir.isError, true); assert.match(dir.content[0].text, /C'est un dossier/);
   const big = await c.callTool({ name: "dropbox_read", arguments: { path: "/Finance/Gros classeur.xlsx" } });
   assert.equal(big.isError, true); assert.match(big.content[0].text, /au-delà de 25 Mo/);
+  const team = await c.callTool({ name: "dropbox_read", arguments: { path: "ns:4321/Contrôle de gestion/Absent.docx" } });
+  assert.match(team.content[0].text, /introuvable/, "chemin d'espace d'équipe ns:… accepté par le schéma, transmis à Dropbox");
   const missing = await c.callTool({ name: "dropbox_read", arguments: { path: "/Finance/Absent.docx" } });
   assert.equal(missing.isError, true); assert.match(missing.content[0].text, /^Dropbox : fichier introuvable ou inaccessible \(path\/not_found/);
   assert.equal(up.requests("/2/files/download").length, 1, "dossier, fichier trop gros, chemin inconnu : aucun téléchargement");

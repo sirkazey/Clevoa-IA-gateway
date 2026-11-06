@@ -35,6 +35,16 @@ test("Excel : feuilles dans l'ordre du classeur, chaînes partagées et en ligne
   assert.equal(r.text, "## Feuille « Détail & annexes »\n\t\tcalculé\n\n## Feuille « Synthèse »\nLibellé\t\tRiche & co\n42.5\t85\tVRAI\ta < b");
 });
 
+test("Excel : dates, heures et pourcentages selon le format de la cellule (formats intégrés et personnalisés, calendrier 1904)", async () => {
+  const styles = '<numFmts count="3"><numFmt numFmtId="164" formatCode="dd/mm/yyyy\\ hh:mm"/><numFmt numFmtId="165" formatCode="#,##0.00\\ &quot;€&quot;;[Red]\\-#,##0.00\\ &quot;€&quot;"/><numFmt numFmtId="166" formatCode="mmm\\-yy"/></numFmts>'
+    + '<cellXfs count="7"><xf numFmtId="0"/><xf numFmtId="14"/><xf numFmtId="164"/><xf numFmtId="165"/><xf numFmtId="10"/><xf numFmtId="20"/><xf numFmtId="166"/></cellXfs>';
+  const row = ['<c r="A1" s="1"><v>45962</v></c>', '<c r="B1" s="2"><v>45962.6041666667</v></c>', '<c r="C1" s="3"><v>3100.5</v></c>', '<c r="D1" s="4"><v>0.155</v></c>', '<c r="E1" s="5"><v>0.75</v></c>', '<c r="F1" s="6"><v>45962</v></c>', '<c r="G1"><v>45962</v></c>'];
+  const { text } = await extract(docs.xlsx({ styles, sheets: [{ name: "Dates", rows: [row] }] }), "xlsx");
+  assert.equal(text, "## Feuille « Dates »\n01/11/2025\t01/11/2025 14:30\t3100.5\t15.5 %\t18:00\t01/11/2025\t45962", "montant en euros et nombre sans style restent des nombres");
+  const { text: t1904 } = await extract(docs.xlsx({ styles, date1904: true, sheets: [{ name: "Dates", rows: [['<c r="A1" s="1"><v>44500</v></c>']] }] }), "xlsx");
+  assert.equal(t1904, "## Feuille « Dates »\n01/11/2025", "calendrier 1904 (classeurs Mac anciens)");
+});
+
 test("PowerPoint : ordre de la présentation, sinon numérique (slide2 avant slide10) ; notes de l'orateur sans le numéro de page", async () => {
   const slides = Array.from({ length: 11 }, (_, i) => `Diapo ${i + 1} &amp; fin`);
   for (const bare of [false, true]) {

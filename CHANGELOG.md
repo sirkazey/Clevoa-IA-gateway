@@ -12,7 +12,7 @@ Une section par version, trois lignes au plus par rubrique. La version est celle
 Version candidate de lecture des documents, issue du test réel de Dropbox du 06/11/2026.
 
 ### Ajouté
-- Lecture des Word, Excel, PowerPoint et PDF (`hub/extract.js`, dépendances `fflate` et `unpdf`) par `sharepoint_read` et le nouvel outil `dropbox_read` (API `files/download`, `DROPBOX_CONTENT_URL`).
+- Lecture des Word, Excel (dates et pourcentages selon le format de la cellule), PowerPoint et PDF (`hub/extract.js`, dépendances `fflate` et `unpdf`) par `sharepoint_read` et le nouvel outil `dropbox_read` (API `files/download`, `DROPBOX_CONTENT_URL`).
 - PDF scannés : pages jointes en image PNG à Claude, 5 par appel (argument `pages`), sans reconnaissance de caractères dans le hub.
 - Garde-fous : 25 Mo par fichier avant téléchargement, 60 Mo décompressés, 300 pages et 20 s par PDF, 200 000 caractères, 4 Mo d'images.
 

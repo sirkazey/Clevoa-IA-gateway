@@ -239,7 +239,7 @@ pointent vers le bouchon.
 | Format | Rendu |
 |---|---|
 | Word (`.docx`) | paragraphes ; tableaux à une ligne par rangée, cellules séparées par des tabulations |
-| Excel (`.xlsx`) | une section par feuille ; une ligne par rangée ; valeur calculée des formules, nombres non formatés |
+| Excel (`.xlsx`) | une section par feuille ; une ligne par rangée ; valeur calculée des formules ; dates (jj/mm/aaaa) et pourcentages selon le format de la cellule, montants sans séparateur ni devise |
 | PowerPoint (`.pptx`) | une section par diapositive, avec les notes de l'orateur |
 | PDF avec texte | texte page par page (« --- Page 3 --- »), 300 pages et 20 s au plus |
 | PDF scanné | pages jointes en image à Claude, 5 par demande (argument `pages`, ex. `6-10`) |

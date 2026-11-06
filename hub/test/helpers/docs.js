@@ -21,14 +21,15 @@ export function docx({ paragraphs = [], table } = {}) {
 }
 
 /** Excel : feuilles { name, rows: [[cellule XML brute, …]] } ; la cellule est le XML de <c> (ex. '<c r="A1" t="s"><v>0</v></c>'). */
-export function xlsx({ sheets, shared = [], order }) {
+export function xlsx({ sheets, shared = [], order, styles, date1904 = false }) {
   const files = {
     "[Content_Types].xml": `${XML}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>`,
-    "xl/workbook.xml": `${XML}<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${
+    "xl/workbook.xml": `${XML}<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${date1904 ? '<workbookPr date1904="1"/>' : ""}<sheets>${
       (order ?? sheets.map((_, i) => i)).map((i) => `<sheet name="${sheets[i].name}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets></workbook>`,
     "xl/_rels/workbook.xml.rels": rels(...sheets.map((_, i) => rel(`rId${i + 1}`, "worksheet", `worksheets/sheet${i + 1}.xml`)), rel("rId99", "sharedStrings", "sharedStrings.xml")),
     "xl/sharedStrings.xml": `${XML}<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${shared.length}">${shared.map((s) => `<si>${s}</si>`).join("")}</sst>`,
   };
+  if (styles) files["xl/styles.xml"] = `${XML}<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${styles}</styleSheet>`;
   sheets.forEach((s, i) => { files[`xl/worksheets/sheet${i + 1}.xml`] = `${XML}<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${
     s.rows.map((r, j) => `<row r="${j + 1}">${r.join("")}</row>`).join("")}</sheetData></worksheet>`; });
   return zip(files);

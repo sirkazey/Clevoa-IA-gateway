@@ -76,7 +76,8 @@ export const tools = [
     name: "dropbox_read", title: "Dropbox – lire un fichier",
     description: "Texte d'un fichier Dropbox : Word, Excel (une section par feuille), PowerPoint (une section par diapositive), PDF (page par page ; pages scannées jointes en image), texte. Préférer l'id renvoyé par search ou list_folder (id:…) ; sinon le chemin complet, ex. /Finance/Budget.xlsx.",
     input: {
-      path: z.string().regex(/^(id:[\w-]+|\/[^\u0000-\u001f]+)$/).describe("Identifiant id:… (préféré) ou chemin complet /dossier/fichier"),
+      // ns:<n>/… : chemin d'espace d'équipe (Dropbox Business) tel que search et list_folder le renvoient
+      path: z.string().regex(/^(id:[\w-]+|ns:\d+\/[^\u0000-\u001f]*|\/[^\u0000-\u001f]+)$/).describe("Identifiant id:… (préféré), chemin d'équipe ns:… ou chemin complet /dossier/fichier, tels que renvoyés par search ou list_folder"),
       pages: z.string().regex(/^\d{1,4}(-\d{1,4})?$/).optional().describe(extract.PAGES_HELP),
     },
     run: async (tok, { path, pages }) => {

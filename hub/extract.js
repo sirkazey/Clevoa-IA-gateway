@@ -113,8 +113,38 @@ function docx(data) {
 const col = (ref) => [...(/^[A-Z]+/.exec(ref)?.[0] ?? "")].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0) - 1;
 const inner = (xml) => [...xml.replace(/<rPh\b[\s\S]*?<\/rPh>/g, "").matchAll(/<t(?:\s[^>]*)?>([^<]*)<\/t>/g)].map((m) => decode(m[1])).join(""); // sans le phonétique
 
+// Formats de nombre Excel : une date est stockée comme un nombre de jours (série), un pourcentage comme une fraction ; sans le
+// style, Claude lirait 45962 au lieu du 01/11/2025 et 0.15 au lieu de 15 %. Formats intégrés de date : 14-22, 27-36, 45-47, 50-58.
+const BUILTIN_DATE = new Set([14, 15, 16, 17, 18, 19, 20, 21, 22, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 45, 46, 47, 50, 51, 52, 53, 54, 55, 56, 57, 58]);
+const BUILTIN_PCT = new Set([9, 10]);
+/** Style de chaque index de cellule (attribut s) : "date", "datetime", "time", "pct" ou null. */
+function cellKinds(styles = "") {
+  const custom = Object.fromEntries([...styles.matchAll(/<numFmt\b[^>]*>/g)].map(([t]) => [attr(t, "numFmtId"), decode(attr(t, "formatCode") ?? "")]));
+  const xfs = /<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/.exec(styles)?.[1] ?? "";
+  return [...xfs.matchAll(/<xf\b[^>]*>/g)].map(([t]) => {
+    const id = Number(attr(t, "numFmtId") ?? 0);
+    if (BUILTIN_PCT.has(id)) return "pct";
+    // Format personnalisé : sans les textes entre guillemets, les caractères échappés et les couleurs [Red] ; [h] (durée) compte.
+    const code = (custom[id] ?? "").replace(/"[^"]*"|\\.|\[(?![hms]\])[^\]]*\]/gi, "").toLowerCase();
+    if (code.includes("%")) return "pct";
+    const day = BUILTIN_DATE.has(id) || /[dy]/.test(code) || (/m/.test(code) && !/[hs]/.test(code)), hour = /[hs]/.test(code) || [18, 19, 20, 21, 22, 45, 46, 47].includes(id);
+    return day && hour ? (id >= 18 && id <= 21) || id >= 45 && id <= 47 ? "time" : "datetime" : day ? "date" : hour ? "time" : null;
+  });
+}
+const two = (n) => String(n).padStart(2, "0");
+/** Valeur affichable d'un nombre selon son style : 01/11/2025, 01/11/2025 14:30, 14:30, 15 %. */
+function formatNumber(raw, kind, date1904) {
+  const n = Number(raw);
+  if (!kind || !Number.isFinite(n) || raw === "") return raw;
+  if (kind === "pct") return `${+(n * 100).toFixed(4)} %`;
+  const ms = Math.round((n + (date1904 ? 1462 : 0)) * 86_400_000) + Date.UTC(1899, 11, 30), d = new Date(ms);
+  const date = `${two(d.getUTCDate())}/${two(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`, time = `${two(d.getUTCHours())}:${two(d.getUTCMinutes())}`;
+  return kind === "date" ? date : kind === "time" ? time : `${date} ${time}`;
+}
+
 function xlsx(data) {
-  const files = unzip(data, (n) => /^xl\/(workbook\.xml|_rels\/workbook\.xml\.rels|sharedStrings\.xml|worksheets\/[^/]+\.xml)$/.test(n));
+  const files = unzip(data, (n) => /^xl\/(workbook\.xml|_rels\/workbook\.xml\.rels|sharedStrings\.xml|styles\.xml|worksheets\/[^/]+\.xml)$/.test(n));
+  const kinds = cellKinds(files["xl/styles.xml"]), date1904 = /<workbookPr\b[^>]*\bdate1904="(1|true)"/.test(files["xl/workbook.xml"] ?? "");
   const shared = [...(files["xl/sharedStrings.xml"] ?? "").matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => inner(m[1]));
   const r = rels(files["xl/_rels/workbook.xml.rels"], "xl/");
   const parts = [];
@@ -126,9 +156,9 @@ function xlsx(data) {
     for (const row of sheet.matchAll(/<row\b[^>]*?(?:\/>|>([\s\S]*?)<\/row>)/g)) {
       const cells = [];
       for (const c of (row[1] ?? "").matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
-        const ref = attr(c[1], "r"), t = attr(c[1], "t"), body = c[2] ?? "";
+        const ref = attr(c[1], "r"), t = attr(c[1], "t"), body = c[2] ?? "", kind = kinds[Number(attr(c[1], "s") ?? 0)];
         const v = /<v>([^<]*)<\/v>/.exec(body)?.[1]; // valeur calculée pour une formule
-        const val = t === "s" ? shared[Number(v)] ?? "" : t === "inlineStr" ? inner(body) : t === "b" ? (v === "1" ? "VRAI" : v === "0" ? "FAUX" : "") : decode(v ?? "");
+        const val = t === "s" ? shared[Number(v)] ?? "" : t === "inlineStr" ? inner(body) : t === "b" ? (v === "1" ? "VRAI" : v === "0" ? "FAUX" : "") : t === "str" || t === "e" ? decode(v ?? "") : formatNumber(decode(v ?? ""), kind, date1904);
         cells[ref ? col(ref) : cells.length] = val.replace(/[\t\r\n]+/g, " ");
       }
       if (cells.length) { const line = Array.from(cells, (x) => x ?? "").join("\t"); lines.push(line); len += line.length; }
