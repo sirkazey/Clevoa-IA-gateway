@@ -9,29 +9,41 @@ Un conteneur Node 24, six dépendances directes ([dépendances](dependances.md))
 services.
 
 ```mermaid
-flowchart TB
-    D["Claude Desktop · Claude Code<br/>réseau interne ou VPN"]
-    M["claude.ai web · mobile<br/>hors réseau"]
-    C["Cloud Anthropic"]
-    T["Cloudflare · compte Clevoa<br/>WAF · tunnel"]
-    subgraph CH["Infrastructure du client · aucun port entrant"]
-        CD["cloudflared"]
-        P["mcp-hub port 8080<br/>portail · /mcp · /sse"]
-        O["mcp-hub port 8090<br/>OAuth relayé · /mcp"]
-        B["mcp-backup"]
-        X3["Sage X3 · MyReport"]
+flowchart LR
+    subgraph U["Collaborateurs"]
+        W["Claude<br/>web · bureau · mobile<br/>compte Microsoft"]
+        D["Usages techniques<br/>Claude Code, scripts"]
     end
-    SAAS["Entra ID · SharePoint<br/>Salesforce · Dropbox"]
-    CL["Clevoa : télémétrie,<br/>console de suivi"]
-    D -->|"MCP + clé personnelle"| P
-    M --> C -->|"MCP + jeton Entra"| T
-    T ---|"tunnel sortant"| CD --> O
-    B --- P
-    P --> X3
-    P --> SAAS
-    O -.->|"jetons relayés"| SAAS
-    P -.->|"compteurs, 6 h"| CL
+    T["Cloudflare<br/>WAF + tunnel"]
+    subgraph CL["Serveur du client · aucun port entrant"]
+        CD["cloudflared"]
+        H["Hub Clevoa<br/>8090 accès en ligne<br/>8080 portail"]
+    end
+    subgraph S["Systèmes métier"]
+        X3["Sage X3 · MyReport"]
+        SA["Salesforce · SharePoint<br/>Dropbox"]
+    end
+    subgraph EXT["Services annexes"]
+        E["Microsoft Entra ID<br/>identité"]
+        CV["Clevoa<br/>compteurs anonymes"]
+    end
+
+    W -->|"jeton Entra"| T
+    T -->|"tunnel ouvert par le serveur"| CD
+    CD --> H
+    D -->|"clé personnelle"| H
+    H ==>|"lecture seule"| X3
+    H ==>|"lecture seule"| SA
+    H -.-> E
+    H -.-> CV
 ```
+
+Les deux entrées mènent au même hub, aux mêmes outils et aux mêmes droits : ceux du collaborateur, en lecture seule. Le tunnel
+est ouvert depuis le serveur (`cloudflared`, connexion sortante) : aucun port n'est ouvert vers l'extérieur. Avec l'accès en ligne, toutes les applications
+Claude (web, bureau, mobile, sur le réseau interne ou non) passent par le connecteur et le compte Microsoft (port 8090).
+La clé personnelle (port 8080, réseau interne) ne sert plus qu'aux usages techniques, ou à tout le monde si l'accès en
+ligne n'est pas activé. Non représentée : la sauvegarde
+quotidienne, conteneur `mcp-backup` ([exploitation § 4](../admin/exploitation.md#4-sauvegarde)).
 
 | Module (`hub/`) | Rôle |
 |---|---|
