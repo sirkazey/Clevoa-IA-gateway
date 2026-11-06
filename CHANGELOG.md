@@ -19,7 +19,7 @@ code depuis la 1.7.0-rc.9. Première version stable depuis la 1.5.2.
 
 ### Modifié
 - Portail : nouvelle identité Clevoa, prénom du collaborateur, parcours « Claude » en premier avec l'accès en ligne, configuration de l'instance retirée.
-- Documentation allégée d'un tiers ; procédures Cloudflare, Entra, Claude Team, ChatGPT et Dropbox vérifiées en réel.
+- Documentation allégée d'un tiers, procédures Cloudflare, Entra, Claude Team, ChatGPT et Dropbox vérifiées en réel ; déroulé de mise en production et fiche de démarrage rapide.
 - Recette en pré-production le 06/11/2026 : cloisonnement, restauration, accès en ligne, lecture des documents ([journal](docs/validation/journal-tests-reels.md)).
 
 ## [1.7.0-rc.9] – 2026-11-06
