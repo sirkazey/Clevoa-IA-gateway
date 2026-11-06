@@ -4,7 +4,7 @@ Public : l'administrateur du hub et l'administrateur Entra ID du client. Objet :
 depuis Claude **hors du réseau de l'entreprise** (téléphone, ordinateur en déplacement), sans ouvrir de port sur le pare-feu et
 sans clé à copier. Statut : **expérimental**, désactivé par défaut (`CLOUDFLARE_TUNNEL=1` l'active), testé sur bouchon seulement
 ([état des fonctionnalités](../validation/etat-des-fonctionnalites.md)). Choix et alternatives écartées :
-[étude](../etudes/connexion-un-clic.md#9-décision-du-3-novembre-2026--entra-seul-relais-oauth-du-sdk-et-cloudflare-tunnel).
+[étude](../history/etude-connexion-un-clic.md#9-décision-du-3-novembre-2026--entra-seul-relais-oauth-du-sdk-et-cloudflare-tunnel).
 
 ## 1. Principe
 

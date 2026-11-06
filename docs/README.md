@@ -3,7 +3,7 @@
 Un dossier par public. Chaque procédure a une seule source de vérité ; les autres documents y renvoient.
 Évolutions du produit : [roadmap produit](roadmap-produit.md), seule roadmap active. Périmètre fonctionnel gelé à la 1.3.1,
 sauf décisions datées du 2026-10-25 (1.4 : portail et supervision ; 1.5 : base d'exploitation et audit).
-Étude : [connexion de l'assistant en un clic](etudes/connexion-un-clic.md) (OAuth, Cloudflare, multi-clients), décision du
+Étude : [connexion de l'assistant en un clic](history/etude-connexion-un-clic.md) (OAuth, Cloudflare, multi-clients), décision du
 3 novembre 2026 : [accès en ligne pour Claude](admin/acces-en-ligne.md) (Entra seul, expérimental).
 
 | Dossier | Public | Contenu |
