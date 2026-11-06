@@ -7,6 +7,17 @@ noms techniques inchangés). Les documents cités par leur ancien nom sont déso
 
 Une section par version, trois lignes au plus par rubrique. La version est celle de `hub/version.js`, le tag Git `vX.Y.Z` et la Release GitHub portent le même numéro.
 
+## [1.7.0-rc.9] – 2026-11-06
+
+Version candidate issue du premier essai de ChatGPT par l'accès en ligne (journal G1–G4).
+
+### Ajouté
+- Accès en ligne : chaque refus de `/authorize` et `/token` est écrit au journal (`[online] /token refusé (400) : invalid_client – …`), sans secret ni code.
+- Secret client accepté aussi en en-tête `Authorization: Basic` (`client_secret_basic`), méthode par défaut de nombreux clients OAuth.
+
+### Modifié
+- Documentation : procédure ChatGPT (serveur MCP personnalisé, URL de rappel, liste IP d'OpenAI dans la règle WAF 2), règle WAF 1 ouverte à tout `/.well-known/`.
+
 ## [1.7.0-rc.8] – 2026-11-06
 
 Version candidate corrective, issue du test réel de lecture des documents (journal L1–L4) : contrat scanné lu par Claude
