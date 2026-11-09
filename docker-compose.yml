@@ -127,7 +127,7 @@ services:
   # public est routé, dans le tableau de bord Cloudflare, vers http://mcp-hub:8090. Le portail (8080) refuse toute requête relayée par
   # Cloudflare. Runbook : docs/admin/cloudflare.md.
   cloudflared:
-    image: cloudflare/cloudflared:2026.10.1@sha256:a15a3b50b8dabd57ac2090e9484c0247dba9dfa1f0df4d298d4317f9d69eb2d5   # version figée, mise à jour choisie
+    image: cloudflare/cloudflared:2026.10.7@sha256:4955524aeaa379e154023d5a027c250f7b35041a2e7e950cf13f144bc9b9c5ba   # version figée, mise à jour choisie
     command: tunnel --no-autoupdate run
     environment:
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}   # jeton du tunnel (après --token dans la commande Docker de Cloudflare), jamais commité
