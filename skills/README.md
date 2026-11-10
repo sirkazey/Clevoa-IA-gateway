@@ -16,8 +16,8 @@ donne l'accès aux données ; ces fiches disent quoi en faire.
 
 ## Qui fait quoi
 
-1. **Le contrôle de gestion décide des règles**, sans toucher à aucun fichier : il remplit le questionnaire qu'on lui
-   remet (une ligne en français par règle).
+1. **Le contrôle de gestion décide des règles**, sans toucher à aucun fichier : il remplit le questionnaire en ligne partagé par
+   Clevoa, qui reprend la colonne « Votre règle » de chaque fiche (une ligne en français par règle).
 2. **L'administrateur Claude de l'entreprise** reporte ces règles dans la colonne « Votre règle » de la copie de
    l'entreprise, puis la charge dans Claude pour toute l'organisation.
 3. **Le contrôle de gestion vérifie** : il pose une question à Claude et regarde si la réponse cite sa règle. Si non,
@@ -32,8 +32,9 @@ Deux principes rendent les fiches sûres :
 
 Chaque fiche est un dossier. On le compresse en `.zip` et on l'ajoute dans les paramètres de Claude, rubrique des
 compétences, pour toute l'organisation. Après chaque modification, on recharge le `.zip`, puis on ouvre une nouvelle
-conversation pour tester. Le fichier `reference.md` traduit les indicateurs en champs techniques : il ne change que si
-l'instance Sage X3 diffère.
+conversation pour tester. Le fichier `reference.md` traduit les indicateurs en champs techniques : il change si l'instance
+diffère ou quand l'intégrateur publie une nouvelle représentation ; mettre alors à jour aussi le tableau de
+disponibilité de la fiche Indicateurs.
 
 ## Ce qui ne va jamais dans ce dossier
 
