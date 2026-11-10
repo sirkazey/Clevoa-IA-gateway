@@ -15,8 +15,13 @@ export function cachedSchema(key, system, load) {
   for (const [k, v] of mem) if (v.at <= cutoff) mem.delete(k);
   const entry = { at: new Date(), data: Promise.resolve().then(load) };
   mem.set(id, entry);
-  entry.data.catch(() => { if (mem.get(id) === entry) mem.delete(id); });
+  entry.data.then((v) => { entry.value = v; }, () => { if (mem.get(id) === entry) mem.delete(id); });
   return entry.data;
+}
+/** Structure déjà chargée et encore valide, sans jamais la charger (aucun appel au système) ; undefined sinon. */
+export function peekSchema(key, system) {
+  const hit = mem.get(`${key}:${system}`);
+  return hit && hit.at > lastCutoff() ? hit.value : undefined;
 }
 /** Oublie la structure d'un collaborateur pour un système : déconnexion, autre compte, nouvel identifiant. */
 export const forget = (key, system) => { mem.delete(`${key}:${system}`); };

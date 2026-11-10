@@ -11,7 +11,7 @@ import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const TOOLS = ["salesforce_tools", "salesforce_call", "sagex3_representations", "sagex3_describe", "sagex3_query", "sagex3_get",
-  "sharepoint_sites", "sharepoint_list", "sharepoint_search", "sharepoint_read", "dropbox_tools", "dropbox_call", "dropbox_read", "myreport_tools", "myreport_call", "clevoa_mon_compte"];
+  "sharepoint_sites", "sharepoint_list", "sharepoint_search", "sharepoint_read", "dropbox_tools", "dropbox_call", "dropbox_read", "myreport_tools", "myreport_call", "clevoa_mon_compte", "clevoa_glossaire"];
 const KEY_NO_REFRESH = "test-key-bob-no-refresh-token";
 const KEY_CAROL = "test-key-carol-0123456789";
 const KEY_DAN = "test-key-dan-apikey-0123456789";
@@ -51,7 +51,7 @@ const sfQuery = (c, q) => c.callTool({ name: "salesforce_call", arguments: { too
 const sfCalls = (method) => up.requests("/sobject-reads", "POST").filter((r) => !method || r.body.includes(`"${method}"`));
 
 // ---------------------------------------------------------------- 1. flux SSE / Streamable HTTP
-test("SSE : listTools expose les 14 outils en lecture seule", async () => {
+test("SSE : listTools expose les 17 outils en lecture seule", async () => {
   const c = await sseClient();
   try {
     const { tools } = await c.listTools();
@@ -154,7 +154,7 @@ test("Streamable HTTP (/mcp, Authorization: Bearer) : listTools et callTool", as
   const c = await httpClient();
   try {
     const { tools } = await c.listTools();
-    assert.equal(tools.length, 16);
+    assert.equal(tools.length, 17);
     const me = JSON.parse((await c.callTool({ name: "clevoa_mon_compte", arguments: {} })).content[0].text);
     assert.equal(me.compte.identification, "clé personnelle (sans compte Microsoft)");
     assert.ok(me.portail.startsWith("http"));

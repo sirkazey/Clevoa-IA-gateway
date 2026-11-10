@@ -64,6 +64,9 @@ services:
       METRICS_TOKEN: ${METRICS_TOKEN}        # jeton de la supervision (GET /metrics, format Prometheus) ; vide = route désactivée
       CONNECTORS_ENABLED: ${CONNECTORS_ENABLED} # connecteurs proposés, ex. sagex3,salesforce,sharepoint ; vide = tous
       CONNECTOR_DOMAINS: ${CONNECTOR_DOMAINS} # classement sur le portail, ex. sagex3=industrie (commerce, finance, industrie, documents, rh, autre)
+      # Couche sémantique (1.8, expérimental) — docs/admin/configuration.md § 9. Chemin, DANS le conteneur, du fichier JSON propre au client
+      # (vocabulaire, sociétés, indicateurs, classeurs de référence), monté en lecture seule (volume ci-dessous). Vide = couche générique seule.
+      SEMANTICS_FILE: ${SEMANTICS_FILE}
       # Journal d'audit (1.5) — docs/admin/securite.md § 7 : à activer seulement après avis du DPO et information des collaborateurs
       AUDIT: ${AUDIT}                        # on = chaque appel d'outil journalisé (collaborateur, système, outil, résultat, durée ; jamais les arguments ni les données)
       AUDIT_DAYS: ${AUDIT_DAYS}              # durée de conservation du journal d'audit en jours ; défaut 90
@@ -78,6 +81,8 @@ services:
     networks: [default, tunnel]   # tunnel : réseau partagé avec cloudflared seul
     volumes:
       - mcp-data:/data   # users.json : jetons OAuth par utilisateur ; hub.db : historique, compteurs, audit (1.5)
+      # Couche sémantique du client : décommenter et adapter le chemin de l'hôte ; SEMANTICS_FILE=/config/semantique.json
+      # - /chemin/sur/l-hote/semantique.json:/config/semantique.json:ro
     # État « healthy / unhealthy » visible dans Portainer et `docker ps` : le hub répond-il sur /health ? (aucun réseau sortant)
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]

@@ -251,6 +251,10 @@ page compte dans l'usage Claude. Les images (`png`, `jpg`), les anciens formats 
 mot de passe ne sont pas lus : le résultat donne les métadonnées et le lien. Limites : fichier de 25 Mo, 60 Mo une
 fois décompressé, 200 000 caractères de texte, 4 Mo d'images par réponse.
 
+Classeur Excel lié à d'autres classeurs : le résultat liste les fichiers liés (`classeursLies`, chemins tels
+qu'enregistrés dans le classeur) avec une note. Les valeurs liées sont celles de la dernière ouverture du classeur, dont
+la date de modification est rappelée ; les dates des fichiers liés ne sont pas comparées.
+
 ## 5. MyReport (proxy MCP SSE) — serveur éditeur non livré
 
 Le hub est client MCP SSE du serveur MCP de MyReport Server (`MYREPORT_MCP_URL`), annoncé par l'éditeur mais non livré :
@@ -294,3 +298,50 @@ données personnelles : [sécurité § 7](securite.md#7-base-dexploitation-et-jo
 
 Audit actif : la ligne de démarrage se termine par `· journal d'audit 90 j`. Base illisible ou disque plein : les
 outils continuent, sans historique, compteurs ni audit, et le journal l'écrit (`[db] base d'exploitation indisponible`).
+
+## 9. Couche sémantique (1.8, expérimental)
+
+L'outil `clevoa_glossaire` donne à l'assistant le sens métier des données : quel objet fait foi pour un indicateur
+(« CA » = factures de vente, pas les commandes), les filtres, les champs clés et les pièges (HT ou TTC, avoirs,
+devises, périodes). Il n'appelle aucun système. Deux couches :
+
+| Couche | Contenu | Où |
+|---|---|---|
+| générique | chaîne de vente et achats Sage X3 standard, objets Salesforce standard, vocabulaire de la direction financière, règles de prudence | `hub/semantics/generique.js`, dans le dépôt |
+| propre au client | vocabulaire maison, sociétés et sites, champs spécifiques, objets personnalisés, règles de gestion, indicateurs, carte des classeurs de référence | fichier JSON désigné par `SEMANTICS_FILE`, hors du dépôt |
+
+La couche du client complète la couche générique et prime sur elle : un terme ou un objet de même nom la remplace.
+Seuls les objets des connecteurs proposés (`CONNECTORS_ENABLED`) sont renvoyés. Pour Sage X3, la disponibilité d'une
+représentation est donnée si la structure du collaborateur est déjà en cache ; sinon l'outil renvoie vers
+`sagex3_representations`.
+
+**Le fichier appartient au client et ne va jamais dans le dépôt.** Mise en place :
+
+1. Partir de l'exemple entièrement fictif [`ops/semantique-exemple.json`](../../ops/semantique-exemple.json) et le
+   remplir sur le serveur, hors du clone Git.
+2. Le monter en lecture seule dans le conteneur : décommenter la ligne
+   `/chemin/sur/l-hote/semantique.json:/config/semantique.json:ro` sous `volumes` dans `docker-compose.yml` (ou dans la
+   stack Portainer) et adapter le chemin de l'hôte.
+3. Dans `.env` : `SEMANTICS_FILE=/config/semantique.json`, puis redémarrer le hub.
+
+Le fichier est lu et validé au démarrage. Invalide (JSON mal formé, clé inconnue, champ obligatoire absent, objet ou
+classeur cité mais non déclaré, plus de 2 Mo), le hub s'arrête avec un message du type
+`[config] SEMANTICS_FILE invalide (/config/semantique.json) : vocabulaire[0].definition : …`. JSON seulement ; YAML
+n'est pas pris en charge. Le chemin du fichier n'est jamais montré à l'assistant.
+
+Format (`version: 1`, toutes les autres clés facultatives) :
+
+| Clé | Contenu |
+|---|---|
+| `nom` | libellé de la couche, ex. nom de la société |
+| `vocabulaire` | `{ terme, synonymes, definition, objets, faitFoi, filtres, pieges }` |
+| `societes` | `{ code, nom, devise, sites: [{ code, nom, role }] }` |
+| `champsSpecifiques` | `{ objet, champ, sens }` : ajouté à la fiche de l'objet |
+| `objets` | `{ id, systeme (sagex3 ou salesforce), nom, synonymes, usage, champs, liens, pieges, questions }` : objet Salesforce personnalisé, représentation Sage X3 spécifique |
+| `regles` | règles de gestion, en phrases |
+| `indicateurs` | `{ nom, synonymes, definition, calcul, objets, classeur }` |
+| `classeurs` | `{ indicateur, fichier, systeme (dropbox ou sharepoint), chemin, site, dependances, miseAJour }` : fichier qui fait foi pour un indicateur |
+
+Les noms de champs génériques portent leur source : constatés sur une instance 24R1, tirés de l'aide en ligne Sage
+(à vérifier dans la représentation avec `sagex3_describe`) ou de la référence des objets Salesforce. Un sens sans nom
+de champ porte la mention « champ à confirmer sur l'instance ».

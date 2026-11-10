@@ -27,6 +27,7 @@ Historique : [`CHANGELOG.md`](../../CHANGELOG.md). Évolutions : [roadmap produi
 | MyReport (proxy MCP SSE) | testé sur bouchon | plomberie SSE et liste blanche | serveur de l'éditeur, non livré |
 | SSO Entra ID (`entra`) | disponible (un compte) | 26/10 (E5–E8), `sso.test.js` | deux collaborateurs réels ; compte invité |
 | Comptages exacts, listes coupées signalées (Salesforce, Sage X3) | testé sur bouchon | `mcp.test.js` | un comptage sur la sandbox ; `$links.$next` de Syracuse |
+| Couche sémantique (1.8, expérimental) : `clevoa_glossaire`, fichier du client `SEMANTICS_FILE` ; classeurs Excel liés (`classeursLies`) | testé sur bouchon | `semantics.test.js`, `extract.test.js`, `docs.test.js` | champs « à confirmer » et représentations publiées sur l'instance ; fichier rempli par le client ; essai avec Claude sur des questions de la direction financière |
 
 ### Assistants et protocole
 

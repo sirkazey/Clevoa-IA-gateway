@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "nom": "Biscuiterie Lune et Comète (société fictive d'exemple)",
+  "vocabulaire": [
+    {
+      "terme": "Ventes comptoir",
+      "synonymes": ["CA boutique", "ventes boutique"],
+      "definition": "Factures de vente du site boutique fictif BOUT, hors ventes aux distributeurs.",
+      "objets": ["SINVOICE"],
+      "faitFoi": "SINVOICE",
+      "filtres": "Site de vente BOUT ; champ spécifique ZCANAL = COMPTOIR."
+    },
+    {
+      "terme": "Carnet de commandes",
+      "synonymes": ["backlog", "commandes à produire"],
+      "definition": "Exemple fictif de définition maison : commandes de vente ouvertes dont la date de livraison demandée tombe dans les 90 prochains jours.",
+      "objets": ["SORDER"],
+      "faitFoi": "SORDER",
+      "filtres": "Commandes ouvertes, date de livraison demandée dans les 90 jours ; hors site BOUT."
+    }
+  ],
+  "societes": [
+    {
+      "code": "LUNE",
+      "nom": "Biscuiterie Lune et Comète SAS (fictive)",
+      "devise": "EUR",
+      "sites": [
+        { "code": "FOUR", "nom": "Fournil de Val-Imaginaire", "role": "production et expédition" },
+        { "code": "BOUT", "nom": "Boutique de la Place des Comètes", "role": "vente au comptoir" }
+      ]
+    },
+    { "code": "ASTR", "nom": "Astre Distribution SARL (fictive)", "devise": "EUR" }
+  ],
+  "champsSpecifiques": [
+    { "objet": "SINVOICE", "champ": "ZCANAL", "sens": "canal de vente (COMPTOIR, DISTRIBUTEUR) : champ spécifique de l'exemple fictif" }
+  ],
+  "objets": [
+    {
+      "id": "Salon__c",
+      "systeme": "salesforce",
+      "nom": "Salon gourmand (objet personnalisé fictif)",
+      "synonymes": ["salon", "foire"],
+      "usage": "Salons professionnels où l'entreprise fictive tient un stand.",
+      "champs": [{ "champ": "Date_Salon__c", "sens": "date d'ouverture du salon" }],
+      "questions": ["Quels salons sont prévus ce trimestre ?"]
+    }
+  ],
+  "regles": [
+    "Exemple fictif : les ventes entre LUNE et ASTR sont internes au groupe et s'éliminent du CA consolidé."
+  ],
+  "indicateurs": [
+    {
+      "nom": "Marge sur coûts directs",
+      "synonymes": ["marge directe", "MCD"],
+      "definition": "CA facturé HT moins farine, beurre, emballages et main-d'œuvre directe (définition fictive).",
+      "calcul": "Lue dans le classeur de référence ; ne pas la recalculer depuis l'ERP.",
+      "objets": ["SINVOICE"],
+      "classeur": "Marge sur coûts directs"
+    }
+  ],
+  "classeurs": [
+    {
+      "indicateur": "Marge sur coûts directs",
+      "fichier": "Marge mensuelle fictive.xlsx",
+      "systeme": "dropbox",
+      "chemin": "/Exemple fictif/Direction financière/Marge mensuelle fictive.xlsx",
+      "dependances": ["/Exemple fictif/Direction financière/Coûts matières fictifs.xlsx"],
+      "miseAJour": "contrôleur de gestion (rôle fictif), le 5 de chaque mois"
+    }
+  ]
+}

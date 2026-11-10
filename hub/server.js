@@ -1,13 +1,15 @@
 // Hub MCP central : identifie l'utilisateur (clé perso), expose les outils des connecteurs en SSE
 // (/sse + /messages) et en Streamable HTTP (/mcp), sert le portail kiosque, les flux OAuth et le diagnostic.
 import express from "express";
+import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { store } from "./store.js";
 import { oauthRouter, withToken, hasCredential, keyCookie, PUBLIC_URL, connectLink } from "./oauth.js";
 import * as sso from "./sso.js";
-import { cachedSchema } from "./cache.js";
+import { cachedSchema, peekSchema } from "./cache.js";
+import * as semantics from "./semantics/index.js";
 import * as salesforce from "./connectors/salesforce.js";
 import * as sagex3 from "./connectors/sagex3.js";
 import * as sharepoint from "./connectors/sharepoint.js";
@@ -37,6 +39,11 @@ const unknown = WANTED.filter((id) => !ALL.some((c) => c.id === id));
 if (unknown.length) { console.error(`[config] CONNECTORS_ENABLED : connecteur inconnu (${unknown.join(", ")}) ; valeurs possibles : ${ALL.map((c) => c.id).join(", ")}`); process.exit(1); }
 // En production, un connecteur sans configuration (simulateur) n'est pas exposé : jamais de données inventées en prod.
 const CONNECTORS = ALL.filter((c) => (!WANTED.length || WANTED.includes(c.id)) && !(IS_PROD && c.mock));
+// Couche sémantique (1.8, expérimental) : glossaire générique, complété par le fichier du client (SEMANTICS_FILE, JSON monté dans le
+// conteneur). Un fichier invalide arrête le démarrage : un glossaire faux ou ignoré sans le dire tromperait l'assistant.
+let GLOSSARY;
+try { GLOSSARY = semantics.build(semantics.loadClient(process.env.SEMANTICS_FILE)); }
+catch (e) { console.error(`[config] SEMANTICS_FILE invalide (${process.env.SEMANTICS_FILE}) : ${e.message}`); process.exit(1); }
 // Multi-client : nom sous lequel le serveur MCP s'annonce aux assistants (clé du bloc mcpServers du portail) et libellé de
 // l'instance affiché sur le portail. Le nom sert de clé JSON côté client : lettres, chiffres, tirets et soulignés seulement.
 const SERVER_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(process.env.MCP_SERVER_NAME || "") ? process.env.MCP_SERVER_NAME : "clevoa-gateway";
@@ -131,6 +138,7 @@ const INSTRUCTIONS = [
   (has("sharepoint") || has("dropbox")) && "Word, Excel, PowerPoint, PDF et texte sont lus ; les pages d'un PDF scanné sont jointes en image, 5 par appel (argument pages pour la suite).",
   has("myreport") && "Analyses MyReport : myreport_tools puis myreport_call.",
   (has("sharepoint") || has("dropbox")) && `Une recherche vide ne prouve pas qu'un document n'existe pas (index en retard sur les dépôts récents, autre nom) : dire « introuvable par la recherche » et parcourir les dossiers probables (${[has("sharepoint") && "sharepoint_list", has("dropbox") && "list_folder"].filter(Boolean).join(", ")}) avant de conclure.`,
+  "Question métier (CA, encours, commandes, BFR…) : consulter clevoa_glossaire avant de choisir les objets.",
   "Compte utilisé, connexions, panne d'un système : clevoa_mon_compte.",
   "Résultat « … aucune donnée n'a été lue. Action requise : … » : le collaborateur doit (re)connecter ce système ; relayer l'action et le lien tels quels, sans jamais en déduire une absence de données ni un total nul.",
 ].filter(Boolean).join(" ");
@@ -193,6 +201,18 @@ function buildServer(key) {
     description: "Compte avec lequel le collaborateur est identifié (Microsoft Entra ID ou clé personnelle), état de sa connexion à chaque système avec le lien pour (re)connecter, état du service (incident en cours). À appeler quand on demande avec quel compte on est connecté, ce qui est connecté, ou si un système est en panne.",
     inputSchema: {}, annotations: { readOnlyHint: true },
   }, async () => ({ content: [{ type: "text", text: JSON.stringify(myAccount(key)) }, { type: "text", text: `Source : Clevoa AI Gateway (${PUBLIC_URL})` }] }));
+  server.registerTool("clevoa_glossaire", {
+    title: "Clevoa – glossaire métier",
+    description: "Sens métier des données, dans le langage de la direction financière : quel objet fait foi pour un indicateur (CA = factures de vente, pas les commandes), filtres, champs clés, pièges (HT/TTC, avoirs, devises, périodes), indicateurs et classeurs de référence de l'entreprise. terme : recherche sans casse ni accents (ex. « CA », « carnet de commandes », « encours ») ; objet : fiche d'un objet (ex. SINVOICE, Opportunity) ; sans argument : sommaire.",
+    inputSchema: {
+      terme: z.string().trim().min(1).max(100).optional().describe("Terme métier, ex. « chiffre d'affaires », « pipeline »"),
+      objet: z.string().regex(/^[\w.' -]{1,80}$/).optional().describe("Objet Sage X3 ou Salesforce, ex. SORDER, Opportunity"),
+    },
+    annotations: { readOnlyHint: true },
+  }, async (args) => ({ content: [
+    { type: "text", text: JSON.stringify(semantics.answer(GLOSSARY, args, CONNECTORS.map((c) => c.id), has("sagex3") ? peekSchema(key, "sagex3") : undefined)) },
+    { type: "text", text: "Source : Clevoa AI Gateway (glossaire métier)" },
+  ] }));
   for (const c of CONNECTORS) for (const t of c.tools) {
     server.registerTool(t.name, { title: t.title, description: t.description, inputSchema: t.input, annotations: { readOnlyHint: true } }, async (args) => {
       telemetry.count();
