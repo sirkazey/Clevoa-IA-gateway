@@ -142,8 +142,29 @@ function formatNumber(raw, kind, date1904) {
   return kind === "date" ? date : kind === "time" ? time : `${date} ${time}`;
 }
 
+/** Classeurs liés (formules vers un autre fichier) : cible de chaque lien externe, telle qu'enregistrée dans le classeur
+ *  (xl/externalLinks/externalLinkN.xml → relation r:id de externalBook, TargetMode="External"). Ordre des liens, sans doublon. */
+function linkedBooks(files) {
+  const num = (p) => Number(/(\d+)\.xml$/.exec(p)[1]);
+  const out = [];
+  for (const p of Object.keys(files).filter((k) => /^xl\/externalLinks\/externalLink\d+\.xml$/.test(k)).sort((a, b) => num(a) - num(b))) {
+    const id = attr(/<externalBook\b[^>]*>/.exec(files[p])?.[0] ?? "", "r:id");
+    const rel = [...(files[p.replace("externalLinks/", "externalLinks/_rels/") + ".rels"] ?? "").matchAll(/<Relationship\b[^>]*>/g)].map(([t]) => t)
+      .find((t) => attr(t, "Id") === id && /^external$/i.test(attr(t, "TargetMode")));
+    const target = rel && attr(rel, "Target");
+    if (target && !out.includes(target)) out.push(target);
+  }
+  return out;
+}
+/** Note jointe à un classeur qui a des liens externes ; date de modification ajoutée quand le connecteur la connaît. */
+export function linkedNote(modified) {
+  let when = "";
+  if (modified) { const d = new Date(modified); if (!Number.isNaN(d.getTime())) when = ` (modifié le ${d.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })})`; }
+  return `Classeur lié à d'autres classeurs (classeursLies) : les valeurs liées sont celles de la dernière ouverture du fichier${when} ; si un classeur source a changé depuis, les chiffres peuvent être décalés.`;
+}
+
 function xlsx(data) {
-  const files = unzip(data, (n) => /^xl\/(workbook\.xml|_rels\/workbook\.xml\.rels|sharedStrings\.xml|styles\.xml|worksheets\/[^/]+\.xml)$/.test(n));
+  const files = unzip(data, (n) => /^xl\/(workbook\.xml|_rels\/workbook\.xml\.rels|sharedStrings\.xml|styles\.xml|worksheets\/[^/]+\.xml|externalLinks\/externalLink\d+\.xml|externalLinks\/_rels\/externalLink\d+\.xml\.rels)$/.test(n));
   const kinds = cellKinds(files["xl/styles.xml"]), date1904 = /<workbookPr\b[^>]*\bdate1904="(1|true)"/.test(files["xl/workbook.xml"] ?? "");
   const shared = [...(files["xl/sharedStrings.xml"] ?? "").matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => inner(m[1]));
   const r = rels(files["xl/_rels/workbook.xml.rels"], "xl/");
@@ -166,7 +187,8 @@ function xlsx(data) {
     }
     parts.push(`## Feuille « ${attr(tag, "name")} »${attr(tag, "state") === "hidden" ? " (masquée)" : ""}\n${lines.join("\n")}`);
   }
-  return parts.join("\n\n");
+  const linked = linkedBooks(files);
+  return { text: parts.join("\n\n"), ...(linked.length && { classeursLies: linked }) };
 }
 
 // ---------- PowerPoint : une section par diapositive (ordre de la présentation, sinon numérique), notes de l'orateur
@@ -272,9 +294,11 @@ async function pdf(data, link, pages) {
   }
 }
 
-/** Texte d'un document déjà téléchargé : { format, truncated, text, note }, et pour un PDF scanné images: [{ page, data }]. */
-export async function extract(data, fmt, link, pages) {
-  const out = fmt === "pdf" ? await pdf(data, link, pages) : { text: fmt === "text" ? new TextDecoder().decode(data).replace(/^﻿/, "") : { docx, xlsx, pptx }[fmt](data) };
+/** Texte d'un document déjà téléchargé : { format, truncated, text, note }, pour un PDF scanné images: [{ page, data }], pour un
+ *  classeur lié à d'autres classeurs classeursLies: [cible…] (modified : date de modification du fichier, pour la note). */
+export async function extract(data, fmt, link, pages, modified) {
+  const out = fmt === "pdf" ? await pdf(data, link, pages) : fmt === "xlsx" ? xlsx(data) : { text: fmt === "text" ? new TextDecoder().decode(data).replace(/^﻿/, "") : { docx, pptx }[fmt](data) };
+  if (out.classeursLies) out.note = linkedNote(modified);
   if (out.text === undefined) return { format: fmt, ...out };
   return { format: fmt, ...out, truncated: !!out.truncated || out.text.length > MAX_TEXT, text: out.text.slice(0, MAX_TEXT) };
 }

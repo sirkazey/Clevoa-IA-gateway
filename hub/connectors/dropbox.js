@@ -89,7 +89,7 @@ export const tools = [
       if (!fmt) return { ...meta, note: extract.unsupported(m.name, where) };
       extract.checkSize(m.size ?? 0, where);
       const data = await extract.readBody(await api(tok, `${CONTENT}/2/files/download`, { arg: { path } }), where);
-      return extract.toResult({ ...meta, ...(await extract.extract(data, fmt, where, pages)) });
+      return extract.toResult({ ...meta, ...(await extract.extract(data, fmt, where, pages, m.server_modified)) });
     },
   },
 ];

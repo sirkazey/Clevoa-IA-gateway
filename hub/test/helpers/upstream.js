@@ -21,11 +21,12 @@ const FILES = {
   "01S": { name: "Page blanche.pdf", data: docs.pdf([""]) },
   "01K": { name: "Contrat scanne.pdf", data: docs.pdf(Array.from({ length: 7 }, (_, i) => ({ image: docs.scan(800, 1100, i + 1) }))) },
   "01X": { name: "Archive.pdf", data: new TextEncoder().encode("%PDF-1.4 tronqué") },
+  "01L": { name: "Synthese liee.xlsx", data: docs.xlsx({ sheets: [{ name: "Synthèse", rows: [['<c r="A1"><f>[1]Feuil1!A1</f><v>42</v></c>']] }], links: ["Ventes%202026.xlsx", "file:///C:\\Exemple\\Achats%20fictifs.xlsx"] }) },
   "01G": { name: "Gros classeur.xlsx", data: new Uint8Array(10), size: 30 * 1024 * 1024 },
   "01I": { name: "photo.png", data: new Uint8Array([0x89, 0x50, 0x4e, 0x47]) },
 };
 /** Fichiers Dropbox simulés : chemin → id de FILES. */
-const DBX = { "/Finance/Budget 2026.xlsx": "01A", "/Finance/Note de synthèse.docx": "01D", "/Finance/Rapport annuel.pdf": "01P", "/Finance/Gros classeur.xlsx": "01G", "/Finance/Contrat scanne.pdf": "01K" };
+const DBX = { "/Finance/Budget 2026.xlsx": "01A", "/Finance/Note de synthèse.docx": "01D", "/Finance/Rapport annuel.pdf": "01P", "/Finance/Gros classeur.xlsx": "01G", "/Finance/Contrat scanne.pdf": "01K", "/Finance/Synthese liee.xlsx": "01L" };
 
 /** Serveur MCP Dropbox simulé : outils de lecture, fetch (que le hub ne transmet pas) et un outil d'écriture (jamais atteignable via
  *  le hub). La liste des outils est servie en deux pages (nextCursor), comme un serveur qui pagine. */

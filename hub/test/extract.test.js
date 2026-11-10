@@ -2,7 +2,7 @@
 // Les documents sont construits dans le test (helpers/docs.js) : aucun fichier binaire dans le dépôt.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { zipSync, strToU8 } from "fflate";
+import { zipSync, unzipSync, strToU8 } from "fflate";
 import * as docs from "./helpers/docs.js";
 import { inflateSync, crc32 } from "node:zlib";
 import { extract, format, checkSize, readBody, decode, unsupported, parsePages, toResult, MAX_SIZE, MAX_TEXT, MAX_IMAGES_B64 } from "../extract.js";
@@ -43,6 +43,21 @@ test("Excel : dates, heures et pourcentages selon le format de la cellule (forma
   assert.equal(text, "## Feuille « Dates »\n01/11/2025\t01/11/2025 14:30\t3100.5\t15.5 %\t18:00\t01/11/2025\t45962", "montant en euros et nombre sans style restent des nombres");
   const { text: t1904 } = await extract(docs.xlsx({ styles, date1904: true, sheets: [{ name: "Dates", rows: [['<c r="A1" s="1"><v>44500</v></c>']] }] }), "xlsx");
   assert.equal(t1904, "## Feuille « Dates »\n01/11/2025", "calendrier 1904 (classeurs Mac anciens)");
+});
+
+test("Excel : classeurs liés (liens externes) listés tels qu'enregistrés, avec la note « dernière ouverture » ; sans lien, aucun champ", async () => {
+  const sheets = [{ name: "Synthèse", rows: [['<c r="A1"><f>[1]Feuil1!A1</f><v>42</v></c>', '<c r="B1"><f>[2]Feuil1!A1</f><v>7</v></c>']] }];
+  const r = await extract(docs.xlsx({ sheets, links: ["Ventes%202026.xlsx", "file:///C:\\Exemple\\Achats%20fictifs.xlsx"] }), "xlsx", "<lien>", undefined, "2026-10-01T08:00:00Z");
+  assert.deepEqual(r.classeursLies, ["Ventes%202026.xlsx", "file:///C:\\Exemple\\Achats%20fictifs.xlsx"]);
+  assert.equal(r.text, "## Feuille « Synthèse »\n42\t7", "valeurs en cache du classeur lu");
+  assert.match(r.note, /dernière ouverture du fichier \(modifié le 01\/10\/2026 \d\d:\d\d\).*peuvent être décalés/);
+  assert.doesNotMatch((await extract(docs.xlsx({ sheets, links: ["a.xlsx"] }), "xlsx")).note, /modifié le/, "date inconnue : note sans date");
+  const plain = await extract(docs.xlsx({ sheets }), "xlsx");
+  assert.equal("classeursLies" in plain, false); assert.equal(plain.note, undefined);
+  // Relation interne (TargetMode absent) ou doublon : écartés
+  const files = unzipSync(docs.xlsx({ sheets, links: ["Ventes.xlsx", "Ventes.xlsx", "interne.xlsx"] }));
+  files["xl/externalLinks/_rels/externalLink3.xml.rels"] = strToU8(new TextDecoder().decode(files["xl/externalLinks/_rels/externalLink3.xml.rels"]).replace(' TargetMode="External"', ""));
+  assert.deepEqual((await extract(zipSync(files), "xlsx")).classeursLies, ["Ventes.xlsx"]);
 });
 
 test("PowerPoint : ordre de la présentation, sinon numérique (slide2 avant slide10) ; notes de l'orateur sans le numéro de page", async () => {

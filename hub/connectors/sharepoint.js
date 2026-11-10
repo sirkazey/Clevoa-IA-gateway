@@ -106,7 +106,7 @@ export const tools = [
       if (!fmt) return { ...meta, note: extract.unsupported(meta.name, meta.webUrl) };
       extract.checkSize(meta.size ?? 0, meta.webUrl);
       const data = await extract.readBody(await get(tok, `${root}/items/${itemId}/content`, {}, true), meta.webUrl);
-      return extract.toResult({ ...meta, ...(await extract.extract(data, fmt, meta.webUrl, pages)) });
+      return extract.toResult({ ...meta, ...(await extract.extract(data, fmt, meta.webUrl, pages, meta.modified)) });
     },
   },
 ];
