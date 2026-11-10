@@ -1,6 +1,6 @@
 # Référence technique des indicateurs (pour Claude)
 
-Cette page sert à Claude ; l'intégrateur ou l'Owner l'adapte si l'instance diffère. Elle traduit chaque indicateur en
+Cette page sert à Claude ; l'intégrateur ou l'administrateur Claude l'adapte si l'instance diffère. Elle traduit chaque indicateur en
 objets, champs et outils.
 
 ## Avant toute lecture
@@ -18,7 +18,7 @@ montrant l'addition ; jamais sur une liste tronquée.
 
 ## Sage X3
 
-| Indicateur | Objet | Publiée par défaut | Filtres et calcul | Attention |
+| Indicateur | Objet | Publiée par défaut (vérifier avec `sagex3_representations`) | Filtres et calcul | Attention |
 |---|---|---|---|---|
 | Chiffre d'affaires | SINVOICE, ou écritures (GACCENTRY) | Non | Date comptable (ACCDAT) ; factures moins avoirs (SIVTYP) | Codes de SIVTYP et champ HT à confirmer avec `sagex3_describe` |
 | Prises de commandes | SORDER | Oui | Date de commande (ORDDAT) | Préciser HT ou TTC ; montants d'en-tête à confirmer |
@@ -27,10 +27,10 @@ montrant l'addition ; jamais sur une liste tronquée.
 | Exposition client | BPCUSTOMER, `sagex3_get`, facette `$details` | Oui | OST (Total en-cours), OSTAUZ (limite ; 0 = aucune limite saisie) | Le détail d'OST, dont le solde comptable, n'est pas exposé ; BPCRSK renseigné = encours suivi sur le client de risque ; BETFCY vrai = intragroupe |
 | Encours comptable | Écritures (GACCENTRY) | Non | Comptes clients à date | Seule source d'un « encours » au sens comptable |
 | Retards clients | GACCDUDATE | Non (absente du dictionnaire) | Échéances non lettrées échues | Sinon non calculable : le dire |
-| Achats facturés | PINVOICE | Oui | Date comptable (ACCDAT) ; HT = TOTLINAMT ; avoirs = PIHTYP 3 et 4, à soustraire | Vérifier que TOTLINAMT et PIHTYP sont en colonnes de liste |
+| Achats facturés | PINVOICE | Oui | Date comptable (ACCDAT) ; HT = TOTLINAMT ; avoirs = PIHTYP 3 et 4, à soustraire | TOTLINAMT doit être en colonne de liste, sinon pas de total : le dire et demander l'ajout à la facette $query ; PIHTYP est filtrable dans where |
 | Échéancier fournisseurs théorique | PINVOICE | Oui | Première échéance (DUDAT1) | Sans statut de règlement : ce ne sont pas des dettes réelles |
 | Engagements d'achat | PORDER | Oui | Commandes signées (APPFLG) non soldées (CLEFLG) | — |
-| Transformation des devis | SQUOTE | Non | Devis émis sur la période (QUODAT), statut (QUOSTA) | Pas de statut « perdu » : exclure les devis encore valides et dire combien |
+| Transformation des devis | SQUOTE | Non | Devis émis sur la période (QUODAT), statut (QUOSTA) | Statut « perdu » pas toujours saisi ; devis encore valides = date de validité (VLYDAT) postérieure à la lecture : les exclure et dire combien |
 | Pièces provisoires | PINVOICE.STA, SINVOICE.INVSTA, GACCENTRY.STA | Selon l'objet | Pièces non comptabilisées ou provisoires | À signaler dans toute revue |
 
 ## Salesforce
@@ -39,7 +39,7 @@ montrant l'addition ; jamais sur une liste tronquée.
 |---|---|---|
 | Pipeline brut | Opportunity | `SELECT SUM(Amount) … WHERE IsClosed = false GROUP BY StageName` ou `CALENDAR_MONTH(CloseDate)` |
 | Pipeline pondéré | Opportunity | `SUM(ExpectedRevenue)` si le champ est lisible (`getObjectSchema`) ; sinon pas de pondéré, le dire |
-| Transformation | Opportunity | Closes gagnées (IsWon) sur closes (IsClosed), même période de clôture (CloseDate) |
+| Taux de gain des opportunités (≠ devis) | Opportunity | Closes gagnées (IsWon) sur closes (IsClosed), même période de clôture (CloseDate) |
 | Conversion des pistes | Lead | `SELECT COUNT()` avec IsConverted = true, puis sans ce filtre, même période (CreatedDate) |
 | Activité commerciale | Task, Event | Task (ActivityDate, IsClosed), Event (StartDateTime), par OwnerId |
 
@@ -49,5 +49,5 @@ multidevise : dire la devise des totaux.
 ## Classeurs du contrôle de gestion
 
 Quand un classeur fait foi, Claude le lit sur Dropbox ou SharePoint. Si la lecture signale des classeurs liés, les
-valeurs datent de la dernière ouverture du fichier : Claude donne cette date et prévient que les chiffres peuvent être
-décalés.
+valeurs viennent du dernier calcul du fichier : Claude donne la date de modification du classeur (seule date connue),
+cite les classeurs liés et prévient qu'il ne sait pas s'ils ont changé depuis.
