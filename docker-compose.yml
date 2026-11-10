@@ -64,8 +64,8 @@ services:
       METRICS_TOKEN: ${METRICS_TOKEN}        # jeton de la supervision (GET /metrics, format Prometheus) ; vide = route désactivée
       CONNECTORS_ENABLED: ${CONNECTORS_ENABLED} # connecteurs proposés, ex. sagex3,salesforce,sharepoint ; vide = tous
       CONNECTOR_DOMAINS: ${CONNECTOR_DOMAINS} # classement sur le portail, ex. sagex3=industrie (commerce, finance, industrie, documents, rh, autre)
-      # Couche sémantique (1.8, expérimental) — docs/admin/configuration.md § 9. Chemin, DANS le conteneur, du fichier JSON propre au client
-      # (vocabulaire, sociétés, indicateurs, classeurs de référence), monté en lecture seule (volume ci-dessous). Vide = couche générique seule.
+      # Dictionnaire de données (1.8, expérimental) — docs/admin/configuration.md § 9. Chemin, DANS le conteneur, du fichier JSON propre au client
+      # (sociétés, champs spécifiques, objets, règles de lecture, classeurs de référence), monté en lecture seule (volume ci-dessous). Vide = couche générique seule.
       SEMANTICS_FILE: ${SEMANTICS_FILE}
       # Journal d'audit (1.5) — docs/admin/securite.md § 7 : à activer seulement après avis du DPO et information des collaborateurs
       AUDIT: ${AUDIT}                        # on = chaque appel d'outil journalisé (collaborateur, système, outil, résultat, durée ; jamais les arguments ni les données)

@@ -11,7 +11,7 @@ import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const TOOLS = ["salesforce_tools", "salesforce_call", "sagex3_representations", "sagex3_describe", "sagex3_query", "sagex3_get",
-  "sharepoint_sites", "sharepoint_list", "sharepoint_search", "sharepoint_read", "dropbox_tools", "dropbox_call", "dropbox_read", "myreport_tools", "myreport_call", "clevoa_mon_compte", "clevoa_glossaire"];
+  "sharepoint_sites", "sharepoint_list", "sharepoint_search", "sharepoint_read", "dropbox_tools", "dropbox_call", "dropbox_read", "myreport_tools", "myreport_call", "clevoa_mon_compte", "clevoa_dictionnaire"];
 const KEY_NO_REFRESH = "test-key-bob-no-refresh-token";
 const KEY_CAROL = "test-key-carol-0123456789";
 const KEY_DAN = "test-key-dan-apikey-0123456789";

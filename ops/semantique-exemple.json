@@ -1,24 +1,6 @@
 {
   "version": 1,
   "nom": "Biscuiterie Lune et Comète (société fictive d'exemple)",
-  "vocabulaire": [
-    {
-      "terme": "Ventes comptoir",
-      "synonymes": ["CA boutique", "ventes boutique"],
-      "definition": "Factures de vente du site boutique fictif BOUT, hors ventes aux distributeurs.",
-      "objets": ["SINVOICE"],
-      "faitFoi": "SINVOICE",
-      "filtres": "Site de vente BOUT ; champ spécifique ZCANAL = COMPTOIR."
-    },
-    {
-      "terme": "Carnet de commandes",
-      "synonymes": ["backlog", "commandes à produire"],
-      "definition": "Exemple fictif de définition maison : commandes de vente ouvertes dont la date de livraison demandée tombe dans les 90 prochains jours.",
-      "objets": ["SORDER"],
-      "faitFoi": "SORDER",
-      "filtres": "Commandes ouvertes, date de livraison demandée dans les 90 jours ; hors site BOUT."
-    }
-  ],
   "societes": [
     {
       "code": "LUNE",
@@ -46,21 +28,12 @@
     }
   ],
   "regles": [
-    "Exemple fictif : les ventes entre LUNE et ASTR sont internes au groupe et s'éliminent du CA consolidé."
-  ],
-  "indicateurs": [
-    {
-      "nom": "Marge sur coûts directs",
-      "synonymes": ["marge directe", "MCD"],
-      "definition": "CA facturé HT moins farine, beurre, emballages et main-d'œuvre directe (définition fictive).",
-      "calcul": "Lue dans le classeur de référence ; ne pas la recalculer depuis l'ERP.",
-      "objets": ["SINVOICE"],
-      "classeur": "Marge sur coûts directs"
-    }
+    "Exemple fictif : les factures entre LUNE et ASTR sont des ventes internes au groupe ; le client ASTR porte BETFCY vrai dans Sage X3.",
+    "Exemple fictif : les ventes du site BOUT sont saisies chaque soir ; les factures du jour ne sont complètes que le lendemain."
   ],
   "classeurs": [
     {
-      "indicateur": "Marge sur coûts directs",
+      "contenu": "Marge mensuelle par site (exemple fictif)",
       "fichier": "Marge mensuelle fictive.xlsx",
       "systeme": "dropbox",
       "chemin": "/Exemple fictif/Direction financière/Marge mensuelle fictive.xlsx",
