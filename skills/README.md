@@ -1,7 +1,7 @@
 # Compétences métier (skills) pour Claude
 
-Public : contrôleurs de gestion, DAF et l'Owner Claude de l'entreprise. Objet : ce que sont ces fiches, comment les
-lire, les modifier et les installer.
+Public : contrôleurs de gestion, DAF et administrateur de l'organisation Claude de l'entreprise. Objet : ce que sont ces
+fiches et comment elles sont remplies, installées et testées.
 
 Une compétence (« skill ») est une **fiche écrite en français** que Claude lit avant de répondre. Elle lui apprend une
 façon de travailler : la définition de vos indicateurs, ou les étapes de votre revue mensuelle. La passerelle Clevoa
@@ -9,28 +9,33 @@ donne l'accès aux données ; ces fiches disent quoi en faire.
 
 ## Les fiches disponibles (ébauches)
 
-| Fiche | À quoi elle sert | Ce que le contrôle de gestion complète |
+| Fiche | À quoi elle sert | Ce que le contrôle de gestion décide |
 |---|---|---|
-| [Indicateurs financiers](indicateurs-financiers/SKILL.md) | Définir CA, encours, BFR, DSO, carnet… et dire où les lire | Le tableau « Vos conventions » |
-| [Revue analytique mensuelle](revue-analytique-mensuelle/SKILL.md) | Comparer le mois à N-1, isoler et expliquer les écarts | Le tableau des réglages (seuils, postes) |
+| [Indicateurs financiers](indicateurs-financiers/SKILL.md) | Définir CA, encours, BFR, DSO, carnet… et dire où les lire | Ses règles : périmètre, intragroupe, définitions, seuil |
+| [Revue analytique mensuelle](revue-analytique-mensuelle/SKILL.md) | Comparer le mois à N-1, isoler et expliquer les écarts | Les comparaisons et les comptes de chaque poste |
 
-## Lire et modifier une fiche
+## Qui fait quoi
 
-1. Ouvrez le fichier SKILL.md de la fiche. Ignorez les quatre premières lignes, entre tirets : c'est l'étiquette qui
-   dit à Claude quand utiliser la fiche.
-2. Modifiez seulement les tableaux de réglages, en remplaçant les exemples en *italique*. Écrivez comme à un nouveau
-   collègue : phrases courtes, chiffres précis.
-3. Testez : posez une question à Claude et vérifiez qu'il cite votre règle.
+1. **Le contrôle de gestion décide des règles**, sans toucher à aucun fichier : il remplit le questionnaire qu'on lui
+   remet (une ligne en français par règle).
+2. **L'administrateur Claude de l'entreprise** reporte ces règles dans la colonne « Votre règle » de la copie de
+   l'entreprise, puis la charge dans Claude pour toute l'organisation.
+3. **Le contrôle de gestion vérifie** : il pose une question à Claude et regarde si la réponse cite sa règle. Si non,
+   il le signale à l'administrateur.
 
-Vous n'avez rien à modifier dans les fichiers `reference.md` : ils traduisent les indicateurs en champs techniques.
+Deux principes rendent les fiches sûres :
 
-## Installer une fiche dans Claude
+* **Une case vide ne devine rien.** Claude pose la question.
+* **La colonne « Exemple » n'est jamais appliquée.** Elle montre seulement une façon de répondre.
 
-Chaque fiche est un dossier. On le compresse en `.zip`, puis on l'ajoute dans Claude, dans les paramètres
-(rubrique des compétences). L'Owner peut la mettre à disposition de toute l'organisation. L'emplacement exact du menu
-évolue : suivez l'aide de Claude.
+## Installer une fiche (administrateur)
+
+Chaque fiche est un dossier. On le compresse en `.zip` et on l'ajoute dans les paramètres de Claude, rubrique des
+compétences, pour toute l'organisation. Après chaque modification, on recharge le `.zip`, puis on ouvre une nouvelle
+conversation pour tester. Le fichier `reference.md` traduit les indicateurs en champs techniques : il ne change que si
+l'instance Sage X3 diffère.
 
 ## Ce qui ne va jamais dans ce dossier
 
-Vos vraies conventions, vos montants, vos noms de clients. Ce dossier est un modèle commun à tous les clients : la
-version remplie de chaque entreprise reste chez elle, dans son organisation Claude.
+Vos vraies règles, vos montants, vos noms de clients. Ce dossier est un modèle commun à tous les clients : la copie
+remplie de chaque entreprise reste chez elle, dans son organisation Claude.
