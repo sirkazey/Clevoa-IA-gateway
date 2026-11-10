@@ -34,6 +34,13 @@ collaborateur. Premier et seul client visé : Groupe Charlois. Dépôt `sirkazey
    au plus par rubrique) ; le propriétaire crée le tag `vX.Y.Z` et la Release sur le commit de `main`.
 4. Pré-production en versions candidates `-rc.N` ; détails : [contribuer](docs/CONTRIBUTING.md).
 
+## Méthode : éléphant et poisson rouge
+
+La session qui a le contexte (l'éléphant) conçoit et rédige ; un sous-agent neuf (le poisson rouge) relit sans la
+conversation ; le propriétaire tranche. Relecture à froid obligatoire avant toute PR qui change un comportement, une
+architecture ou un document remis au client, et rapport d'écart doc/code avant une version stable : détails dans
+[contribuer § 3](docs/CONTRIBUTING.md#3-relecture-à-froid-éléphant-et-poisson-rouge).
+
 ## Commandes
 
 Node 24 obligatoire (l'image cloud fournit Node 22) : `bash ops/claude-setup.sh` l'installe avec les dépendances.
