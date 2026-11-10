@@ -71,7 +71,35 @@ Une PR qui change une variable, une commande, un comportement visible, un chiffr
 documentation et `CHANGELOG.md` dans le même commit. Une PR qui déplace ou supprime un fichier corrige les liens qui y
 menaient.
 
-## 3. Contrôle des liens
+## 3. Relecture à froid (éléphant et poisson rouge)
+
+Celui qui a tout le contexte ne voit plus ses propres dérives. Trois rôles, d'après le modèle
+[Elephant-Goldfish](https://github.com/google/elephant-goldfish-model) :
+
+| Rôle | Ce qu'il sait | Ce qu'il fait |
+|---|---|---|
+| Éléphant (la session de travail) | Le projet, la conversation, les décisions | Conçoit, rédige, corrige |
+| Poisson rouge (sous-agent neuf) | Seulement les fichiers à relire et les sources citées | Cherche hypothèses implicites, flous, erreurs, dérives de périmètre |
+| Propriétaire | Les objectifs et les contraintes | Choisit les remarques retenues, approuve |
+
+**Quand.** Avant la PR, pour tout changement de comportement ou d'architecture, toute nouvelle fonctionnalité et tout
+document remis au client (offre, guide, skill) ; avant une version stable, un rapport d'écart entre la documentation
+et le code.
+
+**Comment briefer un poisson rouge.** Lui donner les chemins des fichiers à relire, les sources autorisées et un rôle
+(par exemple « contrôleur de gestion qui découvre Claude » ou « relecteur technique adversarial ») ; jamais la
+conversation, ni la conclusion attendue, ni l'avis de l'éléphant. Lui demander un rapport classé par gravité, avec le
+passage exact, la preuve et la correction proposée. Deux relecteurs aux angles différents valent mieux qu'un.
+
+**Ensuite.** L'éléphant trie les remarques (retenue, écartée avec sa raison), le propriétaire tranche les compromis,
+et la PR résume ce qui a été relu et ce qui a changé. Une relecture ne remplace ni les tests ni l'avis du
+propriétaire.
+
+**Outillage.** La méthode ne demande aucun outil : un sous-agent briefé comme ci-dessus suffit, en local comme dans
+une session cloud. Le plugin EGM (Apache 2.0) l'outille en local (`/egm:egm-review`, `/egm:egm-drift-report`) ; il
+n'est pas déclaré dans le dépôt, chacun l'installe s'il le souhaite.
+
+## 4. Contrôle des liens
 
 `node ops/check-docs.js` parcourt tous les Markdown du dépôt (hors `node_modules`). Il échoue si un lien relatif vise
 un fichier absent, si une ancre vise un titre inexistant, ou si un chemin cité entre accents graves n'existe plus. Il
