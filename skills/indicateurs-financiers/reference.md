@@ -20,18 +20,18 @@ montrant l'addition ; jamais sur une liste tronquée.
 
 | Indicateur | Objet | Publiée par défaut (vérifier avec `sagex3_representations`) | Filtres et calcul | Attention |
 |---|---|---|---|---|
-| Chiffre d'affaires | SINVOICE, ou écritures (GACCENTRY) | Non | Date comptable (ACCDAT) ; factures moins avoirs (SIVTYP) | Codes de SIVTYP et champ HT à confirmer avec `sagex3_describe` |
+| Chiffre d'affaires | SINVOICE, ou balance (BALANCE) | Non | Date comptable (ACCDAT) ; HT = AMTNOT, TTC = AMTATI ; facture ou avoir = INVTYP (menu local 645) ; statut STA | Noms tirés du modèle de données Sage : confirmer avec `sagex3_describe` |
 | Prises de commandes | SORDER | Oui | Date de commande (ORDDAT) | Préciser HT ou TTC ; montants d'en-tête à confirmer |
-| Carnet de commandes | SORDER, lignes (`sagex3_get`) | Oui | Commandes ouvertes (ORDSTA), livraison incomplète (DLVSTA) | Champs de reste à confirmer ; au-delà de quelques commandes, renvoyer au classeur |
+| Carnet de commandes | SORDER, lignes (`sagex3_get`) | Oui | Commandes ouvertes (ORDSTA), livraison incomplète (DLVSTA) ; reste à livrer en table SORDERQ (QTY, DLVQTY, TDLQTY) | Champs de reste à confirmer dans la représentation ; au-delà de quelques commandes, renvoyer au classeur |
 | Factures à établir | SDELIVERY | Non | Livraisons validées (CFMFLG) non facturées (INVFLG) | — |
 | Exposition client | BPCUSTOMER, `sagex3_get`, facette `$details` | Oui | OST (Total en-cours), OSTAUZ (limite ; 0 = aucune limite saisie) | Le détail d'OST, dont le solde comptable, n'est pas exposé ; BPCRSK renseigné = encours suivi sur le client de risque ; BETFCY vrai = intragroupe |
-| Encours comptable | Écritures (GACCENTRY) | Non | Comptes clients à date | Seule source d'un « encours » au sens comptable |
-| Retards clients | GACCDUDATE | Non (absente du dictionnaire) | Échéances non lettrées échues | Sinon non calculable : le dire |
+| Encours comptable | Composante « solde comptable » de l'encours (table BPCUSTMVT, champs BLC*) si l'intégrateur l'expose ; sinon balance (BALANCE) | Non | Comptes clients à date | Seule source d'un « encours » au sens comptable |
+| Retards clients | GACCDUDATE | Non (absente du dictionnaire) | Échéance DUDDAT passée, montant AMTCUR moins réglé PAYCUR, échéance non soldée (FLGCLE, valeurs à confirmer), sens SNS | Sinon non calculable : le dire |
 | Achats facturés | PINVOICE | Oui | Date comptable (ACCDAT) ; HT = TOTLINAMT ; avoirs = PIHTYP 3 et 4, à soustraire | TOTLINAMT doit être en colonne de liste, sinon pas de total : le dire et demander l'ajout à la facette $query ; PIHTYP est filtrable dans where |
 | Échéancier fournisseurs théorique | PINVOICE | Oui | Première échéance (DUDAT1) | Sans statut de règlement : ce ne sont pas des dettes réelles |
 | Engagements d'achat | PORDER | Oui | Commandes signées (APPFLG) non soldées (CLEFLG) | — |
 | Transformation des devis | SQUOTE | Non | Devis émis sur la période (QUODAT), statut (QUOSTA) | Statut « perdu » pas toujours saisi ; devis encore valides = date de validité (VLYDAT) postérieure à la lecture : les exclure et dire combien |
-| Pièces provisoires | PINVOICE.STA, SINVOICE.INVSTA, GACCENTRY.STA | Selon l'objet | Pièces non comptabilisées ou provisoires | À signaler dans toute revue |
+| Pièces provisoires | PINVOICE.STA (1 en attente, 2 à valider, 3 validée), SINVOICE.STA, GACCENTRY.STA (1 provisoire, 2 définitive) | Selon l'objet | Pièces non validées ou provisoires ; écritures : ne garder que CAT = 1 (réel), sinon simulations et modèles sont inclus | À signaler dans toute revue |
 
 ## Salesforce
 
