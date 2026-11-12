@@ -64,6 +64,16 @@ curl.exe -sS -u IDENTIFIANT -w "`nHTTP %{http_code}`n" "https://<syracuse>/api1/
 * `HTTP 404 … representation does not exist`, ou `HTTP 500 Unexpected token <` au premier appel : représentation non
   publiée, ticket intégrateur.
 
+**Inventaire complet (facultatif).** `ops/sage-inventaire.js` interroge la description ($prototypes) d'une quarantaine de
+représentations standard, suit leurs champs de référence pour découvrir les autres, et produit
+`inventaire-sage-<date>/inventaire.md` : représentations disponibles, absentes ou interdites, champs de liste et de fiche,
+liaisons entre représentations, écart avec le dictionnaire de données. Métadonnées seulement, aucune donnée métier ; un
+mot de passe refusé arrête tout après un seul essai. Le rapport décrit l'instance du client : ne pas le committer.
+
+```
+SAGE_URL=https://<syracuse> SAGE_FOLDER=<POINT_DE_CONNEXION> SAGE_LOGIN=<IDENTIFIANT> node ops/sage-inventaire.js
+```
+
 ### Étape 2 : `.env`
 
 ```
