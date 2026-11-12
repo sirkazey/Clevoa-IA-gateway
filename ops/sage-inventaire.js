@@ -47,18 +47,27 @@ export function readPrototype(p) {
 }
 
 /** Parcours en largeur : chaque représentation trouvée ajoute celles que ses références citent. */
-export async function inventory({ base, folder, auth, seeds = SEEDS, max = 250, delayMs = 150, fetchImpl = fetch, log = () => {} }) {
+export async function inventory({ base, folder, auth, seeds = SEEDS, max = 250, delayMs = 150, timeout = 60_000, fetchImpl = fetch, log = () => {}, partial = {} }) {
   const api = `${base.replace(/\/$/, "")}/api1/x3/erp/${folder}`;
-  const get = async (rep, facet) => {
-    const r = await fetchImpl(`${api}/$prototypes('${rep}.$${facet}')`, { headers: { Authorization: auth, Accept: "application/json" }, signal: AbortSignal.timeout(30_000) });
+  // Syracuse ouvre une session X3 par appel : certaines descriptions (grosses fiches) sont lentes. Un délai dépassé est
+  // réessayé une fois avec plus de marge, puis noté « délai dépassé » sans arrêter l'inventaire.
+  const get = async (rep, facet, timeoutMs = timeout) => {
+    let r;
+    try {
+      r = await fetchImpl(`${api}/$prototypes('${rep}.$${facet}')`, { headers: { Authorization: auth, Accept: "application/json" }, signal: AbortSignal.timeout(timeoutMs) });
+    } catch (e) {
+      if (e.name !== "TimeoutError" && e.name !== "AbortError") throw e;
+      if (timeoutMs === timeout) return get(rep, facet, timeout * 3);
+      return { status: "délai" };
+    }
     if (r.status === 401) { const e = new Error("401 : identifiants refusés par Syracuse, inventaire arrêté (le compte se bloque après quelques échecs)."); e.stop = true; throw e; }
     if (!r.ok) return { status: r.status };
     try { return { status: r.status, proto: JSON.parse(await r.text()) }; } catch { return { status: 502 }; }
   };
-  const result = {}, queue = [...new Set(seeds)], seen = new Set(queue);
+  const result = partial, queue = [...new Set(seeds)], seen = new Set(queue);
   const visit = async (rep) => {
     const q = await get(rep, "query");
-    if (!q.proto) { result[rep] = { statut: q.status === 404 ? "absente" : q.status === 403 ? "interdite" : `erreur ${q.status}` }; return; }
+    if (!q.proto) { result[rep] = { statut: q.status === 404 ? "absente" : q.status === 403 ? "interdite" : q.status === "délai" ? "erreur délai dépassé" : `erreur ${q.status}` }; return; }
     const query = readPrototype(q.proto);
     const d = await get(rep, "details");
     const details = d.proto ? readPrototype(d.proto) : null;
@@ -132,8 +141,13 @@ async function main() {
   const auth = token ? `Bearer ${token}` : `Basic ${Buffer.from(`${login}:${process.env.SAGE_PASSWORD ?? await askHidden(`Mot de passe Syracuse de ${login} : `)}`).toString("base64")}`;
   const seeds = [...SEEDS, ...(arg("--seed")?.split(",").map((s) => s.trim()).filter(Boolean) ?? [])];
   const date = new Date().toISOString().slice(0, 16).replace("T", " ");
+  const result = {};
+  let failure;
   try {
-    const result = await inventory({ base, folder, auth, seeds, max: Number(arg("--max") ?? 250), log: (m) => console.log(m) });
+    await inventory({ base, folder, auth, seeds, max: Number(arg("--max") ?? 250), log: (m) => console.log(m), partial: result });
+  } catch (e) { failure = e; console.error(`\n${e.message}`); }
+  if (!Object.keys(result).length) process.exit(failure?.stop ? 3 : 1);
+  try {
     const { OBJETS } = await import(new URL("../hub/semantics/generique.js", import.meta.url)).catch(() => ({ OBJETS: [] }));
     const ecarts = compare(result, OBJETS);
     const dir = `inventaire-sage-${date.replace(/[: ]/g, "").replace(/-/g, "")}`;
@@ -141,8 +155,9 @@ async function main() {
     writeFileSync(join(dir, "inventaire.json"), JSON.stringify({ dossier: folder, date, representations: result, ecarts }, null, 2));
     writeFileSync(join(dir, "inventaire.md"), markdown(result, ecarts, { folder, date }));
     const ok = Object.values(result).filter((r) => r.statut === "disponible").length;
-    console.log(`\n${Object.keys(result).length} représentations testées, ${ok} disponibles. Rapport : ${dir}/inventaire.md`);
-  } catch (e) { console.error(e.message); process.exit(e.stop ? 3 : 1); }
+    console.log(`\n${Object.keys(result).length} représentations testées, ${ok} disponibles${failure ? " (inventaire interrompu, rapport partiel)" : ""}. Rapport : ${dir}/inventaire.md`);
+  } catch (e) { console.error(e.message); process.exit(1); }
+  if (failure) process.exit(failure.stop ? 3 : 1);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) main();

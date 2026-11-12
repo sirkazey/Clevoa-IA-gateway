@@ -18,6 +18,7 @@ async function fakeSyracuse(t, { status = {} } = {}) {
     const m = decodeURIComponent(req.url).match(/\$prototypes\('(\w+)\.(\$\w+)'\)/);
     const key = m && `${m[1]}.${m[2]}`;
     calls.push({ key, auth: req.headers.authorization, method: req.method });
+    if (status[m?.[1]] === "lent") return; // ne répond jamais : délai dépassé
     if (status[m?.[1]]) { res.writeHead(status[m[1]]); return res.end(); }
     if (!PROTOS[key]) { res.writeHead(404); return res.end(); }
     res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify(PROTOS[key]));
@@ -67,4 +68,12 @@ test("compare et markdown : champs du dictionnaire absents de l'instance", async
   assert.match(md, /\| CLIENT \| CUR \| DEVISE \| oui \|/);
   assert.match(md, /\| CLIENT \| disponible \| ABSENT \|/);
   assert.match(md, /aucune donnée métier/);
+});
+
+test("inventaire : un délai dépassé est réessayé une fois, noté, et n'arrête pas l'inventaire", async (t) => {
+  const { base, calls } = await fakeSyracuse(t, { status: { LENT: "lent" } });
+  const r = await inventory({ base, folder: "TEST", auth: "Basic x", seeds: ["CLIENT", "LENT", "DEVISE"], delayMs: 0, timeout: 100 });
+  assert.equal(r.LENT.statut, "erreur délai dépassé");
+  assert.equal(r.DEVISE.statut, "disponible", "la suite est inventoriée");
+  assert.equal(calls.filter((c) => c.key === "LENT.$query").length, 2, "un seul nouvel essai");
 });
