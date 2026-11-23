@@ -1,7 +1,7 @@
 # Console de suivi Clevoa. À construire depuis la racine du dépôt (elle réutilise clevoa-backend/handler.js pour lire la table) :
 #   docker build -f clevoa-console/Dockerfile -t clevoa-console .
 # Même image de base figée que le hub ; npm, corepack et yarn retirés de l'image d'exécution.
-FROM node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53
+FROM node:24-alpine@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5
 WORKDIR /app/clevoa-console
 COPY clevoa-console/package*.json ./
 RUN npm ci --omit=dev \
