@@ -103,7 +103,7 @@ services:
   # dans BACKUP_DIR sur la machine hôte (chemin ABSOLU sous Portainer,
   # un dossier par environnement), rétention BACKUP_KEEP_DAYS jours. Restauration : sudo ops/restore.sh <fichier>. Voir docs/admin/exploitation.md.
   mcp-backup:
-    image: node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53   # même image figée que le hub
+    image: node:24-alpine@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5   # même image figée que le hub
     restart: unless-stopped
     environment:
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-30}
